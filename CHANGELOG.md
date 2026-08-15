@@ -3,7 +3,7 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
-## v0.5.5 — 2026-08-16
+## v0.5.6 — 2026-08-16
 
 **Newest Source Folders First**
 
