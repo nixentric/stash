@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.2 — 2026-08-16
+
+**Keyboard Select All and Drag-to-Select box**
+
+- **Select all with Ctrl+A / Cmd+A.** Added a standard shortcut to select all footage in the library grid or list by pressing `Ctrl+A` (or `Cmd+A` on macOS) when the viewport is focused.
+- **Drag-to-select box.** Dragging the cursor in empty space or across items now draws a visual selection box (using a themed boundary indicator). Any item touched by the box is added to the selection.
+- **Interactive modifiers.** Selection box dragging seamlessly handles keyboard modifier keys: holding `Ctrl/Cmd` or `Shift` while dragging extends your current selection instead of replacing it.
+- **Boundaries Auto-scrolling.** When dragging near the top or bottom of the window, the viewport automatically scrolls up or down, making it easy to select items across long lists.
+
 ## v0.5.1 — 2026-08-16
 
 **Right-click context menus for Sidebar items**

@@ -39,6 +39,7 @@ export const FootageCard = memo(function FootageCard({
     <div
       ref={ref}
       role="option"
+      data-id={item.id}
       aria-selected={selected}
       tabIndex={-1}
       onClick={onClick}
@@ -57,6 +58,7 @@ export const FootageCard = memo(function FootageCard({
         reader.readAsDataURL(file);
       }}
       className={cn(
+        "footage-card-item",
         "group relative flex cursor-default flex-col overflow-hidden rounded-md border",
         "outline-none transition-[border-color,background-color] duration-100",
         selected

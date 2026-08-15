@@ -31,6 +31,8 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
   const { handleClick, handleContextMenu } = useSelectionHandlers(orderedIds);
   const [focusedId, setFocusedId] = useState<number | null>(null);
 
+  const [dragBox, setDragBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+
   const activeFocusId = (focusedId !== null && selection.includes(focusedId))
     ? focusedId
     : (selection.length > 0 ? (selection[selection.length - 1] ?? null) : null);
@@ -38,6 +40,13 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (quickLookId !== null) return;
     if (orderedIds.length === 0) return;
+
+    // Ctrl+A / Cmd+A selection
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      select(orderedIds, orderedIds[0] ?? null);
+      return;
+    }
 
     const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
     if (!isArrow) return;
@@ -102,6 +111,96 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
     scrollRef.current?.focus({ preventScroll: true });
   };
 
+  const handleMouseDown = (mouseDownEvent: React.MouseEvent) => {
+    if (mouseDownEvent.button !== 0) return;
+
+    const target = mouseDownEvent.target as HTMLElement;
+    if (
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest("textarea") ||
+      target.closest("select") ||
+      target.closest("a") ||
+      target.closest("[role='menu']")
+    ) {
+      return;
+    }
+
+    const startX = mouseDownEvent.clientX;
+    const startY = mouseDownEvent.clientY;
+    const initialSelection = mouseDownEvent.metaKey || mouseDownEvent.ctrlKey || mouseDownEvent.shiftKey ? [...selection] : [];
+    
+    let isDragging = false;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      if (!isDragging && Math.sqrt(dx * dx + dy * dy) > 6) {
+        isDragging = true;
+      }
+
+      if (isDragging) {
+        moveEvent.preventDefault();
+        const currentX = moveEvent.clientX;
+        const currentY = moveEvent.clientY;
+
+        const left = Math.min(startX, currentX);
+        const top = Math.min(startY, currentY);
+        const width = Math.abs(startX - currentX);
+        const height = Math.abs(startY - currentY);
+
+        setDragBox({ left, top, width, height });
+
+        // Auto-scroll the container during dragging near boundaries
+        if (scrollRef.current) {
+          const containerRect = scrollRef.current.getBoundingClientRect();
+          const scrollSpeed = 12;
+          if (currentY < containerRect.top + 30) {
+            scrollRef.current.scrollTop -= scrollSpeed;
+          } else if (currentY > containerRect.bottom - 30) {
+            scrollRef.current.scrollTop += scrollSpeed;
+          }
+        }
+
+        const cardElements = document.querySelectorAll(".footage-card-item");
+        const intersectedIds: number[] = [];
+
+        cardElements.forEach((el) => {
+          const cardRect = el.getBoundingClientRect();
+          const intersects = !(
+            cardRect.left > left + width ||
+            cardRect.right < left ||
+            cardRect.top > top + height ||
+            cardRect.bottom < top
+          );
+          if (intersects) {
+            const dataId = el.getAttribute("data-id");
+            if (dataId) {
+              intersectedIds.push(Number(dataId));
+            }
+          }
+        });
+
+        let newSelection = intersectedIds;
+        if (mouseDownEvent.metaKey || mouseDownEvent.ctrlKey || mouseDownEvent.shiftKey) {
+          newSelection = Array.from(new Set([...initialSelection, ...intersectedIds]));
+        }
+        
+        select(newSelection, selection[selection.length - 1] ?? null);
+      }
+    };
+
+    const onMouseUp = () => {
+      setDragBox(null);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -140,7 +239,11 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
       <div
         ref={scrollRef}
         onKeyDown={handleKeyDown}
-        className="relative h-full overflow-y-auto outline-none"
+        onMouseDown={handleMouseDown}
+        className={cn(
+          "relative h-full overflow-y-auto outline-none",
+          dragBox && "select-none"
+        )}
         role="listbox"
         aria-multiselectable
         aria-label="Footage"
@@ -211,6 +314,22 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
             })}
           </div>
         )}
+        {dragBox && (
+          <div
+            style={{
+              position: "fixed",
+              left: dragBox.left,
+              top: dragBox.top,
+              width: dragBox.width,
+              height: dragBox.height,
+              backgroundColor: "hsl(var(--primary) / 0.15)",
+              border: "1.5px solid hsl(var(--primary) / 0.6)",
+              borderRadius: "4px",
+              pointerEvents: "none",
+              zIndex: 9999,
+            }}
+          />
+        )}
       </div>
     </FootageContextMenu>
   );
@@ -240,11 +359,13 @@ function ListRow({
     <div
       ref={ref}
       role="option"
+      data-id={item.id}
       aria-selected={selected}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       className={cn(
+        "footage-card-item",
         "mx-2 flex h-[28px] cursor-default items-center gap-2.5 rounded px-2 text-[12.5px]",
         selected ? "bg-selection text-foreground" : "hover:bg-accent/60",
       )}
