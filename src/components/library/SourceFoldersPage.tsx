@@ -214,7 +214,7 @@ export function SourceFoldersPage() {
   const brands = useBrands(true);
 
   const [facets, setFacets] = useState<Facet[]>([]);
-  const [sort, setSort] = useState<Sort>({ key: "path", dir: 1 });
+  const [sort, setSort] = useState<Sort>({ key: "added", dir: -1 });
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
   const [deleting, setDeleting] = useState(false);
 

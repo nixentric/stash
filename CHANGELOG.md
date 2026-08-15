@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.5 — 2026-08-16
+
+**Newest Source Folders First**
+
+- **Source Folders opens on the newest additions.** The Source Folders table used to open sorted alphabetically by folder path, which buried the folder you had just catalogued somewhere in the middle of the list. It now opens sorted by the Added column, newest first, so the folders you most recently brought into the library are the ones waiting at the top.
+- **Nothing else changes about sorting.** Clicking any column header still works exactly as before — pick a different column, click again to flip the direction — and the date columns still start at newest first when you switch to them.
+
 ## v0.5.4 — 2026-08-16
 
 **Fixed Invisible Selection Box**
