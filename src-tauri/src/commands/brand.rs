@@ -1,4 +1,4 @@
-use crate::db::models::{Brand, BrandColor, BrandDetail, BrandLogo, BrandTypeface};
+use crate::db::models::{Brand, BrandColor, BrandDetail, BrandLogo, BrandTypeface, SearchHit};
 use crate::db::repo::brand as repo;
 use crate::error::Result;
 use crate::state::AppState;
@@ -54,4 +54,10 @@ pub fn save_brand_logo(state: State<'_, AppState>, logo: BrandLogo) -> Result<i6
 #[tauri::command]
 pub fn delete_brand_logo(state: State<'_, AppState>, id: i64) -> Result<()> {
     state.with_library(|lib| repo::delete_logo(&lib.conn, id))
+}
+
+/// Universal search across assets and every brand entity, grouped by the caller.
+#[tauri::command]
+pub fn universal_search(state: State<'_, AppState>, query: String) -> Result<Vec<SearchHit>> {
+    state.with_library(|lib| crate::db::repo::search::universal(&lib.conn, &query))
 }

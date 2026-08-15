@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -44,6 +44,7 @@ import {
   useStats,
 } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
+import { UniversalSearch } from "@/components/library/UniversalSearch";
 import { emptyQuery, type MediaType, type SortKey } from "@/lib/types";
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -72,6 +73,7 @@ export function Toolbar({
   const caps = useCapabilities();
   const stats = useStats(true);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const {
     search,
@@ -200,12 +202,27 @@ export function Toolbar({
           <Input
             ref={searchRef}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setSearch("")}
-            placeholder="Search filename, tags, notes, project, folder…"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPanelOpen(true);
+            }}
+            onFocus={() => setPanelOpen(true)}
+            // A click inside the panel blurs the field; closing on the next tick
+            // lets that click land first.
+            onBlur={() => setTimeout(() => setPanelOpen(false), 150)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearch("");
+                setPanelOpen(false);
+              }
+            }}
+            placeholder="Search assets, tags, brands, colors, fonts…"
             className="h-7 pl-7 pr-14"
-            aria-label="Search footage"
+            aria-label="Search the library"
           />
+          {panelOpen && (
+            <UniversalSearch term={search} onNavigate={() => setPanelOpen(false)} />
+          )}
           {search ? (
             <button
               onClick={() => setSearch("")}

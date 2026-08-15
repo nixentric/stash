@@ -368,6 +368,23 @@ pub struct BrandLogo {
     pub position: i64,
 }
 
+/// One row in the universal search panel. Deliberately flat and stringly typed:
+/// the panel renders every kind the same way, and grouping is the caller's job.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    /// asset | brand | color | typeface | logo
+    pub kind: String,
+    pub id: i64,
+    pub title: String,
+    pub subtitle: String,
+    /// Where clicking the hit navigates, for everything that belongs to a brand.
+    pub brand_id: Option<i64>,
+    pub brand_name: String,
+    /// Present on colours, so the panel can paint a swatch and offer a copy.
+    pub hex: Option<String>,
+}
+
 // ── query ───────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]

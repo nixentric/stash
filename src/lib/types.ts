@@ -479,3 +479,14 @@ export const emptyQuery = (): FootageQuery => ({
   offset: 0,
   limit: 200,
 });
+
+export interface SearchHit {
+  /** asset | brand | color | typeface | logo */
+  kind: string;
+  id: number;
+  title: string;
+  subtitle: string;
+  brandId: number | null;
+  brandName: string;
+  hex: string | null;
+}

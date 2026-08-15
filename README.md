@@ -95,9 +95,9 @@ xattr -dr com.apple.quarantine /Applications/Stash.app
 - [Footage and sources](#footage-and-sources)
 - [Tags, filters, and search](#tags-filters-and-search)
 - [Usage tracking](#usage-tracking)
-- [Brand guidelines](#brand-guidelines-planned) *(planned)*
-- [Quick Brand Kit](#quick-brand-kit-planned) *(planned)*
-- [Universal search](#universal-search-planned) *(planned)*
+- [Brand guidelines](#brand-guidelines)
+- [Quick Brand Kit](#quick-brand-kit)
+- [Universal search](#universal-search)
 - [Offline-first architecture](#offline-first-architecture)
 - [Portable database](#portable-database)
 - [Google Drive: optional integration](#google-drive-optional-integration)
@@ -128,14 +128,17 @@ Three states are used throughout this document, and they mean exactly this:
 | Usage tracking and history | **Available** |
 | Library search and filters | **Available** |
 | Source folders with custom columns | **Available** |
+| Multiple brands, colors, typography, logos | **Available** |
+| Quick Brand Kit | **Available** |
+| Universal search across assets and brands | **Available** |
 | Clickable tag/value filters | **In development** — Source Folders table only |
 | Per-asset custom fields | **In development** — folder-level only today |
-| Brand guidelines (colors, type, logos, rules) | **Planned** |
-| Quick Brand Kit | **Planned** |
-| Universal search across brands and assets | **Planned** |
+| Logo usage rules, graphic elements | **Planned** |
+| Photography, motion, tone of voice, icon, social guidelines | **Planned** |
 
-The brand layer is the next major body of work. **None of it exists yet** — the
-sections below describe the design target, not shipped behaviour.
+The brand layer landed in two parts. Its **structured** half — the things a
+designer copies mid-edit — is shipped. Its **narrative** half, the written rules
+around them, is not; those sections below say so individually.
 
 ---
 
@@ -250,11 +253,10 @@ one-second question.
 
 ---
 
-## Brand guidelines *(planned)*
+## Brand guidelines
 
-**Status: Planned. Nothing in this section is implemented** — there are no
-tables, no IPC commands, and no UI for any of it today. It is documented here as
-the design target for the next major version.
+**Status: mixed — each subsection states its own.** Brands, colors, typography,
+and logos are shipped; the written guidelines around them are not.
 
 The goal is not to store a brand PDF. It is an **interactive brand reference**:
 when you are mid-edit and need the client's blue, the heading font, or the white
@@ -269,18 +271,18 @@ Brands → Brand B     → Guidelines
 Brands → Client A    → Guidelines
 ```
 
-### Brand overview
+### Brand overview — available
 
 Brand name, description, tagline, website, notes, and a cover thumbnail.
 
-### Color library
+### Color library — available
 
 Palettes grouped by role — primary, secondary, accent, neutral, background,
 semantic. Each color carries a name, HEX, RGB, CMYK, and usage notes, with
 quick actions to copy any format. Clicking a swatch copies its HEX. Colors are
 searchable, so `blue` surfaces every relevant brand color.
 
-### Typography library
+### Typography library — available
 
 Type scales — display, heading, subheading, body, caption, UI, and fallbacks —
 each with font family, weight, size, line height, letter spacing, and usage
@@ -288,50 +290,53 @@ notes. Live preview with your own text (type `Promo Agustus` and see it set in
 the brand's face), **Copy font name**, and a link to the font file where one is
 referenced.
 
-### Logo library
+### Logo library — available
 
 Variants — primary, secondary, horizontal, vertical, icon/symbol, white, black,
 monochrome — each holding SVG, PNG, PDF, or a source-file reference, with
 preview and quick actions: open file, reveal in Finder/Explorer, open source,
 open in Drive.
 
-Usage rules travel with them: clear space, minimum size, background usage, and
-correct/incorrect examples.
+Usage rules — clear space, minimum size, background usage, correct/incorrect
+examples — are **planned**; today a logo carries free-text notes instead.
 
-### Graphic elements
+### Graphic elements — planned
 
 Shapes, patterns, gradients, textures, decorative elements, frames, and
 backgrounds — **referenced from the asset library rather than duplicated**, so
 there is exactly one copy of every file.
 
-### Photography guidelines
+### Photography guidelines — planned
 
 Style, lighting, composition, subject, color treatment, mood, reference
 examples, and do/don't pairs.
 
-### Video and motion guidelines
+### Video and motion guidelines — planned
 
 Built for editors: transition style, animation style, logo animation,
 intro/outro, lower thirds, subtitle style, motion graphics, aspect ratios, safe
 areas, frame-rate recommendations, and reference examples.
 
-### Tone of voice
+### Tone of voice — planned
 
 Brand personality, tone, preferred terminology, words to avoid, CTA style,
 example copy, and do/don't pairs.
 
-### Icons and illustration
+### Icons and illustration — planned
 
 Icon style, stroke width, corner style, filled vs outline, illustration and
 character style, plus example assets.
 
-### Social media guidelines
+### Social media guidelines — planned
 
 Per-platform reference — Instagram feed, story, Reels, TikTok, YouTube
 thumbnails, banners, LinkedIn — each with dimensions, safe areas, typography,
 logo placement, and template references.
 
-### Brand assets
+### Brand assets — partly available
+
+Logos already reference the asset library. Wider brand-asset collections are
+planned.
 
 A brand's own collection of logos, vectors, PDFs, PSDs, templates, backgrounds,
 patterns, and graphic elements — again as **references into the asset library**,
@@ -339,9 +344,10 @@ not a second copy of every file.
 
 ---
 
-## Quick Brand Kit *(planned)*
+## Quick Brand Kit
 
-**Status: Planned.**
+**Status: Available.** It sits at the top of every brand page rather than behind
+a tab — its whole purpose is answering "what is their blue" without navigating.
 
 The 10% of a brand guideline that gets used 90% of the time, one keystroke from
 the main workflow:
@@ -364,14 +370,18 @@ White Logo                 [Open]
 
 ---
 
-## Universal search *(planned)*
+## Universal search
 
-**Status: Planned.** Search today covers the asset library only — names, notes,
-filenames, paths, URLs, tags, collections, and projects (see
-[Tags, filters, and search](#tags-filters-and-search)). Brand entities do not
-exist yet, so they cannot be searched yet.
+**Status: Available.** One field reaches assets, brands, colors, typography,
+and logos at once. Typing filters the grid as before; a panel underneath lists
+what a grid query can never show, grouped by kind. Colors and font names carry
+a copy button inline, and everything else jumps to the brand it belongs to.
 
-The target is one search field across every entity, grouped by kind:
+Colors match on name, role, notes — and on hex, so pasting `#E92832` answers
+"which brand owns this?" without opening anything.
+
+```text
+Search: red
 
 ```text
 Search: red
@@ -526,21 +536,21 @@ Architecture decisions and their rationale live in
 - Source folders with custom columns and clickable facet filters
 - Portable single-file database, embedded thumbnails, optional Drive integration
 
-**Next — brand layer**
+- Multi-brand guidelines: colors, typography, logos, Quick Brand Kit
+- Universal search across assets, brands, colors, typography, and logos
 
-1. Brand entity and multi-brand navigation
-2. Color library with copy actions and search
-3. Typography library with custom preview text
-4. Logo library with variants, files, and reveal/open actions
-5. Quick Brand Kit
-6. Logo usage rules, graphic elements referencing the asset library
+**Next**
+
+1. Logo usage rules — clear space, minimum size, background usage, do/don't
+2. Graphic elements referencing the asset library
+3. Per-asset custom fields, generalizing today's folder columns
+4. Clickable facet filters across the main library grid
 
 **After that**
 
-7. Universal search across assets, brands, colors, type, logos, and guidelines
-8. Photography, video/motion, tone of voice, icon, and social guidelines
-9. Per-asset custom fields, generalizing today's folder columns
-10. Clickable facet filters across the main library grid
+5. Photography, video/motion, tone of voice, icon, and social guidelines
+6. Brand asset collections beyond logos
+7. Guideline text as a searchable kind in universal search
 
 **Not planned**
 

@@ -69,6 +69,7 @@ pub fn run() {
             commands::brand::delete_brand_typeface,
             commands::brand::save_brand_logo,
             commands::brand::delete_brand_logo,
+            commands::brand::universal_search,
             // tags / collections / projects / usage
             commands::taxonomy::all_tags,
             commands::taxonomy::add_tags,

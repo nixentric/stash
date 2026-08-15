@@ -115,6 +115,7 @@ export const ipc = {
   deleteBrandTypeface: (id: number) => invoke<void>("delete_brand_typeface", { id }),
   saveBrandLogo: (logo: T.BrandLogo) => invoke<number>("save_brand_logo", { logo }),
   deleteBrandLogo: (id: number) => invoke<void>("delete_brand_logo", { id }),
+  universalSearch: (query: string) => invoke<T.SearchHit[]>("universal_search", { query }),
 
   // ── app ───────────────────────────────────────────────────────────────────
   appCapabilities: () => invoke<T.AppCapabilities>("app_capabilities"),
