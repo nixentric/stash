@@ -34,12 +34,17 @@ systems warn about it the first time. The bundles are built in public by
 [this workflow](.github/workflows/release.yml) — you can read exactly what
 produced them, or build your own from source below.
 
-**macOS** — right-click the app in Applications and choose **Open**, then
-**Open** again in the dialog. If macOS insists the app "is damaged" or refuses
-outright, clear the download flag it attached and sign the copy locally:
+**macOS** — the first double-click is refused with *"Apple could not verify
+Stash is free of malware"*. Click **Done**, then open **System Settings →
+Privacy & Security**, scroll to **Security**, and press **Open Anyway** next to
+the message about Stash. That records a permanent exception for this app.
+
+On Sequoia (macOS 15) the old right-click → **Open** trick no longer works —
+**Open Anyway** is the only click-through. To skip the dialog entirely, remove
+the quarantine flag macOS attaches to downloads:
 
 ```bash
-xattr -cr /Applications/Stash.app && codesign --force --deep -s - /Applications/Stash.app
+xattr -dr com.apple.quarantine /Applications/Stash.app
 ```
 
 **Windows** — SmartScreen shows a blue "Windows protected your PC" screen. Click
