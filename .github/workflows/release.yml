@@ -60,6 +60,8 @@ jobs:
           releaseBody: |
             Bundles are unsigned. macOS: right-click the app and choose Open the
             first time. Windows: SmartScreen will warn until the app is signed.
-          releaseDraft: true
+          # Published straight away: a draft is invisible to everyone but the
+          # repo owner, and these tags exist so people can download the app.
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
