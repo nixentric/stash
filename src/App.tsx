@@ -327,6 +327,7 @@ export default function App() {
             onNewCollection={() => setNewCollectionOpen(true)}
             onNewBrand={() => setBrandDraft(emptyBrand())}
             onManageTags={() => setManageTagsOpen(true)}
+            onEditBrand={setBrandDraft}
           />
         </div>
 

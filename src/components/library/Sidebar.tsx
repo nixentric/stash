@@ -20,16 +20,28 @@ import {
 import { cn } from "@/lib/utils";
 import { count } from "@/lib/format";
 import { useUi } from "@/store/ui";
-import { useBrands, useCollections, useFolders, useProjects, useStats, useTags } from "@/hooks/queries";
+import { useBrands, useCollections, useFolders, useProjects, useStats, useTags, invalidateLibrary, reportError } from "@/hooks/queries";
 import { Tooltip } from "@/components/ui/misc";
+import type { Brand, Collection, Tag } from "@/lib/types";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/menu";
+import { useQueryClient } from "@tanstack/react-query";
+import { ipc } from "@/lib/ipc";
+import { toast } from "sonner";
+import { PromptDialog } from "@/components/dialogs/PromptDialog";
 
 interface Props {
   onNewCollection: () => void;
   onNewBrand: () => void;
   onManageTags: () => void;
+  onEditBrand: (brand: Brand) => void;
 }
 
-export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
+export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand }: Props) {
   const { view, setView, setSettingsOpen } = useUi();
   const stats = useStats(true);
   const tags = useTags(true);
@@ -37,6 +49,46 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
   const projects = useProjects(true);
   const folders = useFolders(true);
   const brands = useBrands(true);
+  const qc = useQueryClient();
+
+  const [renamingCollection, setRenamingCollection] = useState<Collection | null>(null);
+  const [renamingTag, setRenamingTag] = useState<Tag | null>(null);
+
+  const deleteBrand = async (b: Brand) => {
+    if (confirm(`Delete brand “${b.name}”?`)) {
+      try {
+        await ipc.deleteBrand(b.id);
+        invalidateLibrary(qc);
+        toast.success(`Deleted brand “${b.name}”`);
+      } catch (err) {
+        reportError(err, "Could not delete brand");
+      }
+    }
+  };
+
+  const deleteCollection = async (c: Collection) => {
+    if (confirm(`Delete collection “${c.name}”?`)) {
+      try {
+        await ipc.deleteCollection(c.id);
+        invalidateLibrary(qc);
+        toast.success(`Deleted collection “${c.name}”`);
+      } catch (err) {
+        reportError(err, "Could not delete collection");
+      }
+    }
+  };
+
+  const deleteTag = async (t: Tag) => {
+    if (confirm(`Delete tag “${t.name}”? This will remove it from all clips and folders.`)) {
+      try {
+        await ipc.deleteTags([t.id]);
+        invalidateLibrary(qc);
+        toast.success(`Deleted tag “${t.name}”`);
+      } catch (err) {
+        reportError(err, "Could not delete tag");
+      }
+    }
+  };
 
   const s = stats.data;
 
@@ -115,13 +167,24 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
         empty={brands.data?.length === 0 ? "No brands yet" : undefined}
       >
         {brands.data?.map((b) => (
-          <Row
-            key={b.id}
-            active={view.kind === "brand" && view.id === b.id}
-            onClick={() => setView({ kind: "brand", id: b.id, name: b.name })}
-            icon={<Swatches />}
-            label={b.name}
-          />
+          <ContextMenu key={b.id}>
+            <ContextMenuTrigger>
+              <Row
+                active={view.kind === "brand" && view.id === b.id}
+                onClick={() => setView({ kind: "brand", id: b.id, name: b.name })}
+                icon={<Swatches />}
+                label={b.name}
+              />
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => onEditBrand(b)}>
+                Edit Brand...
+              </ContextMenuItem>
+              <ContextMenuItem destructive onSelect={() => deleteBrand(b)}>
+                Delete Brand
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
       </Section>
 
@@ -131,14 +194,25 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
         empty={collections.data?.length === 0 ? "No collections yet" : undefined}
       >
         {collections.data?.map((c) => (
-          <Row
-            key={c.id}
-            active={view.kind === "collection" && view.id === c.id}
-            onClick={() => setView({ kind: "collection", id: c.id, name: c.name })}
-            icon={<Layers />}
-            label={c.name}
-            badge={c.footageCount}
-          />
+          <ContextMenu key={c.id}>
+            <ContextMenuTrigger>
+              <Row
+                active={view.kind === "collection" && view.id === c.id}
+                onClick={() => setView({ kind: "collection", id: c.id, name: c.name })}
+                icon={<Layers />}
+                label={c.name}
+                badge={c.footageCount}
+              />
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => setRenamingCollection(c)}>
+                Rename Collection...
+              </ContextMenuItem>
+              <ContextMenuItem destructive onSelect={() => deleteCollection(c)}>
+                Delete Collection
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
       </Section>
 
@@ -163,14 +237,25 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
           action={{ label: "Manage tags", onClick: onManageTags, icon: <SlidersHorizontal /> }}
         >
           {tags.data.slice(0, 40).map((t) => (
-            <Row
-              key={t.id}
-              active={view.kind === "tag" && view.name === t.name}
-              onClick={() => setView({ kind: "tag", name: t.name })}
-              icon={<Hash />}
-              label={t.name}
-              badge={t.footageCount}
-            />
+            <ContextMenu key={t.id}>
+              <ContextMenuTrigger>
+                <Row
+                  active={view.kind === "tag" && view.name === t.name}
+                  onClick={() => setView({ kind: "tag", name: t.name })}
+                  icon={<Hash />}
+                  label={t.name}
+                  badge={t.footageCount}
+                />
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => setRenamingTag(t)}>
+                  Rename Tag...
+                </ContextMenuItem>
+                <ContextMenuItem destructive onSelect={() => deleteTag(t)}>
+                  Delete Tag
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
         </Section>
       )}
@@ -184,6 +269,44 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
           label="Settings"
         />
       </div>
+
+      {renamingCollection && (
+        <PromptDialog
+          open={!!renamingCollection}
+          onOpenChange={(open) => !open && setRenamingCollection(null)}
+          title="Rename Collection"
+          placeholder="Collection name"
+          initialValue={renamingCollection.name}
+          onSubmit={async (name) => {
+            try {
+              await ipc.renameCollection(renamingCollection.id, name);
+              invalidateLibrary(qc);
+              toast.success(`Renamed to “${name}”`);
+            } catch (err) {
+              reportError(err, "Could not rename collection");
+            }
+          }}
+        />
+      )}
+
+      {renamingTag && (
+        <PromptDialog
+          open={!!renamingTag}
+          onOpenChange={(open) => !open && setRenamingTag(null)}
+          title="Rename Tag"
+          placeholder="Tag name"
+          initialValue={renamingTag.name}
+          onSubmit={async (name) => {
+            try {
+              await ipc.renameTag(renamingTag.id, name);
+              invalidateLibrary(qc);
+              toast.success(`Renamed to “${name}”`);
+            } catch (err) {
+              reportError(err, "Could not rename tag");
+            }
+          }}
+        />
+      )}
     </nav>
   );
 }

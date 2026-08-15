@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.1 — 2026-08-16
+
+**Right-click context menus for Sidebar items**
+
+- **Quick actions on Sidebar.** Right-clicking any item under **Brands**, **Collections**, or **Tags** in the left sidebar now opens a context menu with actions to edit or delete the item directly.
+- **Rename and Edit.** Selecting **Edit Brand...** opens the brand designer, while selecting **Rename Collection...** or **Rename Tag...** opens an inline text prompt to quickly rename them without leaving your current view.
+- **Instant Deletion.** Selecting the **Delete** action triggers a warning prompt to confirm deletion. Once confirmed, it deletes the item and updates the library state immediately.
+
 ## v0.5.0 — 2026-08-16
 
 **Inline editing for Brands, Tags, and Custom Columns**
