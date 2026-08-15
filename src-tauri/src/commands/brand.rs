@@ -1,4 +1,7 @@
-use crate::db::models::{Brand, BrandColor, BrandDetail, BrandLogo, BrandTypeface, SearchHit};
+use crate::db::models::{
+    Brand, BrandColor, BrandDetail, BrandElement, BrandExample, BrandLogo, BrandLogoRules,
+    BrandTypeface, SearchHit,
+};
 use crate::db::repo::brand as repo;
 use crate::error::Result;
 use crate::state::AppState;
@@ -60,4 +63,29 @@ pub fn delete_brand_logo(state: State<'_, AppState>, id: i64) -> Result<()> {
 #[tauri::command]
 pub fn universal_search(state: State<'_, AppState>, query: String) -> Result<Vec<SearchHit>> {
     state.with_library(|lib| crate::db::repo::search::universal(&lib.conn, &query))
+}
+
+#[tauri::command]
+pub fn save_brand_logo_rules(state: State<'_, AppState>, rules: BrandLogoRules) -> Result<()> {
+    state.with_library(|lib| repo::save_logo_rules(&lib.conn, &rules))
+}
+
+#[tauri::command]
+pub fn save_brand_example(state: State<'_, AppState>, example: BrandExample) -> Result<i64> {
+    state.with_library(|lib| repo::save_example(&lib.conn, &example))
+}
+
+#[tauri::command]
+pub fn delete_brand_example(state: State<'_, AppState>, id: i64) -> Result<()> {
+    state.with_library(|lib| repo::delete_example(&lib.conn, id))
+}
+
+#[tauri::command]
+pub fn save_brand_element(state: State<'_, AppState>, element: BrandElement) -> Result<i64> {
+    state.with_library(|lib| repo::save_element(&lib.conn, &element))
+}
+
+#[tauri::command]
+pub fn delete_brand_element(state: State<'_, AppState>, id: i64) -> Result<()> {
+    state.with_library(|lib| repo::delete_element(&lib.conn, id))
 }

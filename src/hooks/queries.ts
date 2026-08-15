@@ -128,7 +128,12 @@ type BrandAction =
   | { type: "saveTypeface"; typeface: T.BrandTypeface }
   | { type: "deleteTypeface"; id: number }
   | { type: "saveLogo"; logo: T.BrandLogo }
-  | { type: "deleteLogo"; id: number };
+  | { type: "deleteLogo"; id: number }
+  | { type: "saveLogoRules"; rules: T.BrandLogoRules }
+  | { type: "saveExample"; example: T.BrandExample }
+  | { type: "deleteExample"; id: number }
+  | { type: "saveElement"; element: T.BrandElement }
+  | { type: "deleteElement"; id: number };
 
 export function useBrandAction() {
   const qc = useQueryClient();
@@ -152,6 +157,16 @@ export function useBrandAction() {
           return ipc.saveBrandLogo(a.logo);
         case "deleteLogo":
           return ipc.deleteBrandLogo(a.id);
+        case "saveLogoRules":
+          return ipc.saveBrandLogoRules(a.rules);
+        case "saveExample":
+          return ipc.saveBrandExample(a.example);
+        case "deleteExample":
+          return ipc.deleteBrandExample(a.id);
+        case "saveElement":
+          return ipc.saveBrandElement(a.element);
+        case "deleteElement":
+          return ipc.deleteBrandElement(a.id);
       }
     },
     onSuccess: () => {

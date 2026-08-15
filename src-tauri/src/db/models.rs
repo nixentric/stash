@@ -297,7 +297,7 @@ pub struct Brand {
 }
 
 /// A brand plus everything the guideline screens render in one round trip —
-/// four small tables, always shown together.
+/// small tables, always shown together.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BrandDetail {
@@ -305,6 +305,71 @@ pub struct BrandDetail {
     pub colors: Vec<BrandColor>,
     pub typefaces: Vec<BrandTypeface>,
     pub logos: Vec<BrandLogo>,
+    pub logo_rules: BrandLogoRules,
+    pub examples: Vec<BrandExample>,
+    pub elements: Vec<BrandElement>,
+}
+
+/// Rules about the mark itself. One row per brand: clear space and minimum size
+/// belong to the logo as a whole, and restating them per variant is how two
+/// variants end up disagreeing.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandLogoRules {
+    #[serde(default)]
+    pub brand_id: i64,
+    #[serde(default)]
+    pub clear_space: String,
+    #[serde(default)]
+    pub minimum_size: String,
+    #[serde(default)]
+    pub background_usage: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+/// A do/don't example. `section` exists because the pattern recurs across the
+/// guideline; only "logo" has a screen today.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandExample {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub brand_id: i64,
+    #[serde(default = "logo_section")]
+    pub section: String,
+    /// correct | incorrect
+    pub verdict: String,
+    #[serde(default)]
+    pub caption: String,
+    #[serde(default)]
+    pub footage_id: Option<i64>,
+    #[serde(default)]
+    pub position: i64,
+}
+
+fn logo_section() -> String {
+    "logo".to_string()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandElement {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub brand_id: i64,
+    /// shape | pattern | gradient | texture | decorative | frame | background
+    pub category: String,
+    pub name: String,
+    /// Points into the asset library rather than duplicating the file.
+    #[serde(default)]
+    pub footage_id: Option<i64>,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub position: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

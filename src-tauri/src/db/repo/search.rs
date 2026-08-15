@@ -148,6 +148,54 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
         hits.push(row?);
     }
 
+    // ── graphic elements ────────────────────────────────────────────────────
+    let mut stmt = conn.prepare(
+        "SELECT e.id, e.name, e.category, b.id, b.name FROM brand_elements e
+           JOIN brands b ON b.id = e.brand_id
+          WHERE e.name LIKE ?1 ESCAPE '\\' OR e.category LIKE ?1 ESCAPE '\\'
+             OR e.notes LIKE ?1 ESCAPE '\\'
+          ORDER BY b.name COLLATE NOCASE, e.position LIMIT ?2",
+    )?;
+    for row in stmt.query_map(rusqlite::params![pattern, PER_KIND], |r| {
+        let category: String = r.get(2)?;
+        let brand: String = r.get(4)?;
+        Ok(SearchHit {
+            kind: "element".into(),
+            id: r.get(0)?,
+            title: r.get(1)?,
+            subtitle: format!("{brand} — {category}"),
+            brand_id: Some(r.get(3)?),
+            brand_name: brand,
+            hex: None,
+        })
+    })? {
+        hits.push(row?);
+    }
+
+    // ── written rules ───────────────────────────────────────────────────────
+    // The rules are one row of prose per brand, so a hit points at the brand
+    // rather than at a rule that has no page of its own.
+    let mut stmt = conn.prepare(
+        "SELECT r.brand_id, b.name FROM brand_logo_rules r JOIN brands b ON b.id = r.brand_id
+          WHERE r.clear_space LIKE ?1 ESCAPE '\\' OR r.minimum_size LIKE ?1 ESCAPE '\\'
+             OR r.background_usage LIKE ?1 ESCAPE '\\'
+          ORDER BY b.name COLLATE NOCASE LIMIT ?2",
+    )?;
+    for row in stmt.query_map(rusqlite::params![pattern, PER_KIND], |r| {
+        let brand: String = r.get(1)?;
+        Ok(SearchHit {
+            kind: "guideline".into(),
+            id: r.get(0)?,
+            title: "Logo usage rules".into(),
+            subtitle: brand.clone(),
+            brand_id: Some(r.get(0)?),
+            brand_name: brand,
+            hex: None,
+        })
+    })? {
+        hits.push(row?);
+    }
+
     Ok(hits)
 }
 

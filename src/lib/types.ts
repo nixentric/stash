@@ -229,11 +229,54 @@ export interface BrandLogo {
   position: number;
 }
 
+export const ELEMENT_CATEGORIES = [
+  "shape",
+  "pattern",
+  "gradient",
+  "texture",
+  "decorative",
+  "frame",
+  "background",
+] as const;
+
+export interface BrandLogoRules {
+  brandId: number;
+  clearSpace: string;
+  minimumSize: string;
+  backgroundUsage: string;
+  updatedAt: string;
+}
+
+export interface BrandExample {
+  id: number;
+  brandId: number;
+  /** Only "logo" has a screen today; the field exists for the sections to come. */
+  section: string;
+  verdict: "correct" | "incorrect";
+  caption: string;
+  footageId: number | null;
+  position: number;
+}
+
+export interface BrandElement {
+  id: number;
+  brandId: number;
+  category: string;
+  name: string;
+  /** Points into the asset library rather than duplicating the file. */
+  footageId: number | null;
+  notes: string;
+  position: number;
+}
+
 export interface BrandDetail {
   brand: Brand;
   colors: BrandColor[];
   typefaces: BrandTypeface[];
   logos: BrandLogo[];
+  logoRules: BrandLogoRules;
+  examples: BrandExample[];
+  elements: BrandElement[];
 }
 
 export const emptyBrand = (): Brand => ({

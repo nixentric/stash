@@ -10,8 +10,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBrandAction, useFootage } from "@/hooks/queries";
-import { COLOR_ROLES, LOGO_VARIANTS, TYPE_ROLES, emptyQuery } from "@/lib/types";
-import type { Brand, BrandColor, BrandLogo, BrandTypeface } from "@/lib/types";
+import {
+  COLOR_ROLES,
+  ELEMENT_CATEGORIES,
+  LOGO_VARIANTS,
+  TYPE_ROLES,
+  emptyQuery,
+} from "@/lib/types";
+import type {
+  Brand,
+  BrandColor,
+  BrandElement,
+  BrandExample,
+  BrandLogo,
+  BrandTypeface,
+} from "@/lib/types";
 
 /** Label + control, the shape every field in these dialogs takes. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -364,6 +377,191 @@ export function LogoDialog({ logo, onClose }: { logo: BrandLogo | null; onClose:
           <Button
             disabled={!draft.name.trim()}
             onClick={() => action.mutate({ type: "saveLogo", logo: draft }, { onSuccess: onClose })}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Do/don't examples and graphic elements are the same shape of thing: a name,
+ * a category, and a link into the asset library. One dialog serves both.
+ */
+function AssetPicker({
+  footageId,
+  onPick,
+}: {
+  footageId: number | null;
+  onPick: (id: number | null) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const results = useFootage(
+    { ...emptyQuery(), search: search.trim() || null, limit: 8 },
+    search.trim().length > 1,
+  );
+
+  return (
+    <>
+      <Field label="Linked asset">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search the asset library…"
+        />
+      </Field>
+      {footageId != null && (
+        <p className="text-[12px] text-muted-foreground">
+          Linked to asset #{footageId}{" "}
+          <button
+            type="button"
+            className="cursor-pointer text-primary hover:underline"
+            onClick={() => onPick(null)}
+          >
+            unlink
+          </button>
+        </p>
+      )}
+      {(results.data?.items ?? []).length > 0 && (
+        <ul className="max-h-40 overflow-y-auto rounded-md border border-border">
+          {results.data!.items.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => onPick(item.id)}
+                className={`w-full cursor-pointer px-2 py-1.5 text-left text-[12px] hover:bg-accent ${
+                  footageId === item.id ? "bg-accent" : ""
+                }`}
+              >
+                {item.displayName}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+export function ExampleDialog({
+  example,
+  onClose,
+}: {
+  example: BrandExample | null;
+  onClose: () => void;
+}) {
+  const action = useBrandAction();
+  const [draft, setDraft] = useState<BrandExample | null>(example);
+
+  useEffect(() => setDraft(example), [example]);
+  if (!draft) return null;
+
+  return (
+    <Dialog open={!!example} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-[min(30rem,92vw)]">
+        <DialogHeader>
+          <DialogTitle>
+            {draft.verdict === "correct" ? "Correct usage example" : "Incorrect usage example"}
+          </DialogTitle>
+        </DialogHeader>
+        <DialogBody className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+          <Field label="Caption">
+            <Input
+              value={draft.caption}
+              onChange={(e) => setDraft({ ...draft, caption: e.target.value })}
+              placeholder={
+                draft.verdict === "correct" ? "On solid white" : "Never stretch the mark"
+              }
+              autoFocus
+            />
+          </Field>
+          <Field label="Verdict">
+            <Select
+              value={draft.verdict}
+              options={["correct", "incorrect"]}
+              onChange={(v) => setDraft({ ...draft, verdict: v as "correct" | "incorrect" })}
+            />
+          </Field>
+          <AssetPicker
+            footageId={draft.footageId}
+            onPick={(footageId) => setDraft({ ...draft, footageId })}
+          />
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() =>
+              action.mutate({ type: "saveExample", example: draft }, { onSuccess: onClose })
+            }
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ElementDialog({
+  element,
+  onClose,
+}: {
+  element: BrandElement | null;
+  onClose: () => void;
+}) {
+  const action = useBrandAction();
+  const [draft, setDraft] = useState<BrandElement | null>(element);
+
+  useEffect(() => setDraft(element), [element]);
+  if (!draft) return null;
+
+  return (
+    <Dialog open={!!element} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-[min(30rem,92vw)]">
+        <DialogHeader>
+          <DialogTitle>{draft.id === 0 ? "Add Graphic Element" : "Edit Graphic Element"}</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+          <Field label="Name">
+            <Input
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              placeholder="Diagonal grid"
+              autoFocus
+            />
+          </Field>
+          <Field label="Category">
+            <Select
+              value={draft.category}
+              options={ELEMENT_CATEGORIES}
+              onChange={(category) => setDraft({ ...draft, category })}
+            />
+          </Field>
+          <AssetPicker
+            footageId={draft.footageId}
+            onPick={(footageId) => setDraft({ ...draft, footageId })}
+          />
+          <Field label="Usage notes">
+            <Input
+              value={draft.notes}
+              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              placeholder="Backgrounds only, 20% opacity"
+            />
+          </Field>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!draft.name.trim()}
+            onClick={() =>
+              action.mutate({ type: "saveElement", element: draft }, { onSuccess: onClose })
+            }
           >
             Save
           </Button>

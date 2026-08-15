@@ -4,7 +4,10 @@
 //! files live in the asset library exactly once. Colours store hex only; RGB and
 //! CMYK are derived at display time.
 
-use crate::db::models::{Brand, BrandColor, BrandDetail, BrandLogo, BrandTypeface};
+use crate::db::models::{
+    Brand, BrandColor, BrandDetail, BrandElement, BrandExample, BrandLogo, BrandLogoRules,
+    BrandTypeface,
+};
 use crate::error::{AppError, Result};
 use crate::util::now_iso;
 use rusqlite::{params, Connection};
@@ -130,7 +133,63 @@ pub fn detail(conn: &Connection, id: i64) -> Result<BrandDetail> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
-    Ok(BrandDetail { brand, colors, typefaces, logos })
+    // Absent rules are an empty row, not an error: a brand that has not written
+    // its rules down yet still renders the section, ready to fill in.
+    let logo_rules = conn
+        .query_row(
+            "SELECT brand_id, clear_space, minimum_size, background_usage, updated_at
+               FROM brand_logo_rules WHERE brand_id = ?1",
+            [id],
+            |r| {
+                Ok(BrandLogoRules {
+                    brand_id: r.get(0)?,
+                    clear_space: r.get(1)?,
+                    minimum_size: r.get(2)?,
+                    background_usage: r.get(3)?,
+                    updated_at: r.get(4)?,
+                })
+            },
+        )
+        .unwrap_or(BrandLogoRules { brand_id: id, ..Default::default() });
+
+    let mut examples = conn.prepare(
+        "SELECT id, brand_id, section, verdict, caption, footage_id, position FROM brand_examples
+         -- 'correct' sorts before 'incorrect', which is also how they read.
+         WHERE brand_id = ?1 ORDER BY section, verdict, position, id",
+    )?;
+    let examples = examples
+        .query_map([id], |r| {
+            Ok(BrandExample {
+                id: r.get(0)?,
+                brand_id: r.get(1)?,
+                section: r.get(2)?,
+                verdict: r.get(3)?,
+                caption: r.get(4)?,
+                footage_id: r.get(5)?,
+                position: r.get(6)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut elements = conn.prepare(
+        "SELECT id, brand_id, category, name, footage_id, notes, position FROM brand_elements
+         WHERE brand_id = ?1 ORDER BY position, id",
+    )?;
+    let elements = elements
+        .query_map([id], |r| {
+            Ok(BrandElement {
+                id: r.get(0)?,
+                brand_id: r.get(1)?,
+                category: r.get(2)?,
+                name: r.get(3)?,
+                footage_id: r.get(4)?,
+                notes: r.get(5)?,
+                position: r.get(6)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(BrandDetail { brand, colors, typefaces, logos, logo_rules, examples, elements })
 }
 
 /// Creates when `id` is 0, updates otherwise. Returns the brand's id.
@@ -264,6 +323,84 @@ pub fn save_logo(conn: &Connection, l: &BrandLogo) -> Result<i64> {
     Ok(id)
 }
 
+pub fn save_logo_rules(conn: &Connection, r: &BrandLogoRules) -> Result<()> {
+    let clear_space = optional("Clear space", &r.clear_space, 1000)?;
+    let minimum_size = optional("Minimum size", &r.minimum_size, 1000)?;
+    let background_usage = optional("Background usage", &r.background_usage, 2000)?;
+
+    conn.execute(
+        "INSERT INTO brand_logo_rules (brand_id, clear_space, minimum_size, background_usage, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(brand_id) DO UPDATE SET clear_space = excluded.clear_space,
+             minimum_size = excluded.minimum_size, background_usage = excluded.background_usage,
+             updated_at = excluded.updated_at",
+        params![r.brand_id, clear_space, minimum_size, background_usage, now_iso()],
+    )?;
+    touch(conn, r.brand_id)
+}
+
+pub fn save_example(conn: &Connection, e: &BrandExample) -> Result<i64> {
+    if !matches!(e.verdict.as_str(), "correct" | "incorrect") {
+        return Err(AppError::Invalid("An example is either correct or incorrect".into()));
+    }
+    let section = required("Section", &e.section, 40)?;
+    let caption = optional("Caption", &e.caption, 500)?;
+
+    let id = if e.id == 0 {
+        conn.execute(
+            "INSERT INTO brand_examples (brand_id, section, verdict, caption, footage_id, position)
+             VALUES (?1, ?2, ?3, ?4, ?5, COALESCE((SELECT MAX(position) + 1 FROM brand_examples
+                                                    WHERE brand_id = ?1 AND section = ?2), 0))",
+            params![e.brand_id, section, e.verdict, caption, e.footage_id],
+        )?;
+        conn.last_insert_rowid()
+    } else {
+        conn.execute(
+            "UPDATE brand_examples SET section = ?2, verdict = ?3, caption = ?4, footage_id = ?5
+             WHERE id = ?1",
+            params![e.id, section, e.verdict, caption, e.footage_id],
+        )?;
+        e.id
+    };
+    touch(conn, e.brand_id)?;
+    Ok(id)
+}
+
+pub fn save_element(conn: &Connection, el: &BrandElement) -> Result<i64> {
+    let name = required("Element name", &el.name, 120)?;
+    let category = required("Category", &el.category, 40)?;
+    let notes = optional("Notes", &el.notes, 1000)?;
+
+    let id = if el.id == 0 {
+        conn.execute(
+            "INSERT INTO brand_elements (brand_id, category, name, footage_id, notes, position)
+             VALUES (?1, ?2, ?3, ?4, ?5, COALESCE((SELECT MAX(position) + 1 FROM brand_elements
+                                                    WHERE brand_id = ?1), 0))",
+            params![el.brand_id, category, name, el.footage_id, notes],
+        )?;
+        conn.last_insert_rowid()
+    } else {
+        conn.execute(
+            "UPDATE brand_elements SET category = ?2, name = ?3, footage_id = ?4, notes = ?5
+             WHERE id = ?1",
+            params![el.id, category, name, el.footage_id, notes],
+        )?;
+        el.id
+    };
+    touch(conn, el.brand_id)?;
+    Ok(id)
+}
+
+pub fn delete_example(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM brand_examples WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+pub fn delete_element(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM brand_elements WHERE id = ?1", [id])?;
+    Ok(())
+}
+
 pub fn delete_color(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM brand_colors WHERE id = ?1", [id])?;
     Ok(())
@@ -348,6 +485,102 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM brand_colors", [], |r| r.get(0))
             .unwrap();
         assert_eq!(orphans, 0, "deleting a brand cascades to its palette");
+    }
+
+    #[test]
+    fn rules_are_an_empty_row_until_written_and_survive_rewriting() {
+        let c = db();
+        let id = save(&c, &Brand { name: "Acme".into(), ..Default::default() }).unwrap();
+
+        let rules = detail(&c, id).unwrap().logo_rules;
+        assert_eq!(rules.clear_space, "", "a brand with no rules still renders the section");
+        assert_eq!(rules.brand_id, id);
+
+        save_logo_rules(&c, &BrandLogoRules {
+            brand_id: id,
+            clear_space: "1x the mark height".into(),
+            minimum_size: "24px".into(),
+            background_usage: "Never on busy photography".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        save_logo_rules(&c, &BrandLogoRules {
+            brand_id: id,
+            clear_space: "Half the mark height".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Upsert, not insert: the second write replaces rather than duplicating.
+        let count: i64 = c
+            .query_row("SELECT COUNT(*) FROM brand_logo_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(detail(&c, id).unwrap().logo_rules.clear_space, "Half the mark height");
+    }
+
+    #[test]
+    fn examples_are_grouped_by_verdict_and_junk_verdicts_are_refused() {
+        let c = db();
+        let id = save(&c, &Brand { name: "Acme".into(), ..Default::default() }).unwrap();
+
+        for (verdict, caption) in
+            [("correct", "On white"), ("incorrect", "Stretched"), ("correct", "On brand blue")]
+        {
+            save_example(&c, &BrandExample {
+                brand_id: id,
+                section: "logo".into(),
+                verdict: verdict.into(),
+                caption: caption.into(),
+                ..Default::default()
+            })
+            .unwrap();
+        }
+        assert!(
+            save_example(&c, &BrandExample {
+                brand_id: id,
+                section: "logo".into(),
+                verdict: "maybe".into(),
+                ..Default::default()
+            })
+            .is_err(),
+            "an example is either correct or incorrect"
+        );
+
+        let examples = detail(&c, id).unwrap().examples;
+        assert_eq!(examples.len(), 3);
+        assert_eq!(examples[0].verdict, "correct", "do comes before don't");
+        assert_eq!(examples.iter().filter(|e| e.verdict == "incorrect").count(), 1);
+    }
+
+    #[test]
+    fn elements_reference_assets_and_cascade_with_the_brand() {
+        let c = db();
+        let id = save(&c, &Brand { name: "Acme".into(), ..Default::default() }).unwrap();
+        c.execute(
+            "INSERT INTO footages (id, display_name, media_type, date_added, date_modified)
+             VALUES (9, 'grid.svg', 'other', '2026-01-01', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+        save_element(&c, &BrandElement {
+            brand_id: id,
+            category: "pattern".into(),
+            name: "Grid".into(),
+            footage_id: Some(9),
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!(detail(&c, id).unwrap().elements[0].footage_id, Some(9));
+
+        delete(&c, id).unwrap();
+        let left: i64 = c
+            .query_row("SELECT COUNT(*) FROM brand_elements", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0, "elements go with the brand");
+        let asset: i64 = c.query_row("SELECT COUNT(*) FROM footages", [], |r| r.get(0)).unwrap();
+        assert_eq!(asset, 1, "but the asset itself is untouched");
     }
 
     #[test]

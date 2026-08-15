@@ -17,7 +17,14 @@ import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import { JobBanner } from "@/components/library/JobBanner";
 import { SourceFoldersPage } from "@/components/library/SourceFoldersPage";
 import { FolderMetadataDialog } from "@/components/dialogs/FolderMetadataDialog";
-import { BrandDialog, ColorDialog, LogoDialog, TypefaceDialog } from "@/components/dialogs/BrandDialogs";
+import {
+  BrandDialog,
+  ColorDialog,
+  ElementDialog,
+  ExampleDialog,
+  LogoDialog,
+  TypefaceDialog,
+} from "@/components/dialogs/BrandDialogs";
 import { BrandPage } from "@/components/brand/BrandPage";
 import { ipc } from "@/lib/ipc";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
@@ -35,7 +42,16 @@ import {
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { buildQuery, useUi } from "@/store/ui";
 import { emptyBrand } from "@/lib/types";
-import type { Brand, BrandColor, BrandLogo, BrandTypeface, FolderNode, JobProgress } from "@/lib/types";
+import type {
+  Brand,
+  BrandColor,
+  BrandElement,
+  BrandExample,
+  BrandLogo,
+  BrandTypeface,
+  FolderNode,
+  JobProgress,
+} from "@/lib/types";
 
 export default function App() {
   const qc = useQueryClient();
@@ -51,6 +67,8 @@ export default function App() {
   const [colorDraft, setColorDraft] = useState<BrandColor | null>(null);
   const [typefaceDraft, setTypefaceDraft] = useState<BrandTypeface | null>(null);
   const [logoDraft, setLogoDraft] = useState<BrandLogo | null>(null);
+  const [exampleDraft, setExampleDraft] = useState<BrandExample | null>(null);
+  const [elementDraft, setElementDraft] = useState<BrandElement | null>(null);
 
   const ui = useUi();
   const { selection, inspectorOpen, settingsOpen, setSettingsOpen, select } = ui;
@@ -246,6 +264,8 @@ export default function App() {
                 onEditColor={setColorDraft}
                 onEditTypeface={setTypefaceDraft}
                 onEditLogo={setLogoDraft}
+                onEditExample={setExampleDraft}
+                onEditElement={setElementDraft}
               />
             ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage onEdit={setFolderMetadata} /> : <FootageGrid
               items={items}
@@ -279,6 +299,8 @@ export default function App() {
       <ColorDialog color={colorDraft} onClose={() => setColorDraft(null)} />
       <TypefaceDialog typeface={typefaceDraft} onClose={() => setTypefaceDraft(null)} />
       <LogoDialog logo={logoDraft} onClose={() => setLogoDraft(null)} />
+      <ExampleDialog example={exampleDraft} onClose={() => setExampleDraft(null)} />
+      <ElementDialog element={elementDraft} onClose={() => setElementDraft(null)} />
 
       <MarkUsedDialog
         open={markUsedOpen}

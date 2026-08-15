@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Ban,
   Check,
   Copy,
   ExternalLink,
@@ -7,6 +8,7 @@ import {
   Palette,
   Pencil,
   Plus,
+  Shapes,
   Trash2,
   Type as TypeIcon,
   Zap,
@@ -14,9 +16,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBrand, useBrandAction, useFootageDetail } from "@/hooks/queries";
+import { useThumbnail } from "@/hooks/use-thumbnail";
 import { colorFormats, readableOn } from "@/lib/format";
-import { COLOR_ROLES, LOGO_VARIANTS, TYPE_ROLES } from "@/lib/types";
-import type { Brand, BrandColor, BrandLogo, BrandTypeface } from "@/lib/types";
+import { COLOR_ROLES, ELEMENT_CATEGORIES, LOGO_VARIANTS, TYPE_ROLES } from "@/lib/types";
+import type {
+  Brand,
+  BrandColor,
+  BrandElement,
+  BrandExample,
+  BrandLogo,
+  BrandLogoRules,
+  BrandTypeface,
+} from "@/lib/types";
 import { ipc } from "@/lib/ipc";
 import { reportError } from "@/hooks/queries";
 
@@ -305,15 +316,198 @@ function QuickLogo({ logo }: { logo: BrandLogo }) {
   );
 }
 
+/** Thumbnail of the asset an entry points at, or a neutral placeholder. */
+function AssetThumb({ id, className }: { id: number | null; className?: string }) {
+  const thumb = useThumbnail(id ?? 0, id != null);
+  return thumb.data ? (
+    <img src={thumb.data} alt="" loading="lazy" className={className} />
+  ) : (
+    <div className={`${className} bg-thumb-bg`} />
+  );
+}
+
+/**
+ * Rules about the mark itself. Editing happens in place rather than in a dialog:
+ * these are three short lines a designer amends while looking at the logos.
+ */
+function LogoRules({ rules }: { rules: BrandLogoRules }) {
+  const action = useBrandAction();
+  const [draft, setDraft] = useState(rules);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => setDraft(rules), [rules]);
+
+  const written = rules.clearSpace || rules.minimumSize || rules.backgroundUsage;
+
+  if (!editing) {
+    return (
+      <div className="rounded-lg border border-border p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-[12px] font-medium">Usage rules</h3>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+            <Pencil /> {written ? "Edit" : "Add rules"}
+          </Button>
+        </div>
+        {written ? (
+          <dl className="grid gap-2 sm:grid-cols-3">
+            {(
+              [
+                ["Clear space", rules.clearSpace],
+                ["Minimum size", rules.minimumSize],
+                ["Background usage", rules.backgroundUsage],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-[11px] uppercase tracking-wide text-subtle-foreground">
+                  {label}
+                </dt>
+                <dd className="text-[13px]">{value || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-[13px] text-muted-foreground">
+            Clear space, minimum size, and where the mark may sit.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {(
+          [
+            ["Clear space", "clearSpace", "1x the mark height"],
+            ["Minimum size", "minimumSize", "24px / 10mm"],
+            ["Background usage", "backgroundUsage", "Solid backgrounds only"],
+          ] as const
+        ).map(([label, key, placeholder]) => (
+          <label key={key} className="block">
+            <span className="mb-1 block text-[11px] uppercase tracking-wide text-subtle-foreground">
+              {label}
+            </span>
+            <Input
+              value={draft[key]}
+              placeholder={placeholder}
+              onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            setDraft(rules);
+            setEditing(false);
+          }}
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={() =>
+            action.mutate(
+              { type: "saveLogoRules", rules: draft },
+              { onSuccess: () => setEditing(false) },
+            )
+          }
+        >
+          Save rules
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Do / don't pairs, side by side, because the contrast is the lesson. */
+function Examples({
+  examples,
+  onAdd,
+  onEdit,
+}: {
+  examples: BrandExample[];
+  onAdd: (verdict: "correct" | "incorrect") => void;
+  onEdit: (example: BrandExample) => void;
+}) {
+  const action = useBrandAction();
+
+  return (
+    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      {(["correct", "incorrect"] as const).map((verdict) => {
+        const list = examples.filter((e) => e.verdict === verdict);
+        return (
+          <div key={verdict} className="rounded-lg border border-border p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h3
+                className={`flex items-center gap-1.5 text-[12px] font-medium ${
+                  verdict === "correct" ? "text-success" : "text-destructive"
+                }`}
+              >
+                {verdict === "correct" ? <Check className="size-3.5" /> : <Ban className="size-3.5" />}
+                {verdict === "correct" ? "Correct usage" : "Don't"}
+              </h3>
+              <Button size="sm" variant="ghost" onClick={() => onAdd(verdict)}>
+                <Plus />
+              </Button>
+            </div>
+
+            {list.length === 0 ? (
+              <p className="text-[12px] text-subtle-foreground">Nothing yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {list.map((e) => (
+                  <li key={e.id} className="group flex items-center gap-2">
+                    <AssetThumb id={e.footageId} className="size-10 shrink-0 rounded object-cover" />
+                    <span className="min-w-0 flex-1 truncate text-[12px]">
+                      {e.caption || "Untitled example"}
+                    </span>
+                    <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button size="sm" variant="ghost" title="Edit example" onClick={() => onEdit(e)}>
+                        <Pencil />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Delete example"
+                        onClick={() => action.mutate({ type: "deleteExample", id: e.id })}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface Props {
   brandId: number;
   onEditBrand: (brand: Brand) => void;
   onEditColor: (color: BrandColor) => void;
   onEditTypeface: (typeface: BrandTypeface) => void;
   onEditLogo: (logo: BrandLogo) => void;
+  onEditExample: (example: BrandExample) => void;
+  onEditElement: (element: BrandElement) => void;
 }
 
-export function BrandPage({ brandId, onEditBrand, onEditColor, onEditTypeface, onEditLogo }: Props) {
+export function BrandPage({
+  brandId,
+  onEditBrand,
+  onEditColor,
+  onEditTypeface,
+  onEditLogo,
+  onEditExample,
+  onEditElement,
+}: Props) {
   const detail = useBrand(brandId);
   const action = useBrandAction();
   const [sample, setSample] = useState("Promo Agustus");
@@ -439,7 +633,7 @@ export function BrandPage({ brandId, onEditBrand, onEditColor, onEditTypeface, o
         )}
       </section>
 
-      <section>
+      <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-[13px] font-semibold">Logos</h2>
           <Button
@@ -477,7 +671,119 @@ export function BrandPage({ brandId, onEditBrand, onEditColor, onEditTypeface, o
             </div>
           ))
         )}
+
+        <div className="mt-3 space-y-3">
+          <LogoRules rules={d.logoRules} />
+          <Examples
+            examples={d.examples.filter((e) => e.section === "logo")}
+            onAdd={(verdict) =>
+              onEditExample({ ...blank, section: "logo", verdict, caption: "", footageId: null })
+            }
+            onEdit={onEditExample}
+          />
+        </div>
       </section>
+
+      <section>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-[13px] font-semibold">
+            <Shapes className="size-4" /> Graphic elements
+          </h2>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              onEditElement({ ...blank, category: "pattern", name: "", footageId: null })
+            }
+          >
+            <Plus /> Add element
+          </Button>
+        </div>
+
+        {d.elements.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">
+            Shapes, patterns, gradients, textures, frames — linked from the asset library, so a
+            file is never stored twice.
+          </p>
+        ) : (
+          byRole(
+            d.elements.map((el) => ({ ...el, role: el.category })),
+            ELEMENT_CATEGORIES,
+          ).map(([category, list]) => (
+            <div key={category} className="mb-4">
+              <h3 className="mb-1.5 text-[11px] uppercase tracking-wide text-subtle-foreground">
+                {category}
+              </h3>
+              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9rem,1fr))]">
+                {list.map((el) => (
+                  <ElementCard
+                    key={el.id}
+                    element={el}
+                    onEdit={() => onEditElement(el)}
+                    onDelete={() => action.mutate({ type: "deleteElement", id: el.id })}
+                  />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ElementCard({
+  element,
+  onEdit,
+  onDelete,
+}: {
+  element: BrandElement;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const asset = useFootageDetail(element.footageId);
+  const path = asset.data?.source.localPath;
+  const url = asset.data?.source.originalUrl;
+
+  return (
+    <div className="group overflow-hidden rounded-lg border border-border">
+      <AssetThumb id={element.footageId} className="h-20 w-full object-cover" />
+      <div className="p-2">
+        <div className="flex items-center justify-between gap-1">
+          <span className="truncate text-[12px] font-medium">{element.name}</span>
+          <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+            {path && (
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Reveal in file manager"
+                onClick={() => ipc.revealInFileManager(path).catch(reportError)}
+              >
+                <FolderOpen />
+              </Button>
+            )}
+            {!path && url && (
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Open source"
+                onClick={() => ipc.openExternal(url).catch(reportError)}
+              >
+                <ExternalLink />
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" title="Edit element" onClick={onEdit}>
+              <Pencil />
+            </Button>
+            <Button size="sm" variant="ghost" title="Delete element" onClick={onDelete}>
+              <Trash2 />
+            </Button>
+          </div>
+        </div>
+        {element.notes && (
+          <p className="truncate text-[11px] text-subtle-foreground">{element.notes}</p>
+        )}
+      </div>
     </div>
   );
 }

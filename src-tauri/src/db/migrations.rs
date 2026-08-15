@@ -10,7 +10,7 @@ use crate::error::{AppError, Result};
 use rusqlite::Connection;
 
 /// Schema version this build understands. Bump when adding a migration.
-pub const APP_SCHEMA_VERSION: u32 = 4;
+pub const APP_SCHEMA_VERSION: u32 = 5;
 
 /// `PRAGMA application_id` — "STAH" as big-endian ASCII. Marks the file as ours
 /// without needing to read a table, and survives copying between machines.
@@ -21,6 +21,7 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (2, M2_SOURCE_FOLDER_METADATA),
     (3, M3_SOURCE_FOLDER_TOUCHED),
     (4, M4_BRANDS),
+    (5, M5_BRAND_RULES_AND_ELEMENTS),
 ];
 
 const M1_INITIAL: &str = r#"
@@ -276,6 +277,48 @@ CREATE TABLE brand_logos (
   position   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX ix_brand_logos_brand ON brand_logos(brand_id);
+"#;
+
+// Logo usage rules and graphic elements.
+//
+// `brand_logo_rules` is keyed by brand rather than by logo: clear space and
+// minimum size are properties of the mark, and restating them per variant is
+// how two variants end up disagreeing.
+//
+// `brand_examples` carries a `section` column because do/don't pairs recur
+// across the guideline (photography, motion, icons). Only 'logo' is wired to a
+// screen today; the column exists so those sections reuse this table instead of
+// each growing a near-identical one.
+const M5_BRAND_RULES_AND_ELEMENTS: &str = r#"
+CREATE TABLE brand_logo_rules (
+  brand_id         INTEGER PRIMARY KEY REFERENCES brands(id) ON DELETE CASCADE,
+  clear_space      TEXT NOT NULL DEFAULT '',
+  minimum_size     TEXT NOT NULL DEFAULT '',
+  background_usage TEXT NOT NULL DEFAULT '',
+  updated_at       TEXT NOT NULL
+);
+
+CREATE TABLE brand_examples (
+  id         INTEGER PRIMARY KEY,
+  brand_id   INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+  section    TEXT NOT NULL DEFAULT 'logo',
+  verdict    TEXT NOT NULL CHECK (verdict IN ('correct','incorrect')),
+  caption    TEXT NOT NULL DEFAULT '',
+  footage_id INTEGER REFERENCES footages(id) ON DELETE SET NULL,
+  position   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_brand_examples_brand ON brand_examples(brand_id, section);
+
+CREATE TABLE brand_elements (
+  id         INTEGER PRIMARY KEY,
+  brand_id   INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+  category   TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  footage_id INTEGER REFERENCES footages(id) ON DELETE SET NULL,
+  notes      TEXT NOT NULL DEFAULT '',
+  position   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_brand_elements_brand ON brand_elements(brand_id);
 "#;
 
 pub fn user_version(conn: &Connection) -> Result<u32> {
