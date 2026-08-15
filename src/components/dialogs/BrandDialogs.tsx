@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   Dialog,
   DialogBody,
@@ -9,6 +10,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/menu";
 import { useBrandAction, useFootage } from "@/hooks/queries";
 import {
   COLOR_ROLES,
@@ -36,28 +44,65 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/**
+ * A native `<select>` renders with the system's own chrome on macOS — grey and
+ * opaque in the middle of a dark dialog, and immune to most CSS. This is the
+ * same menu primitive the toolbar already uses, so a picker looks like the rest
+ * of the app and keeps type-ahead and keyboard control.
+ */
 function Select({
   value,
   options,
   onChange,
+  swatches,
 }: {
   value: string;
   options: readonly string[];
   onChange: (v: string) => void;
+  /** Optional colour per option, for pickers where the value is visual. */
+  swatches?: Record<string, string>;
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-8 w-full cursor-pointer rounded-md border border-border bg-surface px-2 text-[13px]
-                 outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-    >
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-md
+                     border border-border bg-surface px-2 text-[13px] capitalize outline-none
+                     transition-colors hover:border-border-strong
+                     focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            {swatches?.[value] && (
+              <span
+                aria-hidden
+                className="size-3 shrink-0 rounded-full border border-border"
+                style={{ backgroundColor: swatches[value] }}
+              />
+            )}
+            <span className="truncate">{value}</span>
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          {options.map((o) => (
+            <DropdownMenuRadioItem key={o} value={o} className="capitalize">
+              {swatches?.[o] && (
+                <span
+                  aria-hidden
+                  className="mr-1.5 size-3 shrink-0 rounded-full border border-border"
+                  style={{ backgroundColor: swatches[o] }}
+                />
+              )}
+              {o}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -481,6 +526,7 @@ export function ExampleDialog({
             <Select
               value={draft.verdict}
               options={["correct", "incorrect"]}
+              swatches={{ correct: "var(--success)", incorrect: "var(--destructive)" }}
               onChange={(v) => setDraft({ ...draft, verdict: v as "correct" | "incorrect" })}
             />
           </Field>
