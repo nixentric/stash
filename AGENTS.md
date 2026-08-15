@@ -15,11 +15,7 @@ Rules:
 
 When preparing a release:
 - Bump the version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
-- Document all changes in `CHANGELOG.md` under the new version header, categorized into sections:
-  - **[ADDED]**: New features or components.
-  - **[UPDATED]**: Changes or improvements to existing features.
-  - **[FIXED]**: Bug fixes, style alignment adjustments, or error handling.
-  - **[DELETED]**: Removed code, buttons, or features.
+- Document all changes in `CHANGELOG.md` under the new version header. Do NOT use dry, technical lists like [ADDED], [UPDATED], [FIXED], or [DELETED]. Instead, group changes under bold headers describing the feature group, and write descriptive, user-focused bullet points explaining what changed, how it works, and why (matching the conversational and explanatory style of v0.3.1).
 - Make the descriptions detailed and user-focused, so users downloading the release know exactly what changed.
 - Create a git tag corresponding to the new version (e.g., `git tag v0.5.0`) and push it to origin (e.g., `git push origin v0.5.0`) to trigger the GitHub Release Action workflow.
 

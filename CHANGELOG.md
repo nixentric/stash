@@ -5,25 +5,19 @@ GitHub are generated from this file.
 
 ## v0.5.0 — 2026-08-16
 
-**Inline editing, Column Sizing, and Quick Clear Actions on Source Folders**
+**Inline editing for Brands, Tags, and Custom Columns**
 
-**[ADDED]**
-- **Inline Brand and Custom Columns Value Editing:** You can now set or change the Brand and custom column values directly inside each folder row cell without opening a separate dialog.
-- **Two Custom Column Types:** Added support for **Single Value** and **Multiple Tags** custom column types, configured dynamically inside the custom columns settings dialog.
-- **Quick Clear Actions (Hover X):** Hovering over the Brand, Tags, and Custom Column values reveals a quick-clear `x` button, allowing you to clear their values instantly with one click.
-- **Save Checklist Button:** A green checklist icon appears when editing tags inline, allowing a quick click to confirm and save your tags.
+- **Set Brand and Custom Columns directly.** You no longer need to open the edit folder dialog to customize a folder. Click the **Plus (+)** button or edit icon on any cell to choose a brand or type a custom column value right in the table row.
+- **Pencil and Plus icons.** Added visual hints: empty fields show a dashed **Plus (+)** button to add a new value, while populated fields show a **Pencil** icon on hover to edit the existing value.
+- **Save checklist and keyboard friendly.** Added a green **Check** icon button next to inline inputs to save changes immediately. Pressing `Enter` or `Comma` also saves your input without triggering page navigations.
+- **Single Value vs Multiple Tags columns.** Custom columns now support two distinct types. Choose **Single Value** for standard text inputs, or **Multiple Tags** to write comma-separated tags that render as individual chips (just like the main Tags column). Configure types in the Custom Columns settings.
+- **Quick clear buttons.** Hovering over any brand, tag, or custom value reveals a small **X (clear)** button next to the edit icon. Click it to immediately clear the field value without opening the editor.
 
-**[UPDATED]**
-- **Manage Custom Columns Dialog:** Redesigned the custom columns management window to show column type badges and allow choosing between Single Value or Multiple Tags upon column creation or switching existing columns.
-- **Edit Icons Consistency:** The edit action icon next to filled fields (Brand, Tags, Custom Columns) is changed from Plus to a Pencil icon on hover, reserving the Plus icon exclusively for adding values to empty cells.
-- **Responsive Table Widths & horizontal scrolling:** Applied a dynamic minimum width layout constraint on the folder table (`1000px + 160px * custom_columns_count`), enabling horizontal scrollbars on narrow screens instead of squeezing columns.
+**Responsive table sizing and layout fixes**
 
-**[FIXED]**
-- **Squeezed Preview Column Overlap:** Fixed an issue where the folder preview thumbnails overlapped the folder path column in narrow viewports by enforcing strict cell and header width bounds (`w-[116px] min-w-[116px]`).
-- **Bubbling Key Event Navigations:** Meticulously prevented inline inputs from bubbling up key events (like pressing `Enter` or arrows), ensuring that confirming text values doesn't trigger folder row navigations.
-
-**[DELETED]**
-- **Redundant Edit Modal Dialog:** Removed the old Edit Pencil button from row cells and deprecated `FolderMetadataDialog` along with its main application state and hooks, streamlining page interactions.
+- **Prevent column squeezing.** The table now dynamically scales its minimum width (`1000px + 160px` per custom column) and scrolls horizontally when window width is constrained. This prevents columns from squashing each other.
+- **Fixed Preview column overlap.** Enforced a strict minimum width of `116px` on both headers and cells of the Preview column, giving thumbnails enough space so they never collide with the Folder name.
+- **Edit dialog cleanup.** The old metadata edit modal and its Pencil row button have been removed completely, simplifying the workspace since all properties are now editable inline.
 
 ## v0.3.1 — 2026-08-15
 
