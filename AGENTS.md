@@ -21,4 +21,5 @@ When preparing a release:
   - **[FIXED]**: Bug fixes, style alignment adjustments, or error handling.
   - **[DELETED]**: Removed code, buttons, or features.
 - Make the descriptions detailed and user-focused, so users downloading the release know exactly what changed.
+- Create a git tag corresponding to the new version (e.g., `git tag v0.5.0`) and push it to origin (e.g., `git push origin v0.5.0`) to trigger the GitHub Release Action workflow.
 
