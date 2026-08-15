@@ -106,6 +106,34 @@ export default function App() {
 
   useEffect(() => watchSystemTheme(() => prefs.data?.theme ?? "system"), [prefs.data?.theme]);
 
+  // ── update check ──────────────────────────────────────────────────────────
+  // Once per launch, and only with the setting on: this is the single request
+  // Stash makes on its own behalf, so it stays easy to point at and to refuse.
+  // A failure is silent — someone offline does not need to be told twice.
+  useEffect(() => {
+    if (!prefs.data?.checkUpdates) return;
+    let cancelled = false;
+
+    ipc
+      .checkForUpdate()
+      .then((status) => {
+        if (cancelled || !status.updateAvailable) return;
+        toast(`Stash ${status.latest} is available`, {
+          description: `You are on ${status.current}.`,
+          duration: 12_000,
+          action: {
+            label: "View release",
+            onClick: () => ipc.openExternal(status.url).catch(reportError),
+          },
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [prefs.data?.checkUpdates]);
+
   // ── background job progress ───────────────────────────────────────────────
   useEffect(() => {
     const unlisten = listen<JobProgress>("job:progress", (e) => {

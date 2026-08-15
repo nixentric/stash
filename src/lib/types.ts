@@ -492,6 +492,8 @@ export interface Prefs {
   inspectorVisible: boolean | null;
   gridSize: number | null;
   viewMode: string | null;
+  /** When false, Stash never contacts the update server at all. */
+  checkUpdates: boolean;
 }
 
 /** Shape of every rejected `invoke`. */
@@ -522,6 +524,15 @@ export const emptyQuery = (): FootageQuery => ({
   offset: 0,
   limit: 200,
 });
+
+export interface UpdateStatus {
+  current: string;
+  latest: string;
+  updateAvailable: boolean;
+  url: string;
+  notes: string;
+  publishedAt: string;
+}
 
 export interface SearchHit {
   /** asset | brand | color | typeface | logo */

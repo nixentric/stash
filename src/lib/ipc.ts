@@ -129,4 +129,5 @@ export const ipc = {
   setPrefs: (patch: Partial<T.Prefs>) => invoke<T.Prefs>("set_prefs", { patch }),
   openExternal: (url: string) => invoke<void>("open_external", { url }),
   revealInFileManager: (path: string) => invoke<void>("reveal_in_file_manager", { path }),
+  checkForUpdate: () => invoke<T.UpdateStatus>("check_for_update"),
 };

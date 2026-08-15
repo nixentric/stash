@@ -11,8 +11,13 @@ metadata, tags, search, filters, usage tracking, collections, projects, and
 embedded thumbnails. The same will hold for brand guidelines, color, and
 typography when they land — they are local data, not a hosted service.
 
-A library that has never been connected to Drive makes **zero network
-requests**. No telemetry, no analytics, no crash reporting, no update pings.
+With Drive disconnected and the update check switched off in **Settings →
+General**, Stash makes **zero network requests**. No telemetry, no analytics, no
+crash reporting.
+
+The update check is the only request Stash makes on its own behalf: it asks the
+GitHub releases API whether a newer version exists, sends no identifier, and
+downloads nothing — a newer release opens in your browser.
 
 Cloud is never a requirement. It is one optional source among several.
 

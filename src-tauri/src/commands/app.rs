@@ -52,6 +52,7 @@ pub struct PrefsPatch {
     pub inspector_visible: Option<bool>,
     pub grid_size: Option<f64>,
     pub view_mode: Option<String>,
+    pub check_updates: Option<bool>,
 }
 
 #[tauri::command]
@@ -80,6 +81,9 @@ pub fn set_prefs(state: State<'_, AppState>, patch: PrefsPatch) -> Result<Prefs>
         }
         if let Some(v) = patch.grid_size {
             p.grid_size = Some(v);
+        }
+        if let Some(v) = patch.check_updates {
+            p.check_updates = v;
         }
         if let Some(v) = patch.view_mode {
             p.view_mode = Some(v);
@@ -117,4 +121,11 @@ pub fn reveal_in_file_manager(app: tauri::AppHandle, path: String) -> Result<()>
     app.opener()
         .reveal_item_in_dir(p)
         .map_err(|e| AppError::Other(format!("Could not reveal the file: {e}")))
+}
+
+/// Asks GitHub whether a newer release exists. Never downloads or installs —
+/// the answer is a link the user chooses to follow.
+#[tauri::command]
+pub async fn check_for_update() -> Result<crate::update::UpdateStatus> {
+    crate::update::check(env!("CARGO_PKG_VERSION")).await
 }

@@ -7,6 +7,7 @@ pub mod prefs;
 pub mod preview;
 pub mod source;
 pub mod state;
+pub mod update;
 pub mod util;
 
 use state::AppState;
@@ -123,6 +124,7 @@ pub fn run() {
             commands::app::set_prefs,
             commands::app::open_external,
             commands::app::reveal_in_file_manager,
+            commands::app::check_for_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Stash");

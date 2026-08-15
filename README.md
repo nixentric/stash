@@ -96,8 +96,8 @@ Three states are used throughout the documentation, and they mean exactly this:
 
 ## Principles
 
-**Offline-first.** Every core feature works with the network unplugged. A
-library that has never been connected to Drive makes zero network requests.
+**Offline-first.** Every core feature works with the network unplugged. With
+Drive disconnected and the update check off, Stash makes zero network requests.
 
 **Your file, not our format.** A library is one SQLite file. Rename it to
 `.sqlite` and any SQLite tool opens it.
@@ -109,7 +109,10 @@ in the asset library, so a file exists exactly once.
 requirement. Stash requests read-only scope and implements no write endpoint, so
 it structurally cannot modify your Drive.
 
-**No telemetry.** No analytics, no crash reporting, no update pings.
+**No telemetry.** No analytics, no crash reporting, no tracking of any kind.
+Stash makes exactly one request on its own behalf — asking GitHub whether a
+newer release exists — and **Settings → General** switches that off, after which
+it contacts nothing at all unless you connect Drive.
 
 ---
 
@@ -119,3 +122,9 @@ Tauri v2 (Rust) · React + TypeScript · Tailwind · Zustand + TanStack Query ·
 SQLite via rusqlite · OS keychain for secrets · GitHub Actions for packaging.
 
 Details in [Development](docs/development.md).
+
+---
+
+## License
+
+[MIT](LICENSE). Use it, fork it, ship it.

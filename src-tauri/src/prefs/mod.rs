@@ -51,7 +51,7 @@ impl PortableThumbnailSize {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Prefs {
     pub theme: Theme,
@@ -69,6 +69,39 @@ pub struct Prefs {
     pub inspector_visible: Option<bool>,
     pub grid_size: Option<f64>,
     pub view_mode: Option<String>,
+    /// Whether to ask GitHub for a newer release at launch. The only network
+    /// request Stash makes on its own, so it is switchable off — with it off the
+    /// app contacts nothing at all unless Drive is connected.
+    #[serde(default = "default_true")]
+    pub check_updates: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+// Hand-written rather than derived: `check_updates` must read the same on a
+// fresh install as it does through serde, and a derived Default would quietly
+// make it false for exactly the users who have no prefs.json yet.
+impl Default for Prefs {
+    fn default() -> Self {
+        Self {
+            theme: Theme::default(),
+            recent: Vec::new(),
+            last_library: None,
+            portable_thumbnail_size: PortableThumbnailSize::default(),
+            google_client_id: None,
+            google_account_email: None,
+            window_width: None,
+            window_height: None,
+            sidebar_width: None,
+            inspector_width: None,
+            inspector_visible: None,
+            grid_size: None,
+            view_mode: None,
+            check_updates: true,
+        }
+    }
 }
 
 pub struct PrefsStore {
@@ -166,4 +199,22 @@ pub fn resolve_google_client(prefs: &PrefsStore) -> Option<GoogleClientConfig> {
         client_id: client_id.trim().to_string(),
         client_secret,
     })
+}
+
+#[cfg(test)]
+mod prefs_tests {
+    use super::*;
+
+    #[test]
+    fn update_checks_default_on_but_a_saved_no_is_honoured() {
+        assert!(Prefs::default().check_updates, "a fresh install offers update notices");
+
+        // A user who switched it off must stay switched off across restarts.
+        let off: Prefs = serde_json::from_str(r#"{"checkUpdates":false}"#).unwrap();
+        assert!(!off.check_updates);
+
+        // Prefs written by a build that predates the setting still get the default.
+        let old: Prefs = serde_json::from_str(r#"{"theme":"dark"}"#).unwrap();
+        assert!(old.check_updates);
+    }
 }

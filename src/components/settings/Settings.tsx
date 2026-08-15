@@ -5,11 +5,13 @@ import {
   Check,
   ChevronRight,
   Cloud,
+  Download,
   ExternalLink,
   KeyRound,
   Loader2,
   Monitor,
   Moon,
+  RefreshCw,
   ShieldCheck,
   Sun,
 } from "lucide-react";
@@ -26,7 +28,7 @@ import { bytes } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
 import { keys, reportError, useGoogleStatus, usePrefs } from "@/hooks/queries";
 import { applyTheme } from "@/lib/theme";
-import type { PortableThumbnailSize, Theme } from "@/lib/types";
+import type { PortableThumbnailSize, Theme, UpdateStatus } from "@/lib/types";
 
 type Pane = "general" | "appearance" | "library" | "preview" | "integrations";
 
@@ -120,6 +122,24 @@ function Field({
 // ── panes ───────────────────────────────────────────────────────────────────
 
 function GeneralPane() {
+  const qc = useQueryClient();
+  const prefs = usePrefs();
+  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const checkUpdates = prefs.data?.checkUpdates ?? true;
+
+  async function check() {
+    setChecking(true);
+    try {
+      setStatus(await ipc.checkForUpdate());
+    } catch (e) {
+      reportError(e, "Could not reach the update server");
+    } finally {
+      setChecking(false);
+    }
+  }
+
   return (
     <Pane title="General">
       <div className="rounded-md border border-border bg-muted/40 p-3">
@@ -131,10 +151,50 @@ function GeneralPane() {
           <li>No telemetry, no analytics, no crash reporting.</li>
           <li>Your library never leaves this computer.</li>
           <li>
-            Network requests happen only when you connect Google Drive or ask for a preview.
+            Network requests happen only when you connect Google Drive, ask for a preview, or
+            when the update check below is switched on.
           </li>
         </ul>
       </div>
+
+      <Field
+        label="Updates"
+        hint="Stash asks GitHub whether a newer release exists. It sends no identifier and downloads nothing — a newer version opens in your browser, so you decide what to install. Switch this off and Stash never contacts the update server at all."
+      >
+        <div className="flex flex-col gap-2">
+          <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
+            <input
+              type="checkbox"
+              checked={checkUpdates}
+              onChange={async (e) => {
+                await ipc.setPrefs({ checkUpdates: e.target.checked });
+                qc.invalidateQueries({ queryKey: keys.prefs });
+                if (!e.target.checked) setStatus(null);
+              }}
+              className="size-3.5 cursor-pointer accent-primary"
+            />
+            Check for updates when Stash starts
+          </label>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={check} disabled={checking}>
+              <RefreshCw className={cn("size-3.5", checking && "animate-spin")} />
+              {checking ? "Checking…" : "Check now"}
+            </Button>
+
+            {status &&
+              (status.updateAvailable ? (
+                <Button size="sm" onClick={() => ipc.openExternal(status.url).catch(reportError)}>
+                  <Download /> Get {status.latest}
+                </Button>
+              ) : (
+                <span className="text-[12px] text-muted-foreground">
+                  You are on the latest version ({status.current}).
+                </span>
+              ))}
+          </div>
+        </div>
+      </Field>
 
       <Field
         label="Changes are saved automatically"
