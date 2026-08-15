@@ -25,5 +25,8 @@ export default defineConfig({
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
     // Vite 8 minifies with oxc; the esbuild path needs a separate install.
     minify: !process.env.TAURI_ENV_DEBUG,
+    // The bundle ships inside the app and loads from disk, so chunk size is not a
+    // download cost. Splitting it would only add requests.
+    chunkSizeWarningLimit: 2000,
   },
 });
