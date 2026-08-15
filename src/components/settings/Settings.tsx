@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { HexOrbitLoader } from "@/components/ui/dot-matrix";
 import {
   Check,
   ChevronRight,
@@ -189,18 +190,39 @@ function GeneralPane() {
 
             {status && status !== 'latest' && (
               <Button size="sm" onClick={async () => {
-                const id = toast.loading("Downloading update...");
-                try {
-                  let downloaded = 0;
-                  let contentLength = 0;
-                  await status.downloadAndInstall((e) => {
-                    if (e.event === 'Started') contentLength = e.data.contentLength || 0;
-                    else if (e.event === 'Progress') {
-                      downloaded += e.data.chunkLength;
-                      if (contentLength > 0) toast.loading(`Downloading update... ${Math.round((downloaded / contentLength) * 100)}%`, { id });
-                    }
-                    else if (e.event === 'Finished') toast.loading("Installing...", { id });
-                  });
+                const id = toast.loading(
+                   <div className="flex items-center gap-3 py-1">
+                     <HexOrbitLoader className="shrink-0 scale-75" />
+                     <span className="text-[13px]">Downloading update...</span>
+                   </div>
+                 );
+                 try {
+                   let downloaded = 0;
+                   let contentLength = 0;
+                   await status.downloadAndInstall((e) => {
+                     if (e.event === 'Started') contentLength = e.data.contentLength || 0;
+                     else if (e.event === 'Progress') {
+                       downloaded += e.data.chunkLength;
+                       if (contentLength > 0) {
+                         toast.loading(
+                           <div className="flex items-center gap-3 py-1">
+                             <HexOrbitLoader className="shrink-0 scale-75" />
+                             <span className="text-[13px]">Downloading update... {Math.round((downloaded / contentLength) * 100)}%</span>
+                           </div>,
+                           { id }
+                         );
+                       }
+                     }
+                     else if (e.event === 'Finished') {
+                       toast.loading(
+                         <div className="flex items-center gap-3 py-1">
+                           <HexOrbitLoader className="shrink-0 scale-75" />
+                           <span className="text-[13px]">Installing...</span>
+                         </div>,
+                         { id }
+                       );
+                     }
+                   });
                   toast.success("Update installed!", { id });
                   await relaunch();
                 } catch (e) {

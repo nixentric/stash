@@ -31,6 +31,7 @@ import {
 } from "@/components/dialogs/BrandDialogs";
 import { BrandPage } from "@/components/brand/BrandPage";
 import { ipc } from "@/lib/ipc";
+import { HexOrbitLoader } from "@/components/ui/dot-matrix";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
 import {
   invalidateLibrary,
@@ -145,7 +146,12 @@ export default function App() {
               if (downloading) return;
               downloading = true;
               
-              const id = toast.loading("Downloading update...");
+              const id = toast.loading(
+                <div className="flex items-center gap-3 py-1">
+                  <HexOrbitLoader className="shrink-0 scale-75" />
+                  <span className="text-[13px]">Downloading update...</span>
+                </div>
+              );
               try {
                 let downloaded = 0;
                 let contentLength = 0;
@@ -159,11 +165,23 @@ export default function App() {
                       downloaded += event.data.chunkLength;
                       if (contentLength > 0) {
                         const pct = Math.round((downloaded / contentLength) * 100);
-                        toast.loading(`Downloading update... ${pct}%`, { id });
+                        toast.loading(
+                          <div className="flex items-center gap-3 py-1">
+                            <HexOrbitLoader className="shrink-0 scale-75" />
+                            <span className="text-[13px]">Downloading update... {pct}%</span>
+                          </div>,
+                          { id }
+                        );
                       }
                       break;
                     case 'Finished':
-                      toast.loading("Installing...", { id });
+                      toast.loading(
+                        <div className="flex items-center gap-3 py-1">
+                          <HexOrbitLoader className="shrink-0 scale-75" />
+                          <span className="text-[13px]">Installing...</span>
+                        </div>,
+                        { id }
+                      );
                       break;
                   }
                 });

@@ -14,6 +14,7 @@ import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { toast } from "sonner";
+import { HexOrbitLoader } from "@/components/ui/dot-matrix";
 
 export function Welcome() {
   const qc = useQueryClient();
@@ -65,7 +66,12 @@ export function Welcome() {
   async function handleUpdate() {
     if (!update || updating) return;
     setUpdating(true);
-    const id = toast.loading("Downloading update...");
+    const id = toast.loading(
+      <div className="flex items-center gap-3 py-1">
+        <HexOrbitLoader className="shrink-0 scale-75" />
+        <span className="text-[13px]">Downloading update...</span>
+      </div>
+    );
     try {
       let downloaded = 0;
       let contentLength = 0;
@@ -76,10 +82,22 @@ export function Welcome() {
           downloaded += e.data.chunkLength;
           if (contentLength > 0) {
             const pct = Math.round((downloaded / contentLength) * 100);
-            toast.loading(`Downloading update... ${pct}%`, { id });
+            toast.loading(
+              <div className="flex items-center gap-3 py-1">
+                <HexOrbitLoader className="shrink-0 scale-75" />
+                <span className="text-[13px]">Downloading update... {pct}%</span>
+              </div>,
+              { id }
+            );
           }
         } else if (e.event === 'Finished') {
-          toast.loading("Installing...", { id });
+          toast.loading(
+            <div className="flex items-center gap-3 py-1">
+              <HexOrbitLoader className="shrink-0 scale-75" />
+              <span className="text-[13px]">Installing...</span>
+            </div>,
+            { id }
+          );
         }
       });
       toast.success("Update installed!", { id });

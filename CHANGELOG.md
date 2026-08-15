@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.3 — 2026-08-16
+
+**Hex Orbit Green Gradient Update Loader**
+
+- **Hex Orbit loading animation.** Upgraded the update download status to use a beautiful custom Hex Orbit loader inside the toast notification. The animation simulates two perimeter dots chasing around a hexagonal field with a quietly lit center.
+- **Green gradient theme.** Styled the hexagonal dots using a premium, vibrant green-to-emerald gradient to clearly indicate active progression.
+
 ## v0.5.2 — 2026-08-16
 
 **Keyboard Select All and Drag-to-Select box**

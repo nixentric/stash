@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, useEffect, useState } from "react";
 
 /**
  * "Strobe Stack" from dotmatrix.zzzzshawn.cloud, rebuilt here: each column
@@ -97,6 +97,85 @@ export function DotMatrixLoader({ className }: { className?: string }) {
             transition: `opacity ${STEP_MS}ms linear`,
           }}
         />
+      ))}
+    </div>
+  );
+}
+
+export function HexOrbitLoader({ className }: { className?: string }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((t) => (t + 1) % 12);
+    }, 100);
+    return () => clearInterval(timer);
+  }, []);
+
+  const rowCounts = [3, 4, 5, 4, 3] as const;
+  const greenGradient = "linear-gradient(135deg, #4ade80 0%, #10b981 100%)";
+
+  const perimeterPath = [
+    "0,0", "0,1", "0,2", "1,3", "2,4", "3,3", "4,2", "4,1", "4,0", "3,0", "2,0", "1,0"
+  ];
+
+  const getOpacity = (row: number, col: number) => {
+    const id = `${row},${col}`;
+    if (row === 2 && col === 2) return 0.6; // Center is quietly lit
+
+    const pathIndex = perimeterPath.indexOf(id);
+    if (pathIndex !== -1) {
+      // Two heads moving around
+      const distA = (12 + pathIndex - tick) % 12;
+      const distB = (12 + pathIndex - ((tick + 6) % 12)) % 12;
+
+      const glowA = distA < 5 ? 1 - distA * 0.18 : 0;
+      const glowB = distB < 5 ? 0.74 * (1 - distB * 0.18) : 0;
+
+      return Math.max(0.1, glowA, glowB);
+    }
+
+    // Inner ring cells get a low ambient opacity
+    return 0.2;
+  };
+
+  return (
+    <div
+      className={className}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 3,
+      }}
+      role="status"
+      aria-label="Downloading update"
+    >
+      {rowCounts.map((count, row) => (
+        <div
+          key={row}
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 3,
+          }}
+        >
+          {Array.from({ length: count }, (_, col) => {
+            const opacity = getOpacity(row, col);
+            return (
+              <span
+                key={col}
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 999,
+                  background: greenGradient,
+                  opacity,
+                  transition: "opacity 100ms linear",
+                }}
+              />
+            );
+          })}
+        </div>
       ))}
     </div>
   );
