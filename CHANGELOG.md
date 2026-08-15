@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.4 — 2026-08-16
+
+**Fixed Invisible Selection Box**
+
+- **Color format compatibility.** Resolved a rendering bug where the drag-to-select rectangle was completely invisible. Because Stash defines its primary colors in OKLCH format, passing it directly as `hsl(var(--primary))` caused browser engines to fail parsing the CSS color. Upgraded the styles to use `color-mix` for seamless background/border opacity blending in all color formats.
+- **Improved Drag-Selection UX.** Prevented native browser text-selection highlights while drag-selecting is active, keeping focus cleanly on footage items.
+
 ## v0.5.3 — 2026-08-16
 
 **Hex Orbit Green Gradient Update Loader**

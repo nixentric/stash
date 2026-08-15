@@ -191,14 +191,20 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
       }
     };
 
+    const onSelectStart = (e: Event) => {
+      e.preventDefault();
+    };
+
     const onMouseUp = () => {
       setDragBox(null);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("selectstart", onSelectStart);
     };
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("selectstart", onSelectStart);
   };
 
   useEffect(() => {
@@ -322,8 +328,8 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
               top: dragBox.top,
               width: dragBox.width,
               height: dragBox.height,
-              backgroundColor: "hsl(var(--primary) / 0.15)",
-              border: "1.5px solid hsl(var(--primary) / 0.6)",
+              backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
+              border: "1.5px solid color-mix(in srgb, var(--primary) 60%, transparent)",
               borderRadius: "4px",
               pointerEvents: "none",
               zIndex: 9999,
