@@ -1,0 +1,167 @@
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ipc, asIpcError } from "@/lib/ipc";
+import type * as T from "@/lib/types";
+
+export const keys = {
+  library: ["library"] as const,
+  recent: ["recent"] as const,
+  stats: ["stats"] as const,
+  footage: (q: T.FootageQuery) => ["footage", q] as const,
+  footageIds: (q: T.FootageQuery) => ["footageIds", q] as const,
+  detail: (id: number) => ["footage", "detail", id] as const,
+  thumb: (id: number, large: boolean) => ["thumb", id, large] as const,
+  playback: (id: number) => ["playback", id] as const,
+  tags: ["tags"] as const,
+  collections: ["collections"] as const,
+  projects: ["projects"] as const,
+  folders: ["folders"] as const,
+  folderFields: ["folderFields"] as const,
+  google: ["google"] as const,
+  caps: ["caps"] as const,
+  prefs: ["prefs"] as const,
+};
+
+/** Everything that changes when footage records change. */
+export function invalidateLibrary(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["footage"] });
+  qc.invalidateQueries({ queryKey: ["footageIds"] });
+  qc.invalidateQueries({ queryKey: keys.stats });
+  qc.invalidateQueries({ queryKey: keys.tags });
+  qc.invalidateQueries({ queryKey: keys.collections });
+  qc.invalidateQueries({ queryKey: keys.projects });
+  qc.invalidateQueries({ queryKey: keys.folders });
+  qc.invalidateQueries({ queryKey: keys.folderFields });
+  qc.invalidateQueries({ queryKey: keys.library });
+}
+
+export function reportError(e: unknown, fallback = "Something went wrong") {
+  const err = asIpcError(e);
+  toast.error(err.message || fallback);
+}
+
+// ── library ─────────────────────────────────────────────────────────────────
+
+export const useCurrentLibrary = () =>
+  useQuery({ queryKey: keys.library, queryFn: ipc.currentLibrary, staleTime: 2000 });
+
+export const useRecentLibraries = () =>
+  useQuery({ queryKey: keys.recent, queryFn: ipc.recentLibraries });
+
+export const useStats = (enabled: boolean) =>
+  useQuery({ queryKey: keys.stats, queryFn: ipc.libraryStats, enabled });
+
+// ── footage ─────────────────────────────────────────────────────────────────
+
+export const useFootage = (query: T.FootageQuery, enabled: boolean) =>
+  useQuery({
+    queryKey: keys.footage(query),
+    queryFn: () => ipc.listFootage(query),
+    enabled,
+    // Keeps the previous page visible while a new filter loads, so the grid
+    // never flashes empty mid-typing.
+    placeholderData: (prev) => prev,
+  });
+
+export const useFootageIds = (query: T.FootageQuery, enabled: boolean) =>
+  useQuery({
+    queryKey: keys.footageIds(query),
+    queryFn: () => ipc.listFootageIds(query),
+    enabled,
+  });
+
+export const useFootageDetail = (id: number | null) =>
+  useQuery({
+    queryKey: keys.detail(id ?? -1),
+    queryFn: () => ipc.getFootage(id as number),
+    enabled: id != null,
+  });
+
+export const useTags = (enabled: boolean) =>
+  useQuery({ queryKey: keys.tags, queryFn: ipc.allTags, enabled });
+
+export const useCollections = (enabled: boolean) =>
+  useQuery({ queryKey: keys.collections, queryFn: ipc.allCollections, enabled });
+
+export const useProjects = (enabled: boolean) =>
+  useQuery({ queryKey: keys.projects, queryFn: ipc.allProjects, enabled });
+
+export const useFolders = (enabled: boolean) =>
+  useQuery({ queryKey: keys.folders, queryFn: ipc.listFolders, enabled });
+
+export const useFolderFields = (enabled: boolean) =>
+  useQuery({ queryKey: keys.folderFields, queryFn: ipc.folderFields, enabled });
+
+// ── integrations ────────────────────────────────────────────────────────────
+
+export const useGoogleStatus = () =>
+  useQuery({ queryKey: keys.google, queryFn: ipc.googleStatus });
+
+export const useCapabilities = () =>
+  useQuery({ queryKey: keys.caps, queryFn: ipc.appCapabilities });
+
+export const usePrefs = () => useQuery({ queryKey: keys.prefs, queryFn: ipc.getPrefs });
+
+// ── mutations ───────────────────────────────────────────────────────────────
+
+/**
+ * All footage edits funnel through here.
+ *
+ * One mutation with an action union rather than a dozen near-identical hooks:
+ * the invalidation rules are the same for every one of them, and duplicating
+ * them is how caches drift out of sync.
+ */
+type Action =
+  | { type: "patch"; ids: number[]; patch: T.FootagePatch }
+  | { type: "markUsed"; ids: number[]; projectId: number | null; usedAt: string | null; notes: string | null }
+  | { type: "markUnused"; ids: number[] }
+  | { type: "deleteUsage"; usageId: number; footageId: number }
+  | { type: "addTags"; ids: number[]; tags: string[] }
+  | { type: "removeTags"; ids: number[]; tags: string[] }
+  | { type: "setTags"; id: number; tags: string[] }
+  | { type: "addToCollection"; collectionId: number; ids: number[] }
+  | { type: "removeFromCollection"; collectionId: number; ids: number[] }
+  | { type: "remove"; ids: number[] };
+
+export function useFootageAction() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (a: Action) => {
+      switch (a.type) {
+        case "patch":
+          return ipc.patchFootage(a.ids, a.patch);
+        case "markUsed":
+          return ipc.markUsed(a.ids, a.projectId, a.usedAt, a.notes);
+        case "markUnused":
+          return ipc.markUnused(a.ids);
+        case "deleteUsage":
+          return ipc.deleteUsage(a.usageId);
+        case "addTags":
+          return ipc.addTags(a.ids, a.tags);
+        case "removeTags":
+          return ipc.removeTags(a.ids, a.tags);
+        case "setTags":
+          return ipc.setTags(a.id, a.tags);
+        case "addToCollection":
+          return ipc.addToCollection(a.collectionId, a.ids);
+        case "removeFromCollection":
+          return ipc.removeFromCollection(a.collectionId, a.ids);
+        case "remove":
+          return ipc.removeFootage(a.ids);
+      }
+    },
+    onSuccess: (_r, a) => {
+      invalidateLibrary(qc);
+      const touched =
+        "ids" in a ? a.ids : "id" in a ? [a.id] : "footageId" in a ? [a.footageId] : [];
+      for (const id of touched) qc.invalidateQueries({ queryKey: keys.detail(id) });
+    },
+    onError: (e) => reportError(e),
+  });
+}

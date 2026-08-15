@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Stash",
+  "version": "0.1.0",
+  "identifier": "app.stash.footage",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Stash",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "dragDropEnabled": true,
+        "theme": null
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:",
+        "img-src": "'self' data: blob: asset: http://asset.localhost stash: http://stash.localhost",
+        "media-src": "'self' data: blob: stash: http://stash.localhost",
+        "frame-src": "https://drive.google.com",
+        "connect-src": "'self' ipc: http://ipc.localhost stash: http://stash.localhost"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "fileAssociations": [
+      {
+        "ext": ["footagedb"],
+        "name": "Stash Library",
+        "description": "Stash footage library",
+        "role": "Editor"
+      }
+    ]
+  }
+}

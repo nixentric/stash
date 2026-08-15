@@ -1,0 +1,29 @@
+# Dependencies and frontend build output
+node_modules/
+dist/
+.vite/
+
+# Rust / Tauri generated artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Local environment and secrets (keep the documented template)
+.env
+.env.*
+!.env.example
+
+# Application-local databases
+*.footagedb
+*.footagedb.backup-*
+
+# Graphify output and cache; regenerate with `graphify extract . --code-only`
+graphify-out/
+.graphify_version
+
+# Logs, test output, and operating-system metadata
+*.log
+coverage/
+.DS_Store
+
+# Local bug screenshots
+masalah-*.png
