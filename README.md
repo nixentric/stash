@@ -11,10 +11,49 @@ previews, and your own notes in a single portable file.
 
 ---
 
+## Install
+
+Grab the installer for your machine from the
+[latest release](https://github.com/nixentric/stash/releases/latest):
+
+| Platform | File | Notes |
+|---|---|---|
+| macOS (Apple Silicon) | `Stash_<version>_aarch64.dmg` | M1 and newer |
+| macOS (Intel) | `Stash_<version>_x64.dmg` | |
+| Windows | `Stash_<version>_x64-setup.exe` | `.msi` also available |
+| Linux (Debian/Ubuntu) | `Stash_<version>_amd64.deb` | `sudo dpkg -i Stash_*.deb` |
+| Linux (anything else) | `Stash_<version>_amd64.AppImage` | `chmod +x` then run |
+
+Open the `.dmg` and drag Stash to Applications, or run the `.exe`. There is
+nothing else to set up: no account, no API key, no config file.
+
+### First launch
+
+The app is **not signed with a paid Apple or Microsoft certificate**, so both
+systems warn about it the first time. The bundles are built in public by
+[this workflow](.github/workflows/release.yml) — you can read exactly what
+produced them, or build your own from source below.
+
+**macOS** — right-click the app in Applications and choose **Open**, then
+**Open** again in the dialog. If macOS insists the app "is damaged" or refuses
+outright, clear the download flag it attached and sign the copy locally:
+
+```bash
+xattr -cr /Applications/Stash.app && codesign --force --deep -s - /Applications/Stash.app
+```
+
+**Windows** — SmartScreen shows a blue "Windows protected your PC" screen. Click
+**More info**, then **Run anyway**.
+
+**Linux** — no warning; the `.AppImage` needs `chmod +x Stash_*.AppImage` first.
+
+---
+
 ## Contents
 
+- [Install](#install)
 - [Requirements](#requirements)
-- [Installation](#installation)
+- [Build from source](#build-from-source)
 - [Local development](#local-development)
 - [Google Drive: two modes](#google-drive-two-modes)
 - [Google OAuth setup](#google-oauth-setup)
@@ -47,10 +86,13 @@ catalog with no Google credentials of any kind.
 
 ---
 
-## Installation
+## Build from source
+
+Only needed if you want to develop Stash or build your own bundles — the
+[installers above](#install) need none of this.
 
 ```bash
-git clone <your-repo-url> stash
+git clone https://github.com/nixentric/stash.git
 cd stash
 npm install
 ```
