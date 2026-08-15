@@ -57,11 +57,44 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Stash ${{ github.ref_name }}
-          releaseBody: |
-            Bundles are unsigned. macOS: right-click the app and choose Open the
-            first time. Windows: SmartScreen will warn until the app is signed.
+          # Placeholder only — the step below replaces this with the changelog
+          # entry once the release exists. Whichever runner finishes first wins,
+          # and they all write the same text.
+          releaseBody: Building…
           # Published straight away: a draft is invisible to everyone but the
           # repo owner, and these tags exist so people can download the app.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      # CHANGELOG.md is the single source of truth for what a version changed,
+      # so the release notes are generated from it rather than written twice.
+      - name: Use the changelog entry as the release notes
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes=$(awk -v tag="## $TAG" '
+            $0 ~ "^"tag" " || $0 == tag { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md)
+
+          if [ -z "${notes// /}" ]; then
+            echo "No CHANGELOG.md entry for $TAG; leaving the generated notes alone."
+            notes="See the commit history for what changed in $TAG."
+          fi
+
+          cat > notes.md <<EOF
+          $notes
+
+          ---
+
+          **Installing:** the bundles are unsigned, so macOS and Windows warn on
+          first launch. [How to get past that](https://github.com/nixentric/stash/blob/main/docs/install.md#first-launch).
+          EOF
+
+          gh release edit "$TAG" --notes-file notes.md
