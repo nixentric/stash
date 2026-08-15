@@ -308,6 +308,7 @@ pub struct BrandDetail {
     pub logo_rules: BrandLogoRules,
     pub examples: Vec<BrandExample>,
     pub elements: Vec<BrandElement>,
+    pub additional_infos: Vec<BrandAdditionalInfo>,
 }
 
 /// Rules about the mark itself. One row per brand: clear space and minimum size
@@ -431,6 +432,24 @@ pub struct BrandLogo {
     pub notes: String,
     #[serde(default)]
     pub position: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandAdditionalInfo {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub brand_id: i64,
+    pub title: String,
+    pub editor_mode: String,
+    pub content_type: String,
+    pub content: String,
+    pub file_reference: Option<String>,
+    #[serde(default)]
+    pub position: i64,
+    #[serde(default)]
+    pub updated_at: String,
 }
 
 /// One row in the universal search panel. Deliberately flat and stringly typed:

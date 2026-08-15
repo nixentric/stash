@@ -76,6 +76,7 @@ export function Toolbar({
   const [panelOpen, setPanelOpen] = useState(false);
 
   const {
+    view,
     search,
     setSearch,
     sort,
@@ -219,6 +220,9 @@ export function Toolbar({
             placeholder="Search assets, tags, brands, colors, fonts…"
             className="h-7 pl-7 pr-14"
             aria-label="Search the library"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck="false"
           />
           {panelOpen && (
             <UniversalSearch term={search} onNavigate={() => setPanelOpen(false)} />
@@ -262,8 +266,9 @@ export function Toolbar({
       </div>
 
       {/* Row 2 — filters, sort, view */}
-      <div className="flex h-9 items-center gap-1 px-2">
-        <span className="tnum mr-1 shrink-0 text-[11.5px] text-subtle-foreground">
+      {view.kind !== "brand" && view.kind !== "sourceFolders" && (
+        <div className="flex h-9 items-center gap-1 px-2">
+          <span className="tnum mr-1 shrink-0 text-[11.5px] text-subtle-foreground">
           {count(total)} {total === 1 ? "item" : "items"}
           {selection.length > 0 && ` · ${count(selection.length)} selected`}
         </span>
@@ -417,6 +422,7 @@ export function Toolbar({
           </Tooltip>
         </div>
       </div>
+      )}
     </header>
   );
 }

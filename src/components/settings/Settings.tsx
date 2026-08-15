@@ -28,7 +28,10 @@ import { bytes } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
 import { keys, reportError, useGoogleStatus, usePrefs } from "@/hooks/queries";
 import { applyTheme } from "@/lib/theme";
-import type { PortableThumbnailSize, Theme, UpdateStatus } from "@/lib/types";
+import type { PortableThumbnailSize, Theme } from "@/lib/types";
+import { check as checkUpdate } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import type { Update } from "@tauri-apps/plugin-updater";
 
 type Pane = "general" | "appearance" | "library" | "preview" | "integrations";
 
@@ -124,7 +127,7 @@ function Field({
 function GeneralPane() {
   const qc = useQueryClient();
   const prefs = usePrefs();
-  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [status, setStatus] = useState<Update | 'latest' | null>(null);
   const [checking, setChecking] = useState(false);
 
   const checkUpdates = prefs.data?.checkUpdates ?? true;
@@ -132,7 +135,8 @@ function GeneralPane() {
   async function check() {
     setChecking(true);
     try {
-      setStatus(await ipc.checkForUpdate());
+      const update = await checkUpdate();
+      setStatus(update || 'latest');
     } catch (e) {
       reportError(e, "Could not reach the update server");
     } finally {
@@ -159,7 +163,7 @@ function GeneralPane() {
 
       <Field
         label="Updates"
-        hint="Stash asks GitHub whether a newer release exists. It sends no identifier and downloads nothing — a newer version opens in your browser, so you decide what to install. Switch this off and Stash never contacts the update server at all."
+        hint="Stash checks for newer releases and can download and install them directly in the app. Switch this off and Stash never contacts the update server at all."
       >
         <div className="flex flex-col gap-2">
           <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
@@ -182,16 +186,34 @@ function GeneralPane() {
               {checking ? "Checking…" : "Check now"}
             </Button>
 
-            {status &&
-              (status.updateAvailable ? (
-                <Button size="sm" onClick={() => ipc.openExternal(status.url).catch(reportError)}>
-                  <Download /> Get {status.latest}
-                </Button>
-              ) : (
-                <span className="text-[12px] text-muted-foreground">
-                  You are on the latest version ({status.current}).
-                </span>
-              ))}
+            {status && status !== 'latest' && (
+              <Button size="sm" onClick={async () => {
+                const id = toast.loading("Downloading update...");
+                try {
+                  let downloaded = 0;
+                  let contentLength = 0;
+                  await status.downloadAndInstall((e) => {
+                    if (e.event === 'Started') contentLength = e.data.contentLength || 0;
+                    else if (e.event === 'Progress') {
+                      downloaded += e.data.chunkLength;
+                      if (contentLength > 0) toast.loading(`Downloading update... ${Math.round((downloaded / contentLength) * 100)}%`, { id });
+                    }
+                    else if (e.event === 'Finished') toast.loading("Installing...", { id });
+                  });
+                  toast.success("Update installed!", { id });
+                  await relaunch();
+                } catch (e) {
+                  toast.error(`Update failed: ${e}`, { id });
+                }
+              }}>
+                <Download /> Get {status.version}
+              </Button>
+            )}
+            {status === 'latest' && (
+              <span className="text-[12px] text-muted-foreground">
+                You are on the latest version.
+              </span>
+            )}
           </div>
         </div>
       </Field>

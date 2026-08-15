@@ -11,6 +11,7 @@ import {
   Library,
   Plus,
   Repeat2,
+  Settings,
   Sparkles,
   SwatchBook as Swatches,
   TriangleAlert,
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export function Sidebar({ onNewCollection, onNewBrand }: Props) {
-  const { view, setView } = useUi();
+  const { view, setView, setSettingsOpen } = useUi();
   const stats = useStats(true);
   const tags = useTags(true);
   const collections = useCollections(true);
@@ -169,7 +170,15 @@ export function Sidebar({ onNewCollection, onNewBrand }: Props) {
         </Section>
       )}
 
-      <div className="h-4 shrink-0" />
+      <div className="flex-1 shrink-0 min-h-4" />
+      <div className="px-2 pb-2">
+        <Row
+          active={false}
+          onClick={() => setSettingsOpen(true)}
+          icon={<Settings />}
+          label="Settings"
+        />
+      </div>
     </nav>
   );
 }

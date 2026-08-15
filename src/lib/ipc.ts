@@ -115,12 +115,16 @@ export const ipc = {
   deleteBrandTypeface: (id: number) => invoke<void>("delete_brand_typeface", { id }),
   saveBrandLogo: (logo: T.BrandLogo) => invoke<number>("save_brand_logo", { logo }),
   deleteBrandLogo: (id: number) => invoke<void>("delete_brand_logo", { id }),
+  reorderBrandLogos: (updates: { id: number; variant: string; position: number }[]) => 
+    invoke<void>("reorder_brand_logos", { updates }),
   saveBrandLogoRules: (rules: T.BrandLogoRules) =>
     invoke<void>("save_brand_logo_rules", { rules }),
   saveBrandExample: (example: T.BrandExample) => invoke<number>("save_brand_example", { example }),
   deleteBrandExample: (id: number) => invoke<void>("delete_brand_example", { id }),
   saveBrandElement: (element: T.BrandElement) => invoke<number>("save_brand_element", { element }),
   deleteBrandElement: (id: number) => invoke<void>("delete_brand_element", { id }),
+  saveBrandAdditionalInfo: (info: T.BrandAdditionalInfo) => invoke<number>("save_brand_additional_info", { info }),
+  deleteBrandAdditionalInfo: (id: number) => invoke<void>("delete_brand_additional_info", { id }),
   universalSearch: (query: string) => invoke<T.SearchHit[]>("universal_search", { query }),
 
   // ── app ───────────────────────────────────────────────────────────────────
@@ -129,5 +133,4 @@ export const ipc = {
   setPrefs: (patch: Partial<T.Prefs>) => invoke<T.Prefs>("set_prefs", { patch }),
   openExternal: (url: string) => invoke<void>("open_external", { url }),
   revealInFileManager: (path: string) => invoke<void>("reveal_in_file_manager", { path }),
-  checkForUpdate: () => invoke<T.UpdateStatus>("check_for_update"),
 };

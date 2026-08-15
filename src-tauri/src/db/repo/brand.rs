@@ -5,7 +5,7 @@
 //! CMYK are derived at display time.
 
 use crate::db::models::{
-    Brand, BrandColor, BrandDetail, BrandElement, BrandExample, BrandLogo, BrandLogoRules,
+    Brand, BrandAdditionalInfo, BrandColor, BrandDetail, BrandElement, BrandExample, BrandLogo, BrandLogoRules,
     BrandTypeface,
 };
 use crate::error::{AppError, Result};
@@ -189,7 +189,27 @@ pub fn detail(conn: &Connection, id: i64) -> Result<BrandDetail> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
-    Ok(BrandDetail { brand, colors, typefaces, logos, logo_rules, examples, elements })
+    let mut additional_infos = conn.prepare(
+        "SELECT id, brand_id, title, editor_mode, content_type, content, file_reference, position, updated_at FROM brand_additional_infos
+         WHERE brand_id = ?1 ORDER BY position, id",
+    )?;
+    let additional_infos = additional_infos
+        .query_map([id], |r| {
+            Ok(BrandAdditionalInfo {
+                id: r.get(0)?,
+                brand_id: r.get(1)?,
+                title: r.get(2)?,
+                editor_mode: r.get(3)?,
+                content_type: r.get(4)?,
+                content: r.get(5)?,
+                file_reference: r.get(6)?,
+                position: r.get(7)?,
+                updated_at: r.get(8)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(BrandDetail { brand, colors, typefaces, logos, logo_rules, examples, elements, additional_infos })
 }
 
 /// Creates when `id` is 0, updates otherwise. Returns the brand's id.
@@ -413,6 +433,54 @@ pub fn delete_typeface(conn: &Connection, id: i64) -> Result<()> {
 
 pub fn delete_logo(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM brand_logos WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+pub fn reorder_logos(conn: &Connection, updates: &[crate::commands::brand::LogoOrderUpdate]) -> Result<()> {
+    if updates.is_empty() {
+        return Ok(());
+    }
+    
+    // Begin transaction for bulk update
+    let tx = conn.unchecked_transaction()?;
+    let mut stmt = tx.prepare("UPDATE brand_logos SET variant = ?1, position = ?2 WHERE id = ?3")?;
+    
+    for update in updates {
+        stmt.execute(params![update.variant, update.position, update.id])?;
+    }
+    drop(stmt);
+    
+    tx.commit()?;
+    Ok(())
+}
+
+pub fn save_additional_info(conn: &Connection, info: &BrandAdditionalInfo) -> Result<i64> {
+    let title = required("Title", &info.title, 200)?;
+    let editor_mode = required("Editor mode", &info.editor_mode, 40)?;
+    let content_type = required("Content type", &info.content_type, 40)?;
+
+    let id = if info.id == 0 {
+        conn.execute(
+            "INSERT INTO brand_additional_infos (brand_id, title, editor_mode, content_type, content, file_reference, position, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE((SELECT MAX(position) + 1 FROM brand_additional_infos
+                                                    WHERE brand_id = ?1), 0), ?7)",
+            params![info.brand_id, title, editor_mode, content_type, info.content, info.file_reference, now_iso()],
+        )?;
+        conn.last_insert_rowid()
+    } else {
+        conn.execute(
+            "UPDATE brand_additional_infos SET title = ?2, editor_mode = ?3, content_type = ?4, content = ?5, file_reference = ?6, updated_at = ?7
+             WHERE id = ?1",
+            params![info.id, title, editor_mode, content_type, info.content, info.file_reference, now_iso()],
+        )?;
+        info.id
+    };
+    touch(conn, info.brand_id)?;
+    Ok(id)
+}
+
+pub fn delete_additional_info(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM brand_additional_infos WHERE id = ?1", [id])?;
     Ok(())
 }
 

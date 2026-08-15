@@ -269,6 +269,18 @@ export interface BrandElement {
   position: number;
 }
 
+export interface BrandAdditionalInfo {
+  id: number;
+  brandId: number;
+  title: string;
+  editorMode: string;
+  contentType: string;
+  content: string;
+  fileReference: string | null;
+  position: number;
+  updatedAt: string;
+}
+
 export interface BrandDetail {
   brand: Brand;
   colors: BrandColor[];
@@ -277,6 +289,7 @@ export interface BrandDetail {
   logoRules: BrandLogoRules;
   examples: BrandExample[];
   elements: BrandElement[];
+  additionalInfos: BrandAdditionalInfo[];
 }
 
 export const emptyBrand = (): Brand => ({

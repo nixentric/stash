@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, FolderUp } from "lucide-react";
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { useQueryClient } from "@tanstack/react-query";
+import { ipc } from "@/lib/ipc";
 import {
   Dialog,
   DialogBody,
@@ -17,7 +23,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/menu";
-import { useBrandAction, useFootage } from "@/hooks/queries";
+import { useBrandAction, useFootage, invalidateLibrary, reportError } from "@/hooks/queries";
 import {
   COLOR_ROLES,
   ELEMENT_CATEGORIES,
@@ -27,11 +33,12 @@ import {
 } from "@/lib/types";
 import type {
   Brand,
-  BrandColor,
-  BrandElement,
   BrandExample,
   BrandLogo,
   BrandTypeface,
+  BrandAdditionalInfo,
+  BrandElement,
+  BrandColor,
 } from "@/lib/types";
 
 /** Label + control, the shape every field in these dialogs takes. */
@@ -201,15 +208,26 @@ export function ColorDialog({ color, onClose }: { color: BrandColor | null; onCl
           </Field>
           <Field label="Hex">
             <div className="flex items-center gap-2">
+              <div className="relative size-8 shrink-0 overflow-hidden rounded border border-border">
+                <input
+                  type="color"
+                  value={valid && draft.hex.length === 7 ? draft.hex : "#000000"}
+                  onChange={(e) => set({ hex: e.target.value.toUpperCase() })}
+                  className="absolute -left-2 -top-2 size-12 cursor-pointer border-0 p-0"
+                />
+              </div>
               <Input
                 value={draft.hex}
-                onChange={(e) => set({ hex: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "") {
+                    set({ hex: "" });
+                    return;
+                  }
+                  const raw = val.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+                  set({ hex: `#${raw}`.toUpperCase() });
+                }}
                 placeholder="#146EF5"
-              />
-              <span
-                className="size-8 shrink-0 rounded border border-border"
-                style={{ backgroundColor: valid ? draft.hex : "transparent" }}
-                aria-hidden
               />
             </div>
             {!valid && draft.hex.trim() !== "" && (
@@ -328,6 +346,7 @@ export function TypefaceDialog({
 }
 
 export function LogoDialog({ logo, onClose }: { logo: BrandLogo | null; onClose: () => void }) {
+  const qc = useQueryClient();
   const action = useBrandAction();
   const [draft, setDraft] = useState<BrandLogo | null>(logo);
   const [search, setSearch] = useState("");
@@ -371,11 +390,48 @@ export function LogoDialog({ logo, onClose }: { logo: BrandLogo | null; onClose:
           </Field>
 
           <Field label="Linked asset">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search the asset library…"
-            />
+            <div className="flex gap-2">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search the asset library…"
+                className="flex-1"
+              />
+              <Button type="button" variant="secondary" size="icon" title="Browse local file" onClick={async () => {
+                const picked = await openDialog({
+                  multiple: false,
+                  filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp"] }],
+                });
+                if (!picked || Array.isArray(picked)) return;
+                
+                const pathParts = picked.split(/[\\/]/);
+                const nameWithExt = pathParts.pop() || "untitled";
+                const displayName = nameWithExt.substring(0, nameWithExt.lastIndexOf('.')) || nameWithExt;
+                
+                try {
+                  const outcome = await ipc.importFootage([{
+                    displayName,
+                    provider: "local",
+                    externalId: null,
+                    externalKey: null,
+                    originalUrl: null,
+                    localPath: picked,
+                  }]);
+                  invalidateLibrary(qc);
+                  if (outcome.imported.length > 0) {
+                    const newId = outcome.imported[0]!;
+                    ipc.fetchThumbnails([newId], false).catch(() => {});
+                    set({ footageId: newId });
+                  } else if (outcome.duplicates.length > 0) {
+                    set({ footageId: outcome.duplicates[0]!.footageId });
+                  }
+                } catch(e) {
+                  reportError(e, "Could not import footage");
+                }
+              }}>
+                <FolderUp className="size-4" />
+              </Button>
+            </div>
           </Field>
           {draft.footageId != null && (
             <p className="text-[12px] text-muted-foreground">
@@ -443,19 +499,59 @@ function AssetPicker({
   onPick: (id: number | null) => void;
 }) {
   const [search, setSearch] = useState("");
+  const qc = useQueryClient();
   const results = useFootage(
     { ...emptyQuery(), search: search.trim() || null, limit: 8 },
     search.trim().length > 1,
   );
 
+  const pickLocal = async () => {
+    const picked = await openDialog({
+      multiple: false,
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp"] }],
+    });
+    if (!picked || Array.isArray(picked)) return;
+    
+    const pathParts = picked.split(/[\\/]/);
+    const nameWithExt = pathParts.pop() || "untitled";
+    const displayName = nameWithExt.substring(0, nameWithExt.lastIndexOf('.')) || nameWithExt;
+    
+    try {
+      const outcome = await ipc.importFootage([{
+        displayName,
+        provider: "local",
+        externalId: null,
+        externalKey: null,
+        originalUrl: null,
+        localPath: picked,
+      }]);
+      invalidateLibrary(qc);
+      if (outcome.imported.length > 0) {
+        const newId = outcome.imported[0]!;
+        ipc.fetchThumbnails([newId], false).catch(() => {});
+        onPick(newId);
+      } else if (outcome.duplicates.length > 0) {
+        onPick(outcome.duplicates[0]!.footageId);
+      }
+    } catch(e) {
+      reportError(e, "Could not import footage");
+    }
+  };
+
   return (
     <>
       <Field label="Linked asset">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search the asset library…"
-        />
+        <div className="flex gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search the asset library…"
+            className="flex-1"
+          />
+          <Button type="button" variant="secondary" size="icon" title="Browse local file" onClick={pickLocal}>
+            <FolderUp className="size-4" />
+          </Button>
+        </div>
       </Field>
       {footageId != null && (
         <p className="text-[12px] text-muted-foreground">
@@ -608,6 +704,128 @@ export function ElementDialog({
             onClick={() =>
               action.mutate({ type: "saveElement", element: draft }, { onSuccess: onClose })
             }
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function AdditionalInfoDialog({
+  info,
+  onClose,
+}: {
+  info: BrandAdditionalInfo | null;
+  onClose: () => void;
+}) {
+  const action = useBrandAction();
+  const [draft, setDraft] = useState<BrandAdditionalInfo | null>(info);
+
+  useEffect(() => setDraft(info), [info]);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Link.configure({ openOnClick: false }),
+    ],
+    content: draft?.editorMode === "rich_text" ? draft.content : "",
+    onUpdate: (props: any) => {
+      setDraft((prev) => prev ? { ...prev, content: props.editor.getHTML() } : null);
+    },
+  }, [info?.id]);
+
+  if (!draft) return null;
+
+  const set = (patch: Partial<BrandAdditionalInfo>) => setDraft({ ...draft, ...patch });
+
+  return (
+    <Dialog open={!!info} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-[min(40rem,92vw)]">
+        <DialogHeader>
+          <DialogTitle>{draft.id === 0 ? "Add Info Section" : "Edit Info Section"}</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-2">
+          <Field label="Title">
+            <Input
+              value={draft.title}
+              onChange={(e) => set({ title: e.target.value })}
+              placeholder="e.g. Brand Voice"
+              autoFocus
+            />
+          </Field>
+          <Field label="Format">
+            <Select
+              value={draft.editorMode}
+              options={["rich_text", "minimal"]}
+              onChange={(editorMode) => {
+                 set({ editorMode });
+                 if (editorMode === "rich_text") {
+                    editor?.commands.setContent(draft.content);
+                 }
+              }}
+            />
+          </Field>
+
+          {draft.editorMode === "rich_text" ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-muted/30 p-1">
+                <Button size="sm" variant={editor?.isActive('bold') ? 'secondary' : 'ghost'} onClick={() => editor?.chain().focus().toggleBold().run()}>Bold</Button>
+                <Button size="sm" variant={editor?.isActive('italic') ? 'secondary' : 'ghost'} onClick={() => editor?.chain().focus().toggleItalic().run()}>Italic</Button>
+                <Button size="sm" variant={editor?.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H2</Button>
+                <Button size="sm" variant={editor?.isActive('bulletList') ? 'secondary' : 'ghost'} onClick={() => editor?.chain().focus().toggleBulletList().run()}>Bullet</Button>
+                <Button size="sm" variant={editor?.isActive('orderedList') ? 'secondary' : 'ghost'} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>Number</Button>
+              </div>
+              <div className="min-h-[200px] cursor-text rounded-md border border-border bg-background p-3 text-[13px] focus-within:ring-2 focus-within:ring-ring/60 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mb-2">
+                <EditorContent editor={editor} className="focus:outline-none" />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 rounded-md border border-border bg-muted/10 p-3">
+              <Field label="Content Type">
+                <Select
+                  value={draft.contentType}
+                  options={["text", "url", "file"]}
+                  onChange={(contentType) => set({ contentType })}
+                />
+              </Field>
+              {draft.contentType === "text" && (
+                <Field label="Content">
+                  <textarea
+                    className="flex min-h-[100px] w-full rounded-md border border-border bg-surface px-3 py-2 text-[13px] outline-none transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-ring/60"
+                    value={draft.content}
+                    onChange={(e) => set({ content: e.target.value })}
+                    placeholder="Brief description..."
+                  />
+                </Field>
+              )}
+              {draft.contentType === "url" && (
+                <Field label="URL">
+                  <Input
+                    value={draft.content}
+                    onChange={(e) => set({ content: e.target.value })}
+                    placeholder="https://"
+                  />
+                </Field>
+              )}
+              {draft.contentType === "file" && (
+                <Field label="File Path (Absolute)">
+                  <Input
+                    value={draft.fileReference || ""}
+                    onChange={(e) => set({ fileReference: e.target.value })}
+                    placeholder="/absolute/path/to/file.pdf"
+                  />
+                </Field>
+              )}
+            </div>
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={!draft.title.trim()}
+            onClick={() => action.mutate({ type: "saveAdditionalInfo", info: draft as any }, { onSuccess: onClose })}
           >
             Save
           </Button>

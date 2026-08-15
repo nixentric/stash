@@ -13,6 +13,11 @@
           (t === "system" &&
             window.matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.classList.toggle("dark", dark);
+        // The stylesheet lands after first paint, so colour the document here
+        // too — otherwise the webview shows its white default for a frame.
+        document.documentElement.style.background = dark
+          ? "oklch(0.168 0.005 265)"
+          : "oklch(0.994 0 0)";
       } catch {}
     </script>
   </head>

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { check as checkUpdate } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { useQueryClient } from "@tanstack/react-query";
 import { Toaster, toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/misc";
@@ -24,6 +27,7 @@ import {
   ExampleDialog,
   LogoDialog,
   TypefaceDialog,
+  AdditionalInfoDialog,
 } from "@/components/dialogs/BrandDialogs";
 import { BrandPage } from "@/components/brand/BrandPage";
 import { ipc } from "@/lib/ipc";
@@ -49,6 +53,7 @@ import type {
   BrandExample,
   BrandLogo,
   BrandTypeface,
+  BrandAdditionalInfo,
   FolderNode,
   JobProgress,
 } from "@/lib/types";
@@ -69,6 +74,7 @@ export default function App() {
   const [logoDraft, setLogoDraft] = useState<BrandLogo | null>(null);
   const [exampleDraft, setExampleDraft] = useState<BrandExample | null>(null);
   const [elementDraft, setElementDraft] = useState<BrandElement | null>(null);
+  const [additionalInfoDraft, setAdditionalInfoDraft] = useState<BrandAdditionalInfo | null>(null);
 
   const ui = useUi();
   const { selection, inspectorOpen, settingsOpen, setSettingsOpen, select } = ui;
@@ -99,6 +105,17 @@ export default function App() {
   const items = page.data?.items ?? [];
   const orderedIds = useMemo(() => items.map((i) => i.id), [items]);
 
+  useEffect(() => {
+    // Show the window only after React has mounted and applied themes
+    // to prevent the white flash on startup.
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const win = getCurrentWindow();
+        win.show().then(() => win.setFocus()).catch(console.error);
+      }, 50);
+    });
+  }, []);
+
   // ── theme ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (prefs.data) applyTheme(prefs.data.theme);
@@ -114,16 +131,52 @@ export default function App() {
     if (!prefs.data?.checkUpdates) return;
     let cancelled = false;
 
-    ipc
-      .checkForUpdate()
-      .then((status) => {
-        if (cancelled || !status.updateAvailable) return;
-        toast(`Stash ${status.latest} is available`, {
-          description: `You are on ${status.current}.`,
+    checkUpdate()
+      .then((update) => {
+        if (cancelled || !update) return;
+        
+        let downloading = false;
+        
+        toast(`Stash ${update.version} is available`, {
+          description: `You are on ${update.currentVersion}.`,
           duration: 12_000,
           action: {
-            label: "View release",
-            onClick: () => ipc.openExternal(status.url).catch(reportError),
+            label: "Update & Restart",
+            onClick: async () => {
+              if (downloading) return;
+              downloading = true;
+              
+              const id = toast.loading("Downloading update...");
+              try {
+                let downloaded = 0;
+                let contentLength = 0;
+                
+                await update.downloadAndInstall((event) => {
+                  switch (event.event) {
+                    case 'Started':
+                      contentLength = event.data.contentLength || 0;
+                      break;
+                    case 'Progress':
+                      downloaded += event.data.chunkLength;
+                      if (contentLength > 0) {
+                        const pct = Math.round((downloaded / contentLength) * 100);
+                        toast.loading(`Downloading update... ${pct}%`, { id });
+                      }
+                      break;
+                    case 'Finished':
+                      toast.loading("Installing...", { id });
+                      break;
+                  }
+                });
+                
+                toast.success("Update installed!", { id });
+                await relaunch();
+              } catch (e) {
+                toast.error(`Update failed: ${e}`, { id });
+              } finally {
+                downloading = false;
+              }
+            },
           },
         });
       })
@@ -294,6 +347,7 @@ export default function App() {
                 onEditLogo={setLogoDraft}
                 onEditExample={setExampleDraft}
                 onEditElement={setElementDraft}
+                onEditAdditionalInfo={setAdditionalInfoDraft}
               />
             ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage onEdit={setFolderMetadata} /> : <FootageGrid
               items={items}
@@ -329,6 +383,7 @@ export default function App() {
       <LogoDialog logo={logoDraft} onClose={() => setLogoDraft(null)} />
       <ExampleDialog example={exampleDraft} onClose={() => setExampleDraft(null)} />
       <ElementDialog element={elementDraft} onClose={() => setElementDraft(null)} />
+      <AdditionalInfoDialog info={additionalInfoDraft} onClose={() => setAdditionalInfoDraft(null)} />
 
       <MarkUsedDialog
         open={markUsedOpen}

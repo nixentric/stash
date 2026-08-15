@@ -122,10 +122,3 @@ pub fn reveal_in_file_manager(app: tauri::AppHandle, path: String) -> Result<()>
         .reveal_item_in_dir(p)
         .map_err(|e| AppError::Other(format!("Could not reveal the file: {e}")))
 }
-
-/// Asks GitHub whether a newer release exists. Never downloads or installs —
-/// the answer is a link the user chooses to follow.
-#[tauri::command]
-pub async fn check_for_update() -> Result<crate::update::UpdateStatus> {
-    crate::update::check(env!("CARGO_PKG_VERSION")).await
-}

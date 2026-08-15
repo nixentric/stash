@@ -10,7 +10,7 @@ use crate::error::{AppError, Result};
 use rusqlite::Connection;
 
 /// Schema version this build understands. Bump when adding a migration.
-pub const APP_SCHEMA_VERSION: u32 = 5;
+pub const APP_SCHEMA_VERSION: u32 = 6;
 
 /// `PRAGMA application_id` — "STAH" as big-endian ASCII. Marks the file as ours
 /// without needing to read a table, and survives copying between machines.
@@ -22,6 +22,7 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (3, M3_SOURCE_FOLDER_TOUCHED),
     (4, M4_BRANDS),
     (5, M5_BRAND_RULES_AND_ELEMENTS),
+    (6, M6_BRAND_ADDITIONAL_INFO),
 ];
 
 const M1_INITIAL: &str = r#"
@@ -324,6 +325,21 @@ CREATE INDEX ix_brand_elements_brand ON brand_elements(brand_id);
 pub fn user_version(conn: &Connection) -> Result<u32> {
     Ok(conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))? as u32)
 }
+
+const M6_BRAND_ADDITIONAL_INFO: &str = r#"
+CREATE TABLE brand_additional_infos (
+  id             INTEGER PRIMARY KEY,
+  brand_id       INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+  title          TEXT NOT NULL,
+  editor_mode    TEXT NOT NULL,
+  content_type   TEXT NOT NULL,
+  content        TEXT NOT NULL,
+  file_reference TEXT,
+  position       INTEGER NOT NULL DEFAULT 0,
+  updated_at     TEXT NOT NULL
+);
+CREATE INDEX ix_brand_additional_infos_brand ON brand_additional_infos(brand_id);
+"#;
 
 pub fn application_id(conn: &Connection) -> Result<i32> {
     Ok(conn.query_row("PRAGMA application_id", [], |r| r.get::<_, i64>(0))? as i32)

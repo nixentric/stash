@@ -7,7 +7,6 @@ pub mod prefs;
 pub mod preview;
 pub mod source;
 pub mod state;
-pub mod update;
 pub mod util;
 
 use state::AppState;
@@ -18,6 +17,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // Ranged media for <video>/<img>. See preview/scheme.rs for why this is
         // a URI scheme and not a localhost proxy.
         .register_asynchronous_uri_scheme_protocol("stash", preview::scheme::handle)
@@ -29,6 +30,17 @@ pub fn run() {
 
             let state = AppState::new(config_dir, cache_dir);
             app.manage(state);
+
+            // The window paints its own background before the first frame. The
+            // config colour covers dark; flip it for a light desktop so launch
+            // never flashes a colour the app isn't about to render.
+            // ponytail: follows the OS theme, not the app's own theme setting —
+            // move the setting into prefs if an explicit override starts mattering.
+            if let Some(win) = app.get_webview_window("main") {
+                if win.theme().map(|t| t == tauri::Theme::Light).unwrap_or(false) {
+                    let _ = win.set_background_color(Some(tauri::window::Color(253, 253, 253, 255)));
+                }
+            }
 
             // No Drive session is restored here on purpose: reading the keychain
             // makes the OS ask the user for permission, and launching the app is
@@ -70,6 +82,7 @@ pub fn run() {
             commands::brand::delete_brand_typeface,
             commands::brand::save_brand_logo,
             commands::brand::delete_brand_logo,
+            commands::brand::reorder_brand_logos,
             commands::brand::save_brand_logo_rules,
             commands::brand::save_brand_example,
             commands::brand::delete_brand_example,
@@ -124,7 +137,6 @@ pub fn run() {
             commands::app::set_prefs,
             commands::app::open_external,
             commands::app::reveal_in_file_manager,
-            commands::app::check_for_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Stash");

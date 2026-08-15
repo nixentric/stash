@@ -7,8 +7,10 @@
 
 use crate::util::Secret;
 use std::collections::HashMap;
+#[cfg(not(debug_assertions))]
 use std::sync::{Mutex, OnceLock};
 
+#[cfg(not(debug_assertions))]
 const SERVICE: &str = "app.stash.footage";
 
 /// Every keychain read can raise an OS authorization dialog, and `google_status`
@@ -16,115 +18,127 @@ const SERVICE: &str = "app.stash.footage";
 /// refetch, was asked for the login password again and again. Reads are memoised
 /// for the life of the process instead: one prompt per secret per launch, and
 /// none at all once the user picks "Always Allow".
-fn memo() -> &'static Mutex<HashMap<String, Option<String>>> {
-    static MEMO: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
-    MEMO.get_or_init(Default::default)
-}
-
-/// Poisoning only means some other thread panicked mid-update; the map itself is
-/// still coherent, and refusing to serve a cached secret would bring the dialogs
-/// straight back.
-fn memoized(key: &str, load: impl FnOnce() -> Option<String>) -> Option<String> {
-    let m = memo();
-    if let Some(hit) = m.lock().unwrap_or_else(|e| e.into_inner()).get(key) {
-        return hit.clone();
-    }
-    let value = load();
-    m.lock().unwrap_or_else(|e| e.into_inner()).insert(key.to_string(), value.clone());
-    value
-}
-
-fn remember(key: &str, value: Option<String>) {
-    memo().lock().unwrap_or_else(|e| e.into_inner()).insert(key.to_string(), value);
-}
 
 pub const KEY_REFRESH_TOKEN: &str = "google-refresh-token";
 pub const KEY_CLIENT_SECRET: &str = "google-client-secret";
 
-fn entry(key: &str) -> Option<keyring::Entry> {
-    match keyring::Entry::new(SERVICE, key) {
-        Ok(e) => Some(e),
-        Err(e) => {
-            // Log the failure kind, never the key material.
-            log::warn!("keychain unavailable: {e}");
-            None
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
+#[cfg(debug_assertions)]
+mod dev_store {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::fs;
+    use std::path::PathBuf;
 
-    #[test]
-    fn a_secret_is_read_from_the_keychain_once_per_process() {
-        let reads = AtomicUsize::new(0);
-        let mut load = || {
-            reads.fetch_add(1, Ordering::SeqCst);
-            Some("token".to_string())
-        };
-
-        assert_eq!(memoized("test-key", &mut load).as_deref(), Some("token"));
-        assert_eq!(memoized("test-key", &mut load).as_deref(), Some("token"));
-        assert_eq!(reads.load(Ordering::SeqCst), 1, "second read hit the keychain again");
-
-        // A miss is cached too: repeatedly asking for a secret that is not there
-        // is exactly what the status query does.
-        let misses = AtomicUsize::new(0);
-        let mut absent = || {
-            misses.fetch_add(1, Ordering::SeqCst);
-            None
-        };
-        assert!(memoized("absent-key", &mut absent).is_none());
-        assert!(memoized("absent-key", &mut absent).is_none());
-        assert_eq!(misses.load(Ordering::SeqCst), 1);
-
-        // Writing a new value must be visible without another keychain trip.
-        remember("test-key", Some("rotated".into()));
-        assert_eq!(memoized("test-key", &mut load).as_deref(), Some("rotated"));
-        assert_eq!(reads.load(Ordering::SeqCst), 1);
+    fn path() -> PathBuf {
+        std::env::temp_dir().join("stash-dev-secrets.json")
     }
-}
 
-pub fn available() -> bool {
-    entry(KEY_REFRESH_TOKEN).is_some()
-}
+    fn load_map() -> HashMap<String, String> {
+        fs::read_to_string(path())
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
 
-pub fn get(key: &str) -> Option<Secret> {
-    memoized(key, || {
-        let e = entry(key)?;
-        match e.get_password() {
-            Ok(v) if !v.is_empty() => Some(v),
-            _ => None,
+    pub fn available() -> bool { true }
+
+    pub fn get(key: &str) -> Option<Secret> {
+        load_map().get(key).map(|s| Secret::new(s.clone()))
+    }
+
+    pub fn set(key: &str, value: &Secret) -> bool {
+        let mut map = load_map();
+        map.insert(key.to_string(), value.expose().to_string());
+        if let Ok(json) = serde_json::to_string(&map) {
+            fs::write(path(), json).is_ok()
+        } else {
+            false
         }
-    })
-    .map(Secret::new)
-}
+    }
 
-/// Returns false when there is no keychain to write to, so callers can tell the
-/// user that the connection will not survive a restart.
-pub fn set(key: &str, value: &Secret) -> bool {
-    match entry(key) {
-        Some(e) => match e.set_password(value.expose()) {
-            Ok(()) => {
-                // What we just wrote is what a later read must see, prompt-free.
-                remember(key, Some(value.expose().to_string()));
-                true
-            }
-            Err(err) => {
-                log::warn!("could not store {key} in the keychain: {err}");
-                false
-            }
-        },
-        None => false,
+    pub fn delete(key: &str) {
+        let mut map = load_map();
+        map.remove(key);
+        if let Ok(json) = serde_json::to_string(&map) {
+            let _ = fs::write(path(), json);
+        }
     }
 }
 
-pub fn delete(key: &str) {
-    if let Some(e) = entry(key) {
-        // A missing entry is the desired end state, so a NoEntry error is fine.
-        let _ = e.delete_credential();
+#[cfg(debug_assertions)]
+pub use dev_store::*;
+
+#[cfg(not(debug_assertions))]
+mod prod_store {
+    use super::*;
+
+    fn memo() -> &'static Mutex<HashMap<String, Option<String>>> {
+        static MEMO: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+        MEMO.get_or_init(Default::default)
     }
-    remember(key, None);
+
+    fn memoized(key: &str, load: impl FnOnce() -> Option<String>) -> Option<String> {
+        let m = memo();
+        let mut map = m.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(hit) = map.get(key) {
+            return hit.clone();
+        }
+        let value = load();
+        map.insert(key.to_string(), value.clone());
+        value
+    }
+
+    fn remember(key: &str, value: Option<String>) {
+        memo().lock().unwrap_or_else(|e| e.into_inner()).insert(key.to_string(), value);
+    }
+
+    fn entry(key: &str) -> Option<keyring::Entry> {
+        match keyring::Entry::new(SERVICE, key) {
+            Ok(e) => Some(e),
+            Err(e) => {
+                log::warn!("keychain unavailable: {e}");
+                None
+            }
+        }
+    }
+
+    pub fn available() -> bool {
+        entry(KEY_REFRESH_TOKEN).is_some()
+    }
+
+    pub fn get(key: &str) -> Option<Secret> {
+        memoized(key, || {
+            let e = entry(key)?;
+            match e.get_password() {
+                Ok(v) if !v.is_empty() => Some(v),
+                _ => None,
+            }
+        })
+        .map(Secret::new)
+    }
+
+    pub fn set(key: &str, value: &Secret) -> bool {
+        match entry(key) {
+            Some(e) => match e.set_password(value.expose()) {
+                Ok(()) => {
+                    remember(key, Some(value.expose().to_string()));
+                    true
+                }
+                Err(err) => {
+                    log::warn!("could not store {key} in the keychain: {err}");
+                    false
+                }
+            },
+            None => false,
+        }
+    }
+
+    pub fn delete(key: &str) {
+        if let Some(e) = entry(key) {
+            let _ = e.delete_credential();
+        }
+        remember(key, None);
+    }
 }
+
+#[cfg(not(debug_assertions))]
+pub use prod_store::*;

@@ -1,5 +1,5 @@
 use crate::db::models::{
-    Brand, BrandColor, BrandDetail, BrandElement, BrandExample, BrandLogo, BrandLogoRules,
+    Brand, BrandAdditionalInfo, BrandColor, BrandDetail, BrandElement, BrandExample, BrandLogo, BrandLogoRules,
     BrandTypeface, SearchHit,
 };
 use crate::db::repo::brand as repo;
@@ -59,6 +59,18 @@ pub fn delete_brand_logo(state: State<'_, AppState>, id: i64) -> Result<()> {
     state.with_library(|lib| repo::delete_logo(&lib.conn, id))
 }
 
+#[derive(serde::Deserialize)]
+pub struct LogoOrderUpdate {
+    pub id: i64,
+    pub variant: String,
+    pub position: i64,
+}
+
+#[tauri::command]
+pub fn reorder_brand_logos(state: State<'_, AppState>, updates: Vec<LogoOrderUpdate>) -> Result<()> {
+    state.with_library(|lib| repo::reorder_logos(&lib.conn, &updates))
+}
+
 /// Universal search across assets and every brand entity, grouped by the caller.
 #[tauri::command]
 pub fn universal_search(state: State<'_, AppState>, query: String) -> Result<Vec<SearchHit>> {
@@ -88,4 +100,14 @@ pub fn save_brand_element(state: State<'_, AppState>, element: BrandElement) -> 
 #[tauri::command]
 pub fn delete_brand_element(state: State<'_, AppState>, id: i64) -> Result<()> {
     state.with_library(|lib| repo::delete_element(&lib.conn, id))
+}
+
+#[tauri::command]
+pub fn save_brand_additional_info(state: State<'_, AppState>, info: BrandAdditionalInfo) -> Result<i64> {
+    state.with_library(|lib| repo::save_additional_info(&lib.conn, &info))
+}
+
+#[tauri::command]
+pub fn delete_brand_additional_info(state: State<'_, AppState>, id: i64) -> Result<()> {
+    state.with_library(|lib| repo::delete_additional_info(&lib.conn, id))
 }
