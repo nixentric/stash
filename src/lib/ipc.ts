@@ -103,6 +103,19 @@ export const ipc = {
   googleDisconnect: () => invoke<void>("google_disconnect"),
   syncLibrary: (ids: number[] | null) => invoke<T.SyncReport>("sync_library", { ids }),
 
+  // ── brands ────────────────────────────────────────────────────────────────
+  allBrands: () => invoke<T.Brand[]>("all_brands"),
+  brandDetail: (id: number) => invoke<T.BrandDetail>("brand_detail", { id }),
+  saveBrand: (brand: T.Brand) => invoke<number>("save_brand", { brand }),
+  deleteBrand: (id: number) => invoke<void>("delete_brand", { id }),
+  saveBrandColor: (color: T.BrandColor) => invoke<number>("save_brand_color", { color }),
+  deleteBrandColor: (id: number) => invoke<void>("delete_brand_color", { id }),
+  saveBrandTypeface: (typeface: T.BrandTypeface) =>
+    invoke<number>("save_brand_typeface", { typeface }),
+  deleteBrandTypeface: (id: number) => invoke<void>("delete_brand_typeface", { id }),
+  saveBrandLogo: (logo: T.BrandLogo) => invoke<number>("save_brand_logo", { logo }),
+  deleteBrandLogo: (id: number) => invoke<void>("delete_brand_logo", { id }),
+
   // ── app ───────────────────────────────────────────────────────────────────
   appCapabilities: () => invoke<T.AppCapabilities>("app_capabilities"),
   getPrefs: () => invoke<T.Prefs>("get_prefs"),

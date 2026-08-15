@@ -87,3 +87,55 @@ export const accessibilityLabel: Record<
   offline: { label: "Offline", tone: "muted" },
   source_missing: { label: "Source missing", tone: "warn" },
 };
+
+// ── colour ──────────────────────────────────────────────────────────────────
+
+/** `#RRGGBB` → `[r, g, b]`. Returns null for anything that is not a hex colour. */
+export function hexToRgb(hex: string): [number, number, number] | null {
+  const raw = hex.trim().replace(/^#/, "");
+  const full = raw.length === 3 ? raw.replace(/./g, (c) => c + c) : raw;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/**
+ * Naive device-independent CMYK, the same arithmetic Figma and CSS pickers show.
+ *
+ * ponytail: no ICC profile, so this is a reference value for talking to a
+ * printer, not a proof. Real separation depends on paper and press; swap in a
+ * colour-managed conversion only if someone is actually printing from here.
+ */
+export function rgbToCmyk(r: number, g: number, b: number): [number, number, number, number] {
+  const [rf, gf, bf] = [r / 255, g / 255, b / 255];
+  const k = 1 - Math.max(rf, gf, bf);
+  if (k === 1) return [0, 0, 0, 100];
+  const pct = (v: number) => Math.round(((1 - v - k) / (1 - k)) * 100);
+  return [pct(rf), pct(gf), pct(bf), Math.round(k * 100)];
+}
+
+/** The three copyable representations of a swatch. */
+export function colorFormats(hex: string): { hex: string; rgb: string; cmyk: string } | null {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  const [r, g, b] = rgb;
+  const [c, m, y, k] = rgbToCmyk(r, g, b);
+  return {
+    hex: hex.trim().toUpperCase().startsWith("#") ? hex.trim().toUpperCase() : `#${hex.trim().toUpperCase()}`,
+    rgb: `rgb(${r}, ${g}, ${b})`,
+    cmyk: `${c}, ${m}, ${y}, ${k}`,
+  };
+}
+
+/** White or black body text, whichever stays legible on `hex` (WCAG relative luminance). */
+export function readableOn(hex: string): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "#000000";
+  const linear = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance =
+    0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2]);
+  return luminance > 0.179 ? "#000000" : "#FFFFFF";
+}

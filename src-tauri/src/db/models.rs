@@ -272,6 +272,102 @@ pub struct FolderFieldValue {
     pub value: String,
 }
 
+// ── brands ──────────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Brand {
+    #[serde(default)]
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub tagline: String,
+    #[serde(default)]
+    pub website: String,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub cover_footage_id: Option<i64>,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+/// A brand plus everything the guideline screens render in one round trip —
+/// four small tables, always shown together.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandDetail {
+    pub brand: Brand,
+    pub colors: Vec<BrandColor>,
+    pub typefaces: Vec<BrandTypeface>,
+    pub logos: Vec<BrandLogo>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandColor {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub brand_id: i64,
+    /// primary | secondary | accent | neutral | background | semantic
+    pub role: String,
+    pub name: String,
+    /// Canonical `#RRGGBB`. RGB and CMYK are derived on display, never stored.
+    pub hex: String,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub position: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandTypeface {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub brand_id: i64,
+    /// display | heading | subheading | body | caption | ui | fallback
+    pub role: String,
+    pub family: String,
+    #[serde(default)]
+    pub weight: String,
+    #[serde(default)]
+    pub size: String,
+    #[serde(default)]
+    pub line_height: String,
+    #[serde(default)]
+    pub letter_spacing: String,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub position: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandLogo {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub brand_id: i64,
+    /// primary | secondary | horizontal | vertical | icon | white | black | mono
+    pub variant: String,
+    pub name: String,
+    /// Points into the asset library so a logo file exists exactly once.
+    #[serde(default)]
+    pub footage_id: Option<i64>,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub position: i64,
+}
+
 // ── query ───────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]

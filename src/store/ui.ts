@@ -15,6 +15,7 @@ export type SidebarView =
   | { kind: "favorites" }
   | { kind: "missing" }
   | { kind: "sourceFolders" }
+  | { kind: "brand"; id: number; name: string }
   | { kind: "tag"; name: string }
   | { kind: "collection"; id: number; name: string }
   | { kind: "project"; id: number; name: string }
@@ -194,6 +195,8 @@ export function buildQuery(s: UiState, offset = 0, limit = 200): FootageQuery {
       break;
     case "all":
     case "sourceFolders":
+    // A brand page renders its own guideline, not a footage query.
+    case "brand":
       break;
   }
   return q;

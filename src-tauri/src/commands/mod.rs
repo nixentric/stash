@@ -1,4 +1,5 @@
 pub mod app;
+pub mod brand;
 pub mod footage;
 pub mod gdrive;
 pub mod import;

@@ -17,6 +17,8 @@ import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import { JobBanner } from "@/components/library/JobBanner";
 import { SourceFoldersPage } from "@/components/library/SourceFoldersPage";
 import { FolderMetadataDialog } from "@/components/dialogs/FolderMetadataDialog";
+import { BrandDialog, ColorDialog, LogoDialog, TypefaceDialog } from "@/components/dialogs/BrandDialogs";
+import { BrandPage } from "@/components/brand/BrandPage";
 import { ipc } from "@/lib/ipc";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
 import {
@@ -32,7 +34,8 @@ import {
 } from "@/hooks/queries";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { buildQuery, useUi } from "@/store/ui";
-import type { FolderNode, JobProgress } from "@/lib/types";
+import { emptyBrand } from "@/lib/types";
+import type { Brand, BrandColor, BrandLogo, BrandTypeface, FolderNode, JobProgress } from "@/lib/types";
 
 export default function App() {
   const qc = useQueryClient();
@@ -44,6 +47,10 @@ export default function App() {
   const [newCollectionOpen, setNewCollectionOpen] = useState(false);
   const [job, setJob] = useState<JobProgress | null>(null);
   const [folderMetadata, setFolderMetadata] = useState<FolderNode | null>(null);
+  const [brandDraft, setBrandDraft] = useState<Brand | null>(null);
+  const [colorDraft, setColorDraft] = useState<BrandColor | null>(null);
+  const [typefaceDraft, setTypefaceDraft] = useState<BrandTypeface | null>(null);
+  const [logoDraft, setLogoDraft] = useState<BrandLogo | null>(null);
 
   const ui = useUi();
   const { selection, inspectorOpen, settingsOpen, setSettingsOpen, select } = ui;
@@ -218,7 +225,10 @@ export default function App() {
     <TooltipProvider delayDuration={400}>
       <div className="flex h-full w-full overflow-hidden">
         <div className="w-[13.5rem] shrink-0">
-          <Sidebar onNewCollection={() => setNewCollectionOpen(true)} />
+          <Sidebar
+            onNewCollection={() => setNewCollectionOpen(true)}
+            onNewBrand={() => setBrandDraft(emptyBrand())}
+          />
         </div>
 
         <main className="flex min-w-0 flex-1 flex-col">
@@ -229,7 +239,15 @@ export default function App() {
           />
           {job && <JobBanner job={job} />}
           <div className="min-h-0 flex-1">
-            {ui.view.kind === "sourceFolders" ? <SourceFoldersPage onEdit={setFolderMetadata} /> : <FootageGrid
+            {ui.view.kind === "brand" ? (
+              <BrandPage
+                brandId={ui.view.id}
+                onEditBrand={setBrandDraft}
+                onEditColor={setColorDraft}
+                onEditTypeface={setTypefaceDraft}
+                onEditLogo={setLogoDraft}
+              />
+            ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage onEdit={setFolderMetadata} /> : <FootageGrid
               items={items}
               total={page.data?.total ?? 0}
               loading={page.isLoading}
@@ -257,6 +275,10 @@ export default function App() {
         }}
       />
       <FolderMetadataDialog folder={folderMetadata} onClose={() => setFolderMetadata(null)} />
+      <BrandDialog brand={brandDraft} onClose={() => setBrandDraft(null)} />
+      <ColorDialog color={colorDraft} onClose={() => setColorDraft(null)} />
+      <TypefaceDialog typeface={typefaceDraft} onClose={() => setTypefaceDraft(null)} />
+      <LogoDialog logo={logoDraft} onClose={() => setLogoDraft(null)} />
 
       <MarkUsedDialog
         open={markUsedOpen}

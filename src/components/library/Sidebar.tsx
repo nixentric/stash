@@ -12,25 +12,28 @@ import {
   Plus,
   Repeat2,
   Sparkles,
+  SwatchBook as Swatches,
   TriangleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { count } from "@/lib/format";
 import { useUi } from "@/store/ui";
-import { useCollections, useFolders, useProjects, useStats, useTags } from "@/hooks/queries";
+import { useBrands, useCollections, useFolders, useProjects, useStats, useTags } from "@/hooks/queries";
 import { Tooltip } from "@/components/ui/misc";
 
 interface Props {
   onNewCollection: () => void;
+  onNewBrand: () => void;
 }
 
-export function Sidebar({ onNewCollection }: Props) {
+export function Sidebar({ onNewCollection, onNewBrand }: Props) {
   const { view, setView } = useUi();
   const stats = useStats(true);
   const tags = useTags(true);
   const collections = useCollections(true);
   const projects = useProjects(true);
   const folders = useFolders(true);
+  const brands = useBrands(true);
 
   const s = stats.data;
 
@@ -102,6 +105,22 @@ export function Sidebar({ onNewCollection }: Props) {
           badge={folderTree.length}
         />
       </div>
+
+      <Section
+        title="Brands"
+        action={{ label: "New brand", onClick: onNewBrand, icon: <Plus /> }}
+        empty={brands.data?.length === 0 ? "No brands yet" : undefined}
+      >
+        {brands.data?.map((b) => (
+          <Row
+            key={b.id}
+            active={view.kind === "brand" && view.id === b.id}
+            onClick={() => setView({ kind: "brand", id: b.id, name: b.name })}
+            icon={<Swatches />}
+            label={b.name}
+          />
+        ))}
+      </Section>
 
       <Section
         title="Collections"

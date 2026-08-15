@@ -58,6 +58,17 @@ pub fn run() {
             commands::source_folder::delete_folder_field,
             commands::source_folder::set_folder_tags,
             commands::source_folder::set_folder_field_value,
+            // brands
+            commands::brand::all_brands,
+            commands::brand::brand_detail,
+            commands::brand::save_brand,
+            commands::brand::delete_brand,
+            commands::brand::save_brand_color,
+            commands::brand::delete_brand_color,
+            commands::brand::save_brand_typeface,
+            commands::brand::delete_brand_typeface,
+            commands::brand::save_brand_logo,
+            commands::brand::delete_brand_logo,
             // tags / collections / projects / usage
             commands::taxonomy::all_tags,
             commands::taxonomy::add_tags,

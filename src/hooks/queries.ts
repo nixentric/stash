@@ -25,6 +25,8 @@ export const keys = {
   google: ["google"] as const,
   caps: ["caps"] as const,
   prefs: ["prefs"] as const,
+  brands: ["brands"] as const,
+  brand: (id: number) => ["brands", "detail", id] as const,
 };
 
 /** Everything that changes when footage records change. */
@@ -101,6 +103,63 @@ export const useFolderFields = (enabled: boolean) =>
 
 export const useGoogleStatus = () =>
   useQuery({ queryKey: keys.google, queryFn: ipc.googleStatus });
+
+// ── brands ──────────────────────────────────────────────────────────────────
+
+export const useBrands = (enabled: boolean) =>
+  useQuery({ queryKey: keys.brands, queryFn: ipc.allBrands, enabled });
+
+export const useBrand = (id: number | null) =>
+  useQuery({
+    queryKey: keys.brand(id ?? 0),
+    queryFn: () => ipc.brandDetail(id!),
+    enabled: id != null,
+  });
+
+/**
+ * One mutation for the whole brand surface: every write invalidates the same
+ * two keys, and a hook per entity would only duplicate that rule four times.
+ */
+type BrandAction =
+  | { type: "saveBrand"; brand: T.Brand }
+  | { type: "deleteBrand"; id: number }
+  | { type: "saveColor"; color: T.BrandColor }
+  | { type: "deleteColor"; id: number }
+  | { type: "saveTypeface"; typeface: T.BrandTypeface }
+  | { type: "deleteTypeface"; id: number }
+  | { type: "saveLogo"; logo: T.BrandLogo }
+  | { type: "deleteLogo"; id: number };
+
+export function useBrandAction() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (a: BrandAction) => {
+      switch (a.type) {
+        case "saveBrand":
+          return ipc.saveBrand(a.brand);
+        case "deleteBrand":
+          return ipc.deleteBrand(a.id);
+        case "saveColor":
+          return ipc.saveBrandColor(a.color);
+        case "deleteColor":
+          return ipc.deleteBrandColor(a.id);
+        case "saveTypeface":
+          return ipc.saveBrandTypeface(a.typeface);
+        case "deleteTypeface":
+          return ipc.deleteBrandTypeface(a.id);
+        case "saveLogo":
+          return ipc.saveBrandLogo(a.logo);
+        case "deleteLogo":
+          return ipc.deleteBrandLogo(a.id);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.brands });
+    },
+    onError: (e) => reportError(e),
+  });
+}
 
 export const useCapabilities = () =>
   useQuery({ queryKey: keys.caps, queryFn: ipc.appCapabilities });

@@ -1,3 +1,4 @@
+pub mod brand;
 pub mod footage;
 pub mod query;
 pub mod source_folder;

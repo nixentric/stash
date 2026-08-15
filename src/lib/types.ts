@@ -149,6 +149,105 @@ export interface FolderNode {
   updatedAt: string;
 }
 
+// ── brands ──────────────────────────────────────────────────────────────────
+
+/** Roles a colour can hold in a palette, in the order they are shown. */
+export const COLOR_ROLES = [
+  "primary",
+  "secondary",
+  "accent",
+  "neutral",
+  "background",
+  "semantic",
+] as const;
+
+export const TYPE_ROLES = [
+  "display",
+  "heading",
+  "subheading",
+  "body",
+  "caption",
+  "ui",
+  "fallback",
+] as const;
+
+export const LOGO_VARIANTS = [
+  "primary",
+  "secondary",
+  "horizontal",
+  "vertical",
+  "icon",
+  "white",
+  "black",
+  "mono",
+] as const;
+
+export interface Brand {
+  id: number;
+  name: string;
+  description: string;
+  tagline: string;
+  website: string;
+  notes: string;
+  coverFootageId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrandColor {
+  id: number;
+  brandId: number;
+  role: string;
+  name: string;
+  /** Canonical `#RRGGBB`; RGB and CMYK are derived for display. */
+  hex: string;
+  notes: string;
+  position: number;
+}
+
+export interface BrandTypeface {
+  id: number;
+  brandId: number;
+  role: string;
+  family: string;
+  weight: string;
+  size: string;
+  lineHeight: string;
+  letterSpacing: string;
+  notes: string;
+  position: number;
+}
+
+export interface BrandLogo {
+  id: number;
+  brandId: number;
+  variant: string;
+  name: string;
+  /** Points into the asset library, so the file exists exactly once. */
+  footageId: number | null;
+  notes: string;
+  position: number;
+}
+
+export interface BrandDetail {
+  brand: Brand;
+  colors: BrandColor[];
+  typefaces: BrandTypeface[];
+  logos: BrandLogo[];
+}
+
+export const emptyBrand = (): Brand => ({
+  id: 0,
+  name: "",
+  description: "",
+  tagline: "",
+  website: "",
+  notes: "",
+  coverFootageId: null,
+  createdAt: "",
+  updatedAt: "",
+});
+
 export interface FolderField { id: number; name: string }
 export interface FolderFieldValue { fieldId: number; name: string; value: string }
 

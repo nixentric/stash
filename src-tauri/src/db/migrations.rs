@@ -10,14 +10,18 @@ use crate::error::{AppError, Result};
 use rusqlite::Connection;
 
 /// Schema version this build understands. Bump when adding a migration.
-pub const APP_SCHEMA_VERSION: u32 = 3;
+pub const APP_SCHEMA_VERSION: u32 = 4;
 
 /// `PRAGMA application_id` — "STAH" as big-endian ASCII. Marks the file as ours
 /// without needing to read a table, and survives copying between machines.
 pub const APPLICATION_ID: i32 = 0x5354_4148;
 
-const MIGRATIONS: &[(u32, &str)] =
-    &[(1, M1_INITIAL), (2, M2_SOURCE_FOLDER_METADATA), (3, M3_SOURCE_FOLDER_TOUCHED)];
+const MIGRATIONS: &[(u32, &str)] = &[
+    (1, M1_INITIAL),
+    (2, M2_SOURCE_FOLDER_METADATA),
+    (3, M3_SOURCE_FOLDER_TOUCHED),
+    (4, M4_BRANDS),
+];
 
 const M1_INITIAL: &str = r#"
 -- ── user metadata: authored by the user, never overwritten by any sync ──────
@@ -211,6 +215,67 @@ CREATE TABLE source_folder_meta (
   container_path TEXT PRIMARY KEY,
   updated_at     TEXT NOT NULL
 );
+"#;
+
+// Brand guidelines. Three deliberate choices here:
+//
+//   * A logo points at a footage row rather than carrying its own path, so a
+//     brand's files live in the asset library exactly once (§ the README's
+//     "referenced, not duplicated"). ON DELETE SET NULL keeps the logo entry —
+//     with its variant and usage notes — when the asset is removed.
+//   * Colours store hex only. RGB and CMYK are derived; storing all three
+//     invites the three drifting apart, and honest CMYK needs an ICC profile
+//     this app has no business owning.
+//   * `position` orders entries inside a role, because a palette's order is
+//     meaning, not decoration.
+const M4_BRANDS: &str = r#"
+CREATE TABLE brands (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  description TEXT NOT NULL DEFAULT '',
+  tagline     TEXT NOT NULL DEFAULT '',
+  website     TEXT NOT NULL DEFAULT '',
+  notes       TEXT NOT NULL DEFAULT '',
+  cover_footage_id INTEGER REFERENCES footages(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE brand_colors (
+  id       INTEGER PRIMARY KEY,
+  brand_id INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+  role     TEXT NOT NULL,
+  name     TEXT NOT NULL,
+  hex      TEXT NOT NULL,
+  notes    TEXT NOT NULL DEFAULT '',
+  position INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_brand_colors_brand ON brand_colors(brand_id);
+
+CREATE TABLE brand_typefaces (
+  id             INTEGER PRIMARY KEY,
+  brand_id       INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+  role           TEXT NOT NULL,
+  family         TEXT NOT NULL,
+  weight         TEXT NOT NULL DEFAULT '',
+  size           TEXT NOT NULL DEFAULT '',
+  line_height    TEXT NOT NULL DEFAULT '',
+  letter_spacing TEXT NOT NULL DEFAULT '',
+  notes          TEXT NOT NULL DEFAULT '',
+  position       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_brand_typefaces_brand ON brand_typefaces(brand_id);
+
+CREATE TABLE brand_logos (
+  id         INTEGER PRIMARY KEY,
+  brand_id   INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+  variant    TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  footage_id INTEGER REFERENCES footages(id) ON DELETE SET NULL,
+  notes      TEXT NOT NULL DEFAULT '',
+  position   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_brand_logos_brand ON brand_logos(brand_id);
 "#;
 
 pub fn user_version(conn: &Connection) -> Result<u32> {
