@@ -10,6 +10,7 @@
 //! it — so seeking transfers only the bytes asked for and the original file is
 //! never downloaded (§7 of the brief).
 
+use crate::db::models::MediaType;
 use crate::db::repo::footage as footage_repo;
 use crate::error::{AppError, Result};
 use crate::state::AppState;
@@ -20,6 +21,10 @@ use tauri::Manager;
 /// Upper bound on a single response. Without it, a `<video>` that omits `Range`
 /// would pull an entire 4 GB master into memory.
 const MAX_CHUNK: u64 = 4 * 1024 * 1024;
+
+/// A still has to arrive whole or it does not decode, so `<img>` gets one 200
+/// with the entire file. Bounded anyway: a "photo" that big is not a photo.
+const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 
 struct RangeSpec {
     start: u64,
@@ -55,6 +60,22 @@ fn parse_range(header: Option<&str>, total: u64) -> RangeSpec {
     }
 }
 
+/// Only the types a webview will actually decode. A DNG or PSD is a still too,
+/// but no `<img>` will render it — those fall back to the thumbnail.
+fn ext_mime(name: &str) -> Option<&'static str> {
+    match name.rsplit('.').next()?.to_ascii_lowercase().as_str() {
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "webp" => Some("image/webp"),
+        "gif" => Some("image/gif"),
+        "avif" => Some("image/avif"),
+        "heic" | "heif" => Some("image/heic"),
+        "bmp" => Some("image/bmp"),
+        "tif" | "tiff" => Some("image/tiff"),
+        _ => None,
+    }
+}
+
 fn footage_id_from(request: &Request<Vec<u8>>) -> Option<i64> {
     let uri = request.uri().to_string();
     // macOS/Linux: stash://media/12  ·  Windows: http://stash.localhost/media/12
@@ -83,9 +104,20 @@ fn partial(body: Vec<u8>, start: u64, end: u64, total: u64, mime: &str) -> Respo
 
 async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) -> Result<Response<Vec<u8>>> {
     let src = state.with_library(|lib| footage_repo::get_source(&lib.conn, footage_id))?;
+
+    // The mime column is empty for most local files, so the extension decides —
+    // the same fallback `MediaType::from_mime_or_name` uses when cataloging.
+    let name = src
+        .local_path
+        .clone()
+        .or_else(|| src.original_filename.clone())
+        .unwrap_or_default();
+    let still = MediaType::from_mime_or_name(src.mime_type.as_deref(), &name) == MediaType::Image;
     let mime = src
         .mime_type
         .clone()
+        .filter(|m| !m.is_empty() && !m.ends_with("octet-stream"))
+        .or_else(|| ext_mime(&name).map(str::to_string))
         .unwrap_or_else(|| "application/octet-stream".into());
 
     match src.provider.as_str() {
@@ -95,6 +127,16 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
                 .clone()
                 .ok_or_else(|| AppError::NotFound("No file path".into()))?;
             let total = std::fs::metadata(&path)?.len();
+
+            if still && range_header.is_none() && total <= MAX_IMAGE_BYTES {
+                return Ok(Response::builder()
+                    .status(200)
+                    .header("Content-Type", mime)
+                    .header("Content-Length", total.to_string())
+                    .body(std::fs::read(&path)?)
+                    .unwrap_or_else(|_| Response::new(Vec::new())));
+            }
+
             let r = parse_range(range_header.as_deref(), total);
 
             let mut file = std::fs::File::open(&path)?;
@@ -119,8 +161,10 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
 
             // Ask Drive for a bounded window even when the webview asked for
             // everything, so one request cannot buffer a whole master file.
+            let whole_image = still && range_header.is_none();
             let forwarded = match range_header.as_deref() {
                 Some(h) if h.starts_with("bytes=") => clamp_range_header(h),
+                _ if whole_image => format!("bytes=0-{}", MAX_IMAGE_BYTES - 1),
                 _ => format!("bytes=0-{}", MAX_CHUNK - 1),
             };
 
@@ -139,11 +183,11 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
             let bytes = resp.bytes().await?.to_vec();
 
             let mut builder = Response::builder()
-                .status(206)
+                .status(if whole_image { 200 } else { 206 })
                 .header("Content-Type", content_type)
                 .header("Accept-Ranges", "bytes")
                 .header("Content-Length", bytes.len().to_string());
-            if let Some(cr) = content_range {
+            if let Some(cr) = content_range.filter(|_| !whole_image) {
                 builder = builder.header("Content-Range", cr);
             }
             Ok(builder
@@ -246,6 +290,17 @@ mod tests {
             assert!(r.end >= r.start, "failed on {h}");
             assert!(r.end < 10_000);
         }
+    }
+
+    /// The regression: a catalogued JPEG has no mime in the database, so the
+    /// handler has to recognize the still from its name — otherwise `<img>`
+    /// gets a 4 MB slice of octet-stream and shows nothing.
+    #[test]
+    fn a_photo_with_no_stored_mime_is_still_recognized() {
+        let name = "/Photos/20260617_011836_690_IMG_0011.JPG";
+        assert_eq!(MediaType::from_mime_or_name(None, name), MediaType::Image);
+        assert_eq!(ext_mime(name), Some("image/jpeg"));
+        assert_eq!(ext_mime("/Clips/a.mov"), None);
     }
 
     #[test]

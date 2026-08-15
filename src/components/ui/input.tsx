@@ -5,6 +5,13 @@ export const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"in
   ({ className, ...props }, ref) => (
     <input
       ref={ref}
+      // Nothing here is a web form: no field wants the webview's saved-value
+      // dropdown, and macOS autocorrect rewriting a URL or a path is worse than
+      // useless. Before the spread, so a caller can still ask for them.
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize="off"
+      spellCheck={false}
       className={cn(
         "flex h-7 w-full rounded-md border border-input bg-surface px-2 py-1 text-[13px]",
         "placeholder:text-subtle-foreground outline-none transition-colors",

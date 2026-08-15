@@ -64,6 +64,7 @@ fn from_link(url: &str, display_name: &str) -> NewFootage {
         source_modified_at: None,
         tags: None,
         notes: None,
+        brand_asset: false,
     }
 }
 
@@ -153,7 +154,7 @@ fn full_catalog_workflow_without_any_google_account() {
     .unwrap();
 
     // ── 8. Portable thumbnail, as the preview chain would store it ──────────
-    let encoded = stash_lib::preview::encode::portable(&jpeg_bytes(), 480).unwrap();
+    let encoded = stash_lib::preview::encode::portable(&jpeg_bytes(), 480, false).unwrap();
     thumbnail::put(
         &lib.conn,
         a,
@@ -392,6 +393,40 @@ fn removing_footage_is_catalog_only_and_cascades_cleanly() {
     assert_eq!(projects, 1, "the project itself outlives the footage");
 }
 
+/// A logo imported from the brand page stays out of the grid even before it is
+/// linked to a logo entry — and after it is unlinked again. The link alone used
+/// to be the only signal, so cancelling the dialog leaked the file into the
+/// library with nothing to hide it.
+#[test]
+fn brand_imports_never_show_up_in_the_library() {
+    let dir = TempDir::new();
+    let lib = connection::create(&dir.join("Brand")).unwrap();
+
+    let clip = footage::insert(&lib.conn, &from_link(LINK_A, "B-roll")).unwrap();
+    let logo = footage::insert(
+        &lib.conn,
+        &NewFootage {
+            brand_asset: true,
+            ..from_link(LINK_B, "Wordmark")
+        },
+    )
+    .unwrap();
+
+    let grid = footage::list(&lib.conn, &q()).unwrap();
+    let ids: Vec<i64> = grid.items.iter().map(|i| i.id).collect();
+    assert_eq!(ids, vec![clip], "only the clip belongs in the grid");
+
+    // The brand page and the search bar ask for everything, and still find it.
+    let all = footage::list(
+        &lib.conn,
+        &FootageQuery { include_brand_logos: true, ..q() },
+    )
+    .unwrap();
+    assert!(all.items.iter().any(|i| i.id == logo));
+
+    assert_eq!(footage::stats(&lib.conn).unwrap().total, 1, "counts agree");
+}
+
 /// A mixed library — Drive links, a web URL, a local file — behaves uniformly.
 #[test]
 fn providers_coexist_in_one_library() {
@@ -460,6 +495,7 @@ fn large_libraries_page_in_sql_and_stay_responsive() {
             source_modified_at: None,
             tags: None,
             notes: None,
+            brand_asset: false,
         };
         footage::insert(&tx, &item).unwrap();
     }

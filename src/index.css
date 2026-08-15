@@ -159,6 +159,14 @@
     cursor: auto;
   }
 
+  /* The arrow cursor above is the default, so anything clickable has to ask for
+     the pointer back. Done once here rather than per component. */
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
   ::selection {
     background: var(--selection);
   }

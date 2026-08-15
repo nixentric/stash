@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { ChevronDown, FolderUp } from "lucide-react";
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ipc } from "@/lib/ipc";
+import { registerFont } from "@/lib/fonts";
 import {
   Dialog,
   DialogBody,
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip } from "@/components/ui/misc";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +58,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * same menu primitive the toolbar already uses, so a picker looks like the rest
  * of the app and keeps type-ahead and keyboard control.
  */
-function Select({
+export function Select({
   value,
   options,
   onChange,
@@ -269,11 +270,27 @@ export function TypefaceDialog({
 }) {
   const action = useBrandAction();
   const [draft, setDraft] = useState<BrandTypeface | null>(typeface);
+  const [fontQuery, setFontQuery] = useState("");
+
+  // Enumerating installed fonts costs a few hundred milliseconds; once per session
+  // is plenty, since installing a font while this dialog is open is not a thing.
+  const installed = useQuery({
+    queryKey: ["system-fonts"],
+    queryFn: ipc.systemFonts,
+    staleTime: Infinity,
+  });
 
   useEffect(() => setDraft(typeface), [typeface]);
   if (!draft) return null;
 
   const set = (patch: Partial<BrandTypeface>) => setDraft({ ...draft, ...patch });
+
+  const q = fontQuery.trim().toLowerCase();
+  const matchingFonts = q
+    ? (installed.data ?? [])
+        .filter((n) => n.toLowerCase().includes(q) && n.toLowerCase() !== q)
+        .slice(0, 50)
+    : [];
 
   return (
     <Dialog open={!!typeface} onOpenChange={(open) => !open && onClose()}>
@@ -283,13 +300,65 @@ export function TypefaceDialog({
         </DialogHeader>
         <DialogBody className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
           <Field label="Font family">
-            <Input
-              value={draft.family}
-              onChange={(e) => set({ family: e.target.value })}
-              placeholder="Inter"
-              autoFocus
-            />
+            <div className="flex gap-2">
+              <Input
+                value={draft.family}
+                onChange={(e) => {
+                  // Typing a name by hand means it is no longer the file's font.
+                  set({ family: e.target.value, fontFile: null });
+                  setFontQuery(e.target.value);
+                }}
+                placeholder="Inter"
+                autoFocus
+              />
+              <Tooltip content="Add a font file from disk">
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      const path = await openDialog({
+                        multiple: false,
+                        filters: [{ name: "Fonts", extensions: ["ttf", "otf", "ttc", "woff", "woff2"] }],
+                      });
+                      if (typeof path !== "string") return;
+                      const font = await ipc.loadFontFile(path);
+                      await registerFont(font.family, font.dataUrl);
+                      set({ family: font.family, fontFile: path });
+                      setFontQuery("");
+                    } catch (e) {
+                      reportError(e, "Could not read that font file");
+                    }
+                  }}
+                >
+                  <FolderUp className="size-4" />
+                </Button>
+              </Tooltip>
+            </div>
           </Field>
+          {matchingFonts.length > 0 && (
+            <ul className="max-h-40 overflow-y-auto rounded-md border border-border">
+              {matchingFonts.map((name) => (
+                <li key={name}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set({ family: name, fontFile: null });
+                      setFontQuery("");
+                    }}
+                    className="w-full px-2 py-1.5 text-left text-[12px] hover:bg-accent"
+                    style={{ fontFamily: `"${name}"` }}
+                  >
+                    {name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {draft.fontFile && (
+            <p className="truncate text-[12px] text-muted-foreground">
+              From file: {draft.fontFile}
+            </p>
+          )}
           <Field label="Role">
             <Select value={draft.role} options={TYPE_ROLES} onChange={(role) => set({ role })} />
           </Field>
@@ -416,6 +485,7 @@ export function LogoDialog({ logo, onClose }: { logo: BrandLogo | null; onClose:
                     externalKey: null,
                     originalUrl: null,
                     localPath: picked,
+                    brandAsset: true,
                   }]);
                   invalidateLibrary(qc);
                   if (outcome.imported.length > 0) {
@@ -524,6 +594,7 @@ function AssetPicker({
         externalKey: null,
         originalUrl: null,
         localPath: picked,
+        brandAsset: true,
       }]);
       invalidateLibrary(qc);
       if (outcome.imported.length > 0) {
@@ -726,10 +797,9 @@ export function AdditionalInfoDialog({
   useEffect(() => setDraft(info), [info]);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false }),
-    ],
+    // StarterKit already ships the link extension; adding it again registered the
+    // name twice and tiptap warned about it on every mount.
+    extensions: [StarterKit.configure({ link: { openOnClick: false } })],
     content: draft?.editorMode === "rich_text" ? draft.content : "",
     onUpdate: (props: any) => {
       setDraft((prev) => prev ? { ...prev, content: props.editor.getHTML() } : null);
@@ -739,6 +809,10 @@ export function AdditionalInfoDialog({
   if (!draft) return null;
 
   const set = (patch: Partial<BrandAdditionalInfo>) => setDraft({ ...draft, ...patch });
+
+  // The two columns stay separate in the database; the dialog folds them into one
+  // choice because rich text is just another kind of content to the person filling it in.
+  const kind = draft.editorMode === "rich_text" ? "rich text" : draft.contentType;
 
   return (
     <Dialog open={!!info} onOpenChange={(open) => !open && onClose()}>
@@ -755,20 +829,22 @@ export function AdditionalInfoDialog({
               autoFocus
             />
           </Field>
-          <Field label="Format">
+          <Field label="Content Type">
             <Select
-              value={draft.editorMode}
-              options={["rich_text", "minimal"]}
-              onChange={(editorMode) => {
-                 set({ editorMode });
-                 if (editorMode === "rich_text") {
-                    editor?.commands.setContent(draft.content);
-                 }
+              value={kind}
+              options={["rich text", "text", "url", "file"]}
+              onChange={(next) => {
+                if (next === "rich text") {
+                  set({ editorMode: "rich_text", contentType: "text" });
+                  editor?.commands.setContent(draft.content);
+                } else {
+                  set({ editorMode: "minimal", contentType: next });
+                }
               }}
             />
           </Field>
 
-          {draft.editorMode === "rich_text" ? (
+          {kind === "rich text" ? (
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-muted/30 p-1">
                 <Button size="sm" variant={editor?.isActive('bold') ? 'secondary' : 'ghost'} onClick={() => editor?.chain().focus().toggleBold().run()}>Bold</Button>
@@ -782,14 +858,7 @@ export function AdditionalInfoDialog({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-4 rounded-md border border-border bg-muted/10 p-3">
-              <Field label="Content Type">
-                <Select
-                  value={draft.contentType}
-                  options={["text", "url", "file"]}
-                  onChange={(contentType) => set({ contentType })}
-                />
-              </Field>
+            <div className="flex flex-col gap-4">
               {draft.contentType === "text" && (
                 <Field label="Content">
                   <textarea

@@ -95,7 +95,8 @@ pub fn detail(conn: &Connection, id: i64) -> Result<BrandDetail> {
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     let mut typefaces = conn.prepare(
-        "SELECT id, brand_id, role, family, weight, size, line_height, letter_spacing, notes, position
+        "SELECT id, brand_id, role, family, weight, size, line_height, letter_spacing, notes,
+                font_file, position
            FROM brand_typefaces WHERE brand_id = ?1 ORDER BY position, id",
     )?;
     let typefaces = typefaces
@@ -110,7 +111,8 @@ pub fn detail(conn: &Connection, id: i64) -> Result<BrandDetail> {
                 line_height: r.get(6)?,
                 letter_spacing: r.get(7)?,
                 notes: r.get(8)?,
-                position: r.get(9)?,
+                font_file: r.get(9)?,
+                position: r.get(10)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -296,21 +298,22 @@ pub fn save_typeface(conn: &Connection, t: &BrandTypeface) -> Result<i64> {
     let line_height = optional("Line height", &t.line_height, 60)?;
     let letter_spacing = optional("Letter spacing", &t.letter_spacing, 60)?;
     let notes = optional("Notes", &t.notes, 1000)?;
+    let font_file = t.font_file.as_deref().filter(|p| !p.trim().is_empty());
 
     let id = if t.id == 0 {
         conn.execute(
             "INSERT INTO brand_typefaces (brand_id, role, family, weight, size, line_height,
-                                          letter_spacing, notes, position)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                                          letter_spacing, notes, font_file, position)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
                      COALESCE((SELECT MAX(position) + 1 FROM brand_typefaces WHERE brand_id = ?1), 0))",
-            params![t.brand_id, role, family, weight, size, line_height, letter_spacing, notes],
+            params![t.brand_id, role, family, weight, size, line_height, letter_spacing, notes, font_file],
         )?;
         conn.last_insert_rowid()
     } else {
         conn.execute(
             "UPDATE brand_typefaces SET role = ?2, family = ?3, weight = ?4, size = ?5,
-                    line_height = ?6, letter_spacing = ?7, notes = ?8 WHERE id = ?1",
-            params![t.id, role, family, weight, size, line_height, letter_spacing, notes],
+                    line_height = ?6, letter_spacing = ?7, notes = ?8, font_file = ?9 WHERE id = ?1",
+            params![t.id, role, family, weight, size, line_height, letter_spacing, notes, font_file],
         )?;
         t.id
     };
@@ -429,6 +432,18 @@ pub fn delete_color(conn: &Connection, id: i64) -> Result<()> {
 pub fn delete_typeface(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM brand_typefaces WHERE id = ?1", [id])?;
     Ok(())
+}
+
+/// Whether this asset is used as a brand logo.
+///
+/// The thumbnail pipeline asks so it can keep transparency for these and only
+/// these — everywhere else a flattened JPEG is the cheaper, better answer.
+pub fn is_logo_asset(conn: &Connection, footage_id: i64) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM brand_logos WHERE footage_id = ?1)",
+        [footage_id],
+        |r| r.get::<_, i64>(0),
+    )? != 0)
 }
 
 pub fn delete_logo(conn: &Connection, id: i64) -> Result<()> {
@@ -675,5 +690,44 @@ mod tests {
         let d = detail(&c, brand).unwrap();
         assert_eq!(d.logos.len(), 1, "the logo entry survives");
         assert_eq!(d.logos[0].footage_id, None, "but no longer points at a missing asset");
+    }
+
+    /// A logo is documentation, not stock: it should not turn up while browsing
+    /// footage, and the counts beside the views should not include it either.
+    #[test]
+    fn a_logo_asset_is_hidden_from_the_library_but_still_reachable() {
+        use crate::db::models::FootageQuery;
+        use crate::db::repo::footage;
+
+        let c = db();
+        let brand = save(&c, &Brand { name: "Acme".into(), ..Default::default() }).unwrap();
+        for (id, name) in [(7, "logo.png"), (8, "b-roll.mp4")] {
+            c.execute(
+                "INSERT INTO footages (id, display_name, media_type, date_added, date_modified)
+                 VALUES (?1, ?2, 'image', '2026-01-01', '2026-01-01')",
+                params![id, name],
+            )
+            .unwrap();
+        }
+        save_logo(&c, &BrandLogo {
+            brand_id: brand,
+            variant: "primary".into(),
+            name: "Primary Logo".into(),
+            footage_id: Some(7),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let q = FootageQuery { limit: 50, ..Default::default() };
+        let listed = footage::list(&c, &q).unwrap();
+        assert_eq!(listed.total, 1, "only the b-roll is in the library");
+        assert_eq!(listed.items[0].id, 8);
+
+        assert_eq!(footage::stats(&c).unwrap().total, 1, "counts agree with the grid");
+
+        // The brand page and any whole-catalogue job still see it.
+        assert!(is_logo_asset(&c, 7).unwrap());
+        let all = FootageQuery { limit: 50, include_brand_logos: true, ..Default::default() };
+        assert_eq!(footage::list(&c, &all).unwrap().total, 2);
     }
 }

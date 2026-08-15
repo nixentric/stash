@@ -17,6 +17,17 @@ const queryClient = new QueryClient({
   },
 });
 
+// The webview's own menu offers Inspect Element and nothing the app wants.
+// Release builds already ship without devtools (no `devtools` feature on the
+// tauri crate); suppressing the menu closes the door in the UI too. Text fields
+// keep theirs, or copy and paste stop working.
+if (import.meta.env.PROD) {
+  document.addEventListener("contextmenu", (e) => {
+    const el = e.target as HTMLElement | null;
+    if (!el?.closest("input, textarea, [contenteditable='true']")) e.preventDefault();
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

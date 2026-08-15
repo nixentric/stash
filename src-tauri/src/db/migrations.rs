@@ -10,7 +10,7 @@ use crate::error::{AppError, Result};
 use rusqlite::Connection;
 
 /// Schema version this build understands. Bump when adding a migration.
-pub const APP_SCHEMA_VERSION: u32 = 6;
+pub const APP_SCHEMA_VERSION: u32 = 9;
 
 /// `PRAGMA application_id` — "STAH" as big-endian ASCII. Marks the file as ours
 /// without needing to read a table, and survives copying between machines.
@@ -23,6 +23,9 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (4, M4_BRANDS),
     (5, M5_BRAND_RULES_AND_ELEMENTS),
     (6, M6_BRAND_ADDITIONAL_INFO),
+    (7, M7_TYPEFACE_FONT_FILE),
+    (8, M8_BRAND_ASSET_FLAG),
+    (9, M9_FOLDER_BRAND),
 ];
 
 const M1_INITIAL: &str = r#"
@@ -339,6 +342,29 @@ CREATE TABLE brand_additional_infos (
   updated_at     TEXT NOT NULL
 );
 CREATE INDEX ix_brand_additional_infos_brand ON brand_additional_infos(brand_id);
+"#;
+
+// The path, not the bytes: a brand font is often tens of megabytes and already
+// lives somewhere the user manages. A moved file costs a preview, not the entry.
+const M7_TYPEFACE_FONT_FILE: &str = r#"
+ALTER TABLE brand_typefaces ADD COLUMN font_file TEXT;
+"#;
+
+/// A file brought in from the brand page was never meant for the shot list, and
+/// the brand link alone cannot say so: cancelling the logo dialog, unlinking, or
+/// deleting the logo all leave the imported row behind with nothing pointing at
+/// it. The flag records the intent at import time, so the leak has no path.
+const M8_BRAND_ASSET_FLAG: &str = r#"
+ALTER TABLE footages ADD COLUMN brand_asset INTEGER NOT NULL DEFAULT 0
+  CHECK (brand_asset IN (0,1));
+"#;
+
+/// Which brand a source folder belongs to. One brand per folder: a shoot folder
+/// is for a client, not shared between them — and `SET NULL` means deleting a
+/// brand loses the label, never the folder.
+const M9_FOLDER_BRAND: &str = r#"
+ALTER TABLE source_folder_meta ADD COLUMN brand_id INTEGER
+  REFERENCES brands(id) ON DELETE SET NULL;
 "#;
 
 pub fn application_id(conn: &Connection) -> Result<i32> {

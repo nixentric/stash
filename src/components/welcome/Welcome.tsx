@@ -1,19 +1,95 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Clock, FilePlus2, FolderOpen, Layers, X } from "lucide-react";
+import { Clock, FilePlus2, FolderOpen, Layers, X, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd, Tooltip } from "@/components/ui/misc";
 import { ipc } from "@/lib/ipc";
 import { keys, reportError } from "@/hooks/queries";
 import { useRecentLibraries } from "@/hooks/queries";
 import { relativeDate } from "@/lib/format";
-import { mod } from "@/lib/utils";
+import { cn, mod } from "@/lib/utils";
+import { getVersion } from "@tauri-apps/api/app";
+import { check as checkUpdate } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { toast } from "sonner";
 
 export function Welcome() {
   const qc = useQueryClient();
   const recent = useRecentLibraries();
   const [busy, setBusy] = useState(false);
+  const [version, setVersion] = useState<string>("");
+  const [update, setUpdate] = useState<Update | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(console.error);
+
+    let cancelled = false;
+    setChecking(true);
+    checkUpdate()
+      .then((upd) => {
+        if (cancelled) return;
+        setUpdate(upd);
+      })
+      .catch((err) => {
+        console.error("Welcome update check failed:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function checkManual() {
+    if (checking || updating) return;
+    setChecking(true);
+    try {
+      const upd = await checkUpdate();
+      setUpdate(upd);
+      if (!upd) {
+        toast.success("You are on the latest version.");
+      }
+    } catch (e) {
+      reportError(e, "Could not reach the update server");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleUpdate() {
+    if (!update || updating) return;
+    setUpdating(true);
+    const id = toast.loading("Downloading update...");
+    try {
+      let downloaded = 0;
+      let contentLength = 0;
+      await update.downloadAndInstall((e) => {
+        if (e.event === 'Started') {
+          contentLength = e.data.contentLength || 0;
+        } else if (e.event === 'Progress') {
+          downloaded += e.data.chunkLength;
+          if (contentLength > 0) {
+            const pct = Math.round((downloaded / contentLength) * 100);
+            toast.loading(`Downloading update... ${pct}%`, { id });
+          }
+        } else if (e.event === 'Finished') {
+          toast.loading("Installing...", { id });
+        }
+      });
+      toast.success("Update installed!", { id });
+      await relaunch();
+    } catch (e) {
+      toast.error(`Update failed: ${e}`, { id });
+    } finally {
+      setUpdating(false);
+    }
+  }
 
   async function afterOpen() {
     await qc.invalidateQueries();
@@ -61,7 +137,31 @@ export function Welcome() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="drag-region h-10 shrink-0" />
+      <div className="drag-region flex h-10 shrink-0 items-center justify-end px-4 gap-2">
+        {update ? (
+          <Button
+            variant="default"
+            size="sm"
+            className="no-drag h-7 text-[11.5px] font-medium animate-fade-in"
+            onClick={handleUpdate}
+            disabled={updating}
+          >
+            <Download className="size-3.5" />
+            Update to v{update.version}
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="no-drag h-7 text-[11.5px] font-normal text-muted-foreground hover:text-foreground"
+            onClick={checkManual}
+            disabled={checking}
+          >
+            <RefreshCw className={cn("size-3.5", checking && "animate-spin")} />
+            {checking ? "Checking..." : version ? `v${version}` : "Check for Updates"}
+          </Button>
+        )}
+      </div>
 
       <div className="flex flex-1 items-center justify-center px-8 pb-16">
         <div className="grid w-full max-w-3xl grid-cols-1 gap-12 md:grid-cols-[1fr_auto_1fr]">

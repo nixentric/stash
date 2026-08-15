@@ -143,6 +143,9 @@ export interface FolderNode {
   unusedCount: number;
   tags: string[];
   fields: FolderFieldValue[];
+  /** Whose folder this is, resolved from the brand itself so renames follow. */
+  brandId: number | null;
+  brandName: string | null;
   /** Oldest footage added from this folder — folders have no creation record of their own. */
   addedAt: string;
   /** Latest footage edit or folder tag/column edit. */
@@ -215,6 +218,8 @@ export interface BrandTypeface {
   lineHeight: string;
   letterSpacing: string;
   notes: string;
+  /** Set when the family came from a font file on disk rather than an installed one. */
+  fontFile: string | null;
   position: number;
 }
 
@@ -337,6 +342,8 @@ export interface FootageQuery {
   usedAfter?: string | null;
   usedBefore?: string | null;
   missingThumbnail: boolean;
+  /** Brand logos are hidden from the library; set this for whole-catalogue jobs. */
+  includeBrandLogos: boolean;
   sort: SortKey;
   offset: number;
   limit: number;
@@ -378,6 +385,8 @@ export interface NewFootage {
   sourceModifiedAt?: string | null;
   tags?: string[] | null;
   notes?: string | null;
+  /** Imported from the brand page: it belongs to the guideline, not the grid. */
+  brandAsset?: boolean;
 }
 
 export interface FootagePatch {
@@ -533,6 +542,7 @@ export const emptyQuery = (): FootageQuery => ({
   usedAfter: null,
   usedBefore: null,
   missingThumbnail: false,
+  includeBrandLogos: false,
   sort: "newestAdded",
   offset: 0,
   limit: 200,

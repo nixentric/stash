@@ -32,15 +32,20 @@ export const ipc = {
   folderFields: () => invoke<T.FolderField[]>("folder_fields"),
   createFolderField: (name: string) => invoke<number>("create_folder_field", { name }),
   deleteFolderField: (id: number) => invoke<void>("delete_folder_field", { id }),
+  deleteFolder: (path: string) => invoke<number>("delete_folder", { path }),
   setFolderTags: (path: string, tags: string[]) => invoke<void>("set_folder_tags", { path, tags }),
   setFolderFieldValue: (path: string, fieldId: number, value: string) =>
     invoke<void>("set_folder_field_value", { path, fieldId, value }),
+  setFolderBrand: (path: string, brandId: number | null) =>
+    invoke<void>("set_folder_brand", { path, brandId }),
 
   // ── tags / collections / projects / usage ─────────────────────────────────
   allTags: () => invoke<T.Tag[]>("all_tags"),
   addTags: (ids: number[], tags: string[]) => invoke<void>("add_tags", { ids, tags }),
   removeTags: (ids: number[], tags: string[]) => invoke<void>("remove_tags", { ids, tags }),
   setTags: (id: number, tags: string[]) => invoke<void>("set_tags", { id, tags }),
+  deleteTags: (ids: number[]) => invoke<number>("delete_tags", { ids }),
+  renameTag: (id: number, name: string) => invoke<void>("rename_tag", { id, name }),
 
   allCollections: () => invoke<T.Collection[]>("all_collections"),
   createCollection: (name: string) => invoke<number>("create_collection", { name }),
@@ -113,6 +118,9 @@ export const ipc = {
   saveBrandTypeface: (typeface: T.BrandTypeface) =>
     invoke<number>("save_brand_typeface", { typeface }),
   deleteBrandTypeface: (id: number) => invoke<void>("delete_brand_typeface", { id }),
+  systemFonts: () => invoke<string[]>("system_fonts"),
+  loadFontFile: (path: string) =>
+    invoke<{ family: string; dataUrl: string }>("load_font_file", { path }),
   saveBrandLogo: (logo: T.BrandLogo) => invoke<number>("save_brand_logo", { logo }),
   deleteBrandLogo: (id: number) => invoke<void>("delete_brand_logo", { id }),
   reorderBrandLogos: (updates: { id: number; variant: string; position: number }[]) => 

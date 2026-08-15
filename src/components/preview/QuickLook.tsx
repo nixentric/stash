@@ -197,7 +197,19 @@ function Stage({
   }
 
   if (kind === "image") {
-    return <img src={url} alt="" className="max-h-full max-w-full object-contain" />;
+    // RAW and PSD are stills the webview cannot decode; the thumbnail is the
+    // only thing left to show for them.
+    return (
+      <img
+        src={url}
+        alt=""
+        className="max-h-full max-w-full object-contain"
+        onError={(e) => {
+          const img = e.currentTarget;
+          if (poster && img.src !== poster) img.src = poster;
+        }}
+      />
+    );
   }
 
   if (kind === "embed") {
@@ -215,16 +227,24 @@ function Stage({
     );
   }
 
-  return (
-    <video
-      src={url}
-      poster={poster}
-      controls
-      autoPlay
-      playsInline
-      className="max-h-full max-w-full rounded-md bg-black"
-    />
-  );
+  if (kind === "stream") {
+    return (
+      <video
+        src={url}
+        poster={poster}
+        controls
+        autoPlay
+        playsInline
+        className="max-h-full max-w-full rounded-md bg-black"
+      />
+    );
+  }
+
+  // Anything unrecognized falls back to the thumbnail rather than a player:
+  // handing a still to <video> is what made images render as a black box.
+  return poster ? (
+    <img src={poster} alt="" className="max-h-full max-w-full object-contain" />
+  ) : null;
 }
 
 function NavButton({

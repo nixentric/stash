@@ -3,6 +3,28 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.0 — 2026-08-16
+
+**Inline editing, Column Sizing, and Quick Clear Actions on Source Folders**
+
+**[ADDED]**
+- **Inline Brand and Custom Columns Value Editing:** You can now set or change the Brand and custom column values directly inside each folder row cell without opening a separate dialog.
+- **Two Custom Column Types:** Added support for **Single Value** and **Multiple Tags** custom column types, configured dynamically inside the custom columns settings dialog.
+- **Quick Clear Actions (Hover X):** Hovering over the Brand, Tags, and Custom Column values reveals a quick-clear `x` button, allowing you to clear their values instantly with one click.
+- **Save Checklist Button:** A green checklist icon appears when editing tags inline, allowing a quick click to confirm and save your tags.
+
+**[UPDATED]**
+- **Manage Custom Columns Dialog:** Redesigned the custom columns management window to show column type badges and allow choosing between Single Value or Multiple Tags upon column creation or switching existing columns.
+- **Edit Icons Consistency:** The edit action icon next to filled fields (Brand, Tags, Custom Columns) is changed from Plus to a Pencil icon on hover, reserving the Plus icon exclusively for adding values to empty cells.
+- **Responsive Table Widths & horizontal scrolling:** Applied a dynamic minimum width layout constraint on the folder table (`1000px + 160px * custom_columns_count`), enabling horizontal scrollbars on narrow screens instead of squeezing columns.
+
+**[FIXED]**
+- **Squeezed Preview Column Overlap:** Fixed an issue where the folder preview thumbnails overlapped the folder path column in narrow viewports by enforcing strict cell and header width bounds (`w-[116px] min-w-[116px]`).
+- **Bubbling Key Event Navigations:** Meticulously prevented inline inputs from bubbling up key events (like pressing `Enter` or arrows), ensuring that confirming text values doesn't trigger folder row navigations.
+
+**[DELETED]**
+- **Redundant Edit Modal Dialog:** Removed the old Edit Pencil button from row cells and deprecated `FolderMetadataDialog` along with its main application state and hooks, streamlining page interactions.
+
 ## v0.3.1 — 2026-08-15
 
 **Update notifications, and a switch to turn them off**

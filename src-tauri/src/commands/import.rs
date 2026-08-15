@@ -312,8 +312,11 @@ pub async fn fetch_thumbnails(
         if token.is_cancelled() {
             break;
         }
-        if crate::preview::refresh(&state, id, force).await.unwrap_or(false) {
-            succeeded += 1;
+        match crate::preview::refresh(&state, id, force).await {
+            Ok(true) => succeeded += 1,
+            Ok(false) => {}
+            // Silently dropping this left the badge stuck with no way to find out why.
+            Err(e) => log::warn!("thumbnail refresh failed for footage {id}: {e}"),
         }
         done += 1;
         let _ = app.emit(

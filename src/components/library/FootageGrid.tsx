@@ -23,12 +23,84 @@ const GAP = 10;
 const PAD = 14;
 
 export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnail }: Props) {
-  const { selection, viewMode, gridSize, setQuickLookId, hasActiveFilters, search } = useUi();
+  const { selection, viewMode, gridSize, quickLookId, setQuickLookId, hasActiveFilters, search, lastAnchor, select } = useUi();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
   const orderedIds = useMemo(() => items.map((i) => i.id), [items]);
   const { handleClick, handleContextMenu } = useSelectionHandlers(orderedIds);
+  const [focusedId, setFocusedId] = useState<number | null>(null);
+
+  const activeFocusId = (focusedId !== null && selection.includes(focusedId))
+    ? focusedId
+    : (selection.length > 0 ? (selection[selection.length - 1] ?? null) : null);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (quickLookId !== null) return;
+    if (orderedIds.length === 0) return;
+
+    const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
+    if (!isArrow) return;
+
+    e.preventDefault();
+
+    const lastIndex = activeFocusId !== null ? orderedIds.indexOf(activeFocusId) : -1;
+    let newIndex = 0;
+
+    if (lastIndex === -1) {
+      newIndex = 0;
+    } else {
+      switch (e.key) {
+        case "ArrowLeft":
+          newIndex = Math.max(0, lastIndex - 1);
+          break;
+        case "ArrowRight":
+          newIndex = Math.min(orderedIds.length - 1, lastIndex + 1);
+          break;
+        case "ArrowUp":
+          if (viewMode === "grid") {
+            newIndex = Math.max(0, lastIndex - columns);
+          } else {
+            newIndex = Math.max(0, lastIndex - 1);
+          }
+          break;
+        case "ArrowDown":
+          if (viewMode === "grid") {
+            newIndex = Math.min(orderedIds.length - 1, lastIndex + columns);
+          } else {
+            newIndex = Math.min(orderedIds.length - 1, lastIndex + 1);
+          }
+          break;
+      }
+    }
+
+    const targetId = orderedIds[newIndex];
+    if (targetId !== undefined) {
+      setFocusedId(targetId);
+      if (e.shiftKey && lastAnchor !== null) {
+        const from = orderedIds.indexOf(lastAnchor);
+        const to = newIndex;
+        const [lo, hi] = from < to ? [from, to] : [to, from];
+        const range = orderedIds.slice(lo, hi + 1);
+        select(range, lastAnchor);
+      } else {
+        select([targetId], targetId);
+      }
+
+      const targetRowIndex = viewMode === "grid" ? Math.floor(newIndex / columns) : newIndex;
+      virtualizer.scrollToIndex(targetRowIndex, { align: "auto" });
+    }
+  };
+
+  const onCardClick = (id: number, e: React.MouseEvent) => {
+    handleClick(id, e);
+    scrollRef.current?.focus({ preventScroll: true });
+  };
+
+  const onCardContextMenu = (id: number) => {
+    handleContextMenu(id);
+    scrollRef.current?.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -64,9 +136,10 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
   const isEmpty = !loading && items.length === 0;
 
   return (
-    <FootageContextMenu onSetThumbnail={onSetThumbnail}>
+    <FootageContextMenu items={items} onSetThumbnail={onSetThumbnail}>
       <div
         ref={scrollRef}
+        onKeyDown={handleKeyDown}
         className="relative h-full overflow-y-auto outline-none"
         role="listbox"
         aria-multiselectable
@@ -99,9 +172,9 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
                     <ListRow
                       item={item}
                       selected={selection.includes(item.id)}
-                      onClick={(e) => handleClick(item.id, e)}
+                      onClick={(e) => onCardClick(item.id, e)}
                       onDoubleClick={() => setQuickLookId(item.id)}
-                      onContextMenu={() => handleContextMenu(item.id)}
+                      onContextMenu={() => onCardContextMenu(item.id)}
                     />
                   </div>
                 );
@@ -127,9 +200,9 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
                       key={item.id}
                       item={item}
                       selected={selection.includes(item.id)}
-                      onClick={(e) => handleClick(item.id, e)}
+                      onClick={(e) => onCardClick(item.id, e)}
                       onDoubleClick={() => setQuickLookId(item.id)}
-                      onContextMenu={() => handleContextMenu(item.id)}
+                      onContextMenu={() => onCardContextMenu(item.id)}
                       onDropImage={(dataUrl) => onSetThumbnail(item.id, dataUrl)}
                     />
                   ))}

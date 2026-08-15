@@ -30,6 +30,8 @@ import { reportError, useCollections, useFootageAction, useProjects } from "@/ho
 import { useUi } from "@/store/ui";
 import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { TagPromptDialog } from "@/components/dialogs/TagPromptDialog";
+import { cn } from "@/lib/utils";
+import type { FootageListItem } from "@/lib/types";
 
 /**
  * Right-click menu for the grid.
@@ -41,9 +43,11 @@ import { TagPromptDialog } from "@/components/dialogs/TagPromptDialog";
  */
 export function FootageContextMenu({
   children,
+  items,
   onSetThumbnail,
 }: {
   children: React.ReactNode;
+  items: FootageListItem[];
   onSetThumbnail: (id: number, dataUrl: string) => void;
 }) {
   const { selection, setQuickLookId } = useUi();
@@ -56,6 +60,9 @@ export function FootageContextMenu({
   const ids = selection;
   const single = ids.length === 1 ? ids[0] : null;
   const many = ids.length > 1;
+
+  const selectedItems = items.filter((item) => ids.includes(item.id));
+  const anyUnfavorited = selectedItems.length === 0 || selectedItems.some((item) => !item.favorite);
 
   async function copyLink() {
     if (single == null) return;
@@ -142,20 +149,12 @@ export function FootageContextMenu({
 
               <ContextMenuItem
                 onSelect={() =>
-                  action.mutate({ type: "patch", ids, patch: { favorite: true } })
+                  action.mutate({ type: "patch", ids, patch: { favorite: anyUnfavorited } })
                 }
               >
-                <Heart />
-                Favorite
+                <Heart className={cn(!anyUnfavorited && "fill-destructive text-destructive")} />
+                {anyUnfavorited ? "Favorite" : "Remove Favorite"}
                 <MenuShortcut>F</MenuShortcut>
-              </ContextMenuItem>
-              <ContextMenuItem
-                onSelect={() =>
-                  action.mutate({ type: "patch", ids, patch: { favorite: false } })
-                }
-              >
-                <Heart />
-                Remove Favorite
               </ContextMenuItem>
 
               <ContextMenuItem onSelect={() => setTagOpen(true)}>

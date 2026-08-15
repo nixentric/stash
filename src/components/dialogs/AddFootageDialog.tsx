@@ -28,6 +28,7 @@ import { bytes, duration as fmtDuration } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
 import { invalidateLibrary, reportError, useCapabilities } from "@/hooks/queries";
 import type { BulkParseResult, NewFootage, ScannedItem } from "@/lib/types";
+import { useUi } from "@/store/ui";
 
 interface Props {
   open: boolean;
@@ -38,6 +39,8 @@ interface Props {
 export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) {
   const caps = useCapabilities();
   const [tab, setTab] = useState("links");
+  const ui = useUi();
+  const collectionId = ui.view.kind === "collection" ? ui.view.id : undefined;
 
   useEffect(() => {
     if (open) setTab("links");
@@ -74,10 +77,11 @@ export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) 
               onDone={() => onOpenChange(false)}
               onOpenSettings={onOpenSettings}
               onOpenDriveFolder={() => setTab("drive")}
+              collectionId={collectionId}
             />
           </TabsContent>
           <TabsContent value="local" className="min-h-0 flex-1 outline-none">
-            <LocalTab onDone={() => onOpenChange(false)} />
+            <LocalTab onDone={() => onOpenChange(false)} collectionId={collectionId} />
           </TabsContent>
           <TabsContent value="drive" className="min-h-0 flex-1 outline-none">
             <DriveTab
@@ -85,6 +89,7 @@ export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) 
               onDone={() => onOpenChange(false)}
               onOpenSettings={onOpenSettings}
               onUseLinks={() => setTab("links")}
+              collectionId={collectionId}
             />
           </TabsContent>
         </Tabs>
@@ -100,11 +105,13 @@ function LinksTab({
   onDone,
   onOpenSettings,
   onOpenDriveFolder,
+  collectionId,
 }: {
   connected: boolean;
   onDone: () => void;
   onOpenSettings: () => void;
   onOpenDriveFolder: () => void;
+  collectionId?: number;
 }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
@@ -143,6 +150,9 @@ function LinksTab({
         localPath: e.source.localPath,
       }));
       const outcome = await ipc.importFootage(payload);
+      if (outcome.imported.length && collectionId) {
+        await ipc.addToCollection(collectionId, outcome.imported);
+      }
       invalidateLibrary(qc);
 
       const parts = [`Added ${outcome.imported.length}`];
@@ -308,7 +318,7 @@ function FolderNotice({
 
 // ── local files ─────────────────────────────────────────────────────────────
 
-function LocalTab({ onDone }: { onDone: () => void }) {
+function LocalTab({ onDone, collectionId }: { onDone: () => void; collectionId?: number }) {
   const qc = useQueryClient();
   const [paths, setPaths] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -342,6 +352,9 @@ function LocalTab({ onDone }: { onDone: () => void }) {
         containerPath: p.split(/[\\/]/).slice(0, -1).pop() ?? null,
       }));
       const outcome = await ipc.importFootage(payload);
+      if (outcome.imported.length && collectionId) {
+        await ipc.addToCollection(collectionId, outcome.imported);
+      }
       invalidateLibrary(qc);
       toast.success(`Added ${outcome.imported.length} file(s)`);
       if (outcome.imported.length) ipc.fetchThumbnails(outcome.imported, false).catch(() => {});
@@ -391,11 +404,13 @@ function DriveTab({
   onDone,
   onOpenSettings,
   onUseLinks,
+  collectionId,
 }: {
   connected: boolean;
   onDone: () => void;
   onOpenSettings: () => void;
   onUseLinks: () => void;
+  collectionId?: number;
 }) {
   const qc = useQueryClient();
   const [url, setUrl] = useState("");
@@ -497,6 +512,9 @@ function DriveTab({
         }));
 
       const outcome = await ipc.importFootage(payload);
+      if (outcome.imported.length && collectionId) {
+        await ipc.addToCollection(collectionId, outcome.imported);
+      }
       invalidateLibrary(qc);
       toast.success(
         `Added ${outcome.imported.length}${

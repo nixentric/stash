@@ -10,7 +10,7 @@ pub mod providers;
 pub mod scheme;
 
 use crate::db::models::{Accessibility, SourceInfo};
-use crate::db::repo::{footage as footage_repo, thumbnail as thumb_repo};
+use crate::db::repo::{brand as brand_repo, footage as footage_repo, thumbnail as thumb_repo};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -25,7 +25,14 @@ fn identity(src: &SourceInfo) -> Option<String> {
 }
 
 fn to_data_url(bytes: &[u8]) -> String {
-    format!("data:image/jpeg;base64,{}", STANDARD.encode(bytes))
+    // Thumbnails are JPEG unless the source had transparency worth keeping, in
+    // which case they are PNG. Labelling those as JPEG left the webview to guess.
+    let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        "image/png"
+    } else {
+        "image/jpeg"
+    };
+    format!("data:{mime};base64,{}", STANDARD.encode(bytes))
 }
 
 /// Reads an existing preview without touching the network.
@@ -143,7 +150,9 @@ pub fn store(
     let max_edge = state.prefs.get().portable_thumbnail_size.max_edge();
 
     if let Some(edge) = max_edge {
-        let small = encode::portable(raw, edge)?;
+        let keep_alpha =
+            state.with_library(|lib| brand_repo::is_logo_asset(&lib.conn, footage_id))?;
+        let small = encode::portable(raw, edge, keep_alpha)?;
         state.with_library(|lib| {
             thumb_repo::put(
                 &lib.conn,

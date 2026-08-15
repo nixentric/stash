@@ -369,7 +369,14 @@ export function Toolbar({
                     const n = await ipc.fetchThumbnails(ids, false);
                     qc.invalidateQueries({ queryKey: ["thumb"] });
                     invalidateLibrary(qc);
-                    toast.success(`Refreshed ${n} preview(s)`);
+                    if (n < ids.length) {
+                      toast.info(
+                        `Refreshed ${n} of ${ids.length} — the rest have no preview available, ` +
+                          `usually a missing source or an unsupported file.`,
+                      );
+                    } else {
+                      toast.success(`Refreshed ${n} preview(s)`);
+                    }
                   } catch (e) {
                     reportError(e);
                   }

@@ -12,6 +12,7 @@ import {
   Plus,
   Repeat2,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   SwatchBook as Swatches,
   TriangleAlert,
@@ -25,9 +26,10 @@ import { Tooltip } from "@/components/ui/misc";
 interface Props {
   onNewCollection: () => void;
   onNewBrand: () => void;
+  onManageTags: () => void;
 }
 
-export function Sidebar({ onNewCollection, onNewBrand }: Props) {
+export function Sidebar({ onNewCollection, onNewBrand, onManageTags }: Props) {
   const { view, setView, setSettingsOpen } = useUi();
   const stats = useStats(true);
   const tags = useTags(true);
@@ -156,7 +158,10 @@ export function Sidebar({ onNewCollection, onNewBrand }: Props) {
       )}
 
       {!!tags.data?.length && (
-        <Section title="Tags">
+        <Section
+          title="Tags"
+          action={{ label: "Manage tags", onClick: onManageTags, icon: <SlidersHorizontal /> }}
+        >
           {tags.data.slice(0, 40).map((t) => (
             <Row
               key={t.id}

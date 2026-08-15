@@ -253,6 +253,10 @@ pub struct FolderNode {
     pub unused_count: i64,
     pub tags: Vec<String>,
     pub fields: Vec<FolderFieldValue>,
+    /// Whose folder this is. Resolved from the brand, not copied, so a rename
+    /// there shows up here.
+    pub brand_id: Option<i64>,
+    pub brand_name: Option<String>,
     pub added_at: String,
     pub updated_at: String,
 }
@@ -411,6 +415,10 @@ pub struct BrandTypeface {
     pub letter_spacing: String,
     #[serde(default)]
     pub notes: String,
+    /// Absolute path to a font file, when the family was added from disk rather
+    /// than picked from the installed ones. Lets the preview render the real face.
+    #[serde(default)]
+    pub font_file: Option<String>,
     #[serde(default)]
     pub position: i64,
 }
@@ -514,6 +522,11 @@ pub struct FootageQuery {
     pub used_after: Option<String>,
     pub used_before: Option<String>,
     pub missing_thumbnail: bool,
+    /// Brand logos live in the guideline, not the library — they are excluded from
+    /// every listing unless something needs the whole catalogue, like rebuilding
+    /// thumbnails. Universal search runs its own query and finds them regardless.
+    #[serde(default)]
+    pub include_brand_logos: bool,
     pub sort: SortKey,
     pub offset: i64,
     pub limit: i64,
@@ -563,6 +576,10 @@ pub struct NewFootage {
     pub source_modified_at: Option<String>,
     pub tags: Option<Vec<String>>,
     pub notes: Option<String>,
+    /// Imported from the brand page, so it belongs to the guideline rather than
+    /// the library grid. Defaulted: every other caller means "a normal asset".
+    #[serde(default)]
+    pub brand_asset: bool,
 }
 
 /// Partial update. `None` means "leave alone" — this is what keeps a Drive sync

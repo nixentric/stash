@@ -1,26 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { applyFacets, type Facet } from "./SourceFoldersPage";
+import { applyFacets, sortFolders, type Facet } from "./SourceFoldersPage";
 import type { FolderNode } from "@/lib/types";
 
-const folder = (path: string, tags: string[], branch?: string): FolderNode => ({
+const folder = (
+  path: string,
+  tags: string[],
+  branch?: string,
+  brandName: string | null = null,
+  addedAt = "2026-01-01",
+): FolderNode => ({
   containerPath: path,
   footageCount: 1,
   usedCount: 0,
   unusedCount: 1,
   tags,
   fields: branch ? [{ fieldId: 1, name: "Branch", value: branch }] : [],
-  addedAt: "2026-01-01",
+  brandId: brandName ? 1 : null,
+  brandName,
+  addedAt,
   updatedAt: "2026-01-01",
 });
 
 const all = [
-  folder("A", ["test", "kol"], "Serang"),
-  folder("B", ["test"], "Bandung"),
+  folder("A", ["test", "kol"], "Serang", "ETIVE", "2026-03-01"),
+  folder("B", ["test"], "Bandung", "Acme", "2026-01-15"),
   folder("C", ["kol"]),
 ];
 
 const tag = (value: string): Facet => ({ fieldId: null, label: "Tag", value });
 const branch = (value: string): Facet => ({ fieldId: 1, label: "Branch", value });
+const brand = (value: string): Facet => ({ fieldId: "brand", label: "Brand", value });
 
 const paths = (facets: Facet[]) => applyFacets(all, facets).map((f) => f.containerPath);
 
@@ -41,5 +50,26 @@ describe("applyFacets", () => {
   it("combines a tag with a column value", () => {
     expect(paths([tag("kol"), branch("Serang")])).toEqual(["A"]);
     expect(paths([tag("kol"), branch("Bandung")])).toEqual([]);
+  });
+
+  it("filters by brand, and combines brands with OR like any single-valued column", () => {
+    expect(paths([brand("ETIVE")])).toEqual(["A"]);
+    expect(paths([brand("ETIVE"), brand("Acme")])).toEqual(["A", "B"]);
+    expect(paths([brand("ETIVE"), tag("test")])).toEqual(["A"]);
+  });
+});
+
+describe("sortFolders", () => {
+  const order = (key: Parameters<typeof sortFolders>[1]) =>
+    sortFolders(all, key).map((f) => f.containerPath);
+
+  it("sorts newest or oldest first by date", () => {
+    expect(order({ key: "added", dir: -1 })).toEqual(["A", "B", "C"]);
+    expect(order({ key: "added", dir: 1 })).toEqual(["C", "B", "A"]);
+  });
+
+  it("keeps folders with an empty column at the bottom in both directions", () => {
+    expect(order({ key: "brand", dir: 1 })).toEqual(["B", "A", "C"]);
+    expect(order({ key: "brand", dir: -1 })).toEqual(["A", "B", "C"]);
   });
 });

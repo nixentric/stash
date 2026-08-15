@@ -63,13 +63,58 @@ pub fn set_tags(conn: &Connection, footage_id: i64, raw: &[String]) -> Result<()
     prune_orphan_tags(conn)
 }
 
-/// A tag with no footage is noise in autocomplete; drop it.
+/// A tag nothing carries is noise in autocomplete; drop it. A source folder is a
+/// carrier too — checking only `footage_tags` would delete a folder-only tag (and
+/// cascade its `source_folder_tags` rows away) the next time any clip lost a tag.
 fn prune_orphan_tags(conn: &Connection) -> Result<()> {
     conn.execute(
-        "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM footage_tags)",
+        "DELETE FROM tags
+          WHERE id NOT IN (SELECT tag_id FROM footage_tags)
+            AND id NOT IN (SELECT tag_id FROM source_folder_tags)",
         [],
     )?;
     Ok(())
+}
+
+/// Deletes tags outright, wherever they are used — the manage-tags surface, where
+/// the user is looking at the counts and decides. Cascades take the footage and
+/// folder links with them.
+pub fn delete_tags(conn: &mut Connection, ids: &[i64]) -> Result<usize> {
+    let tx = conn.transaction()?;
+    let mut n = 0;
+    {
+        let mut stmt = tx.prepare("DELETE FROM tags WHERE id = ?1")?;
+        for id in ids {
+            n += stmt.execute([id])?;
+        }
+    }
+    tx.commit()?;
+    Ok(n)
+}
+
+/// Renames a tag, merging into the target when that name already exists — tags are
+/// unique, so a rename onto a live name has to be a merge or an error, and merging
+/// is what "fix this typo" actually means.
+pub fn rename_tag(conn: &mut Connection, id: i64, raw: &str) -> Result<()> {
+    let name = normalize_tag(raw).ok_or_else(|| AppError::Invalid("Invalid tag name".into()))?;
+    let existing: Option<i64> = conn
+        .query_row("SELECT id FROM tags WHERE name = ?1", [&name], |r| r.get(0))
+        .optional()?;
+    match existing {
+        Some(other) if other == id => Ok(()),
+        Some(other) => {
+            let tx = conn.transaction()?;
+            tx.execute("UPDATE OR IGNORE footage_tags SET tag_id = ?2 WHERE tag_id = ?1", params![id, other])?;
+            tx.execute("UPDATE OR IGNORE source_folder_tags SET tag_id = ?2 WHERE tag_id = ?1", params![id, other])?;
+            tx.execute("DELETE FROM tags WHERE id = ?1", [id])?;
+            tx.commit()?;
+            Ok(())
+        }
+        None => {
+            conn.execute("UPDATE tags SET name = ?2 WHERE id = ?1", params![id, name])?;
+            Ok(())
+        }
+    }
 }
 
 pub fn tags_for(conn: &Connection, footage_id: i64) -> Result<Vec<String>> {
@@ -266,6 +311,41 @@ mod tests {
 
         let tag = all_tags(&c).unwrap().into_iter().find(|t| t.name == "cabang").unwrap();
         assert_eq!(tag.footage_count, 3, "clip 1 counts once, not twice");
+    }
+
+    #[test]
+    fn pruning_never_takes_a_folder_only_tag() {
+        let mut c = db();
+        source_folder::set_tags(&c, "Drive/Cabang Bandung", &["cabang".into()]).unwrap();
+        add_tags(&c, &[3], &["loose".into()]).unwrap();
+
+        // Removing an unrelated footage tag runs the prune; the folder tag must survive it.
+        remove_tags(&c, &[3], &["loose".into()]).unwrap();
+        let names: Vec<String> = all_tags(&c).unwrap().into_iter().map(|t| t.name).collect();
+        assert_eq!(names, vec!["cabang".to_string()], "folder tag kept, orphaned footage tag gone");
+
+        // And it still reaches its clips — the cascade did not empty source_folder_tags.
+        let q = FootageQuery { tags: vec!["cabang".into()], limit: 100, ..Default::default() };
+        assert_eq!(footage::list(&c, &q).unwrap().total, 2);
+
+        // Deleting it from the manage-tags surface is the one thing that does remove it.
+        let id = all_tags(&c).unwrap()[0].id;
+        assert_eq!(delete_tags(&mut c, &[id]).unwrap(), 1);
+        assert!(all_tags(&c).unwrap().is_empty());
+    }
+
+    #[test]
+    fn renaming_onto_an_existing_tag_merges_instead_of_failing() {
+        let mut c = db();
+        add_tags(&c, &[1], &["kol".into()]).unwrap();
+        add_tags(&c, &[1, 3], &["kols".into()]).unwrap();
+        let typo = all_tags(&c).unwrap().into_iter().find(|t| t.name == "kols").unwrap();
+
+        rename_tag(&mut c, typo.id, "KOL").unwrap();
+        let tags = all_tags(&c).unwrap();
+        assert_eq!(tags.len(), 1, "merged, not duplicated");
+        assert_eq!(tags[0].name, "kol");
+        assert_eq!(tags[0].footage_count, 2, "clip 3 came along, clip 1 counts once");
     }
 
     #[test]

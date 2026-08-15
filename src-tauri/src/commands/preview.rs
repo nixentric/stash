@@ -69,10 +69,18 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
     state.drive.ensure_restored(&state.prefs).await;
     let connected = state.drive.is_connected().await;
 
+    // Stills are shown, not played. Every provider that serves bytes has to
+    // answer "image" for them, or the frontend hands a JPEG to <video>.
+    let served_kind = if media_type == MediaType::Image {
+        "image"
+    } else {
+        "stream"
+    };
+
     let target = match src.provider.as_str() {
         // Local files stream straight off disk through the same scheme handler.
         "local" => PlaybackTarget {
-            kind: "stream",
+            kind: served_kind,
             url: Some(format!("stash://media/{id}")),
             external_url,
             reason: None,
@@ -81,7 +89,7 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
         // Connected: authenticated ranged streaming. Nothing is downloaded
         // beyond the bytes the player asks for.
         "google_drive" if connected => PlaybackTarget {
-            kind: "stream",
+            kind: served_kind,
             url: Some(format!("stash://media/{id}")),
             external_url,
             reason: None,
@@ -105,15 +113,8 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
             },
         },
 
-        "url" if media_type == MediaType::Image => PlaybackTarget {
-            kind: "image",
-            url: src.original_url.clone(),
-            external_url,
-            reason: None,
-        },
-
         "url" => PlaybackTarget {
-            kind: "stream",
+            kind: served_kind,
             url: src.original_url.clone(),
             external_url,
             reason: None,

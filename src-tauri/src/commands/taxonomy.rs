@@ -26,6 +26,16 @@ pub fn set_tags(state: State<'_, AppState>, id: i64, tags: Vec<String>) -> Resul
     state.with_library(|lib| tax::set_tags(&lib.conn, id, &tags))
 }
 
+#[tauri::command]
+pub fn delete_tags(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize> {
+    state.with_library_mut(|lib| tax::delete_tags(&mut lib.conn, &ids))
+}
+
+#[tauri::command]
+pub fn rename_tag(state: State<'_, AppState>, id: i64, name: String) -> Result<()> {
+    state.with_library_mut(|lib| tax::rename_tag(&mut lib.conn, id, &name))
+}
+
 // ── collections ─────────────────────────────────────────────────────────────
 
 #[tauri::command]

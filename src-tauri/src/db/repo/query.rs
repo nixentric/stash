@@ -36,6 +36,16 @@ pub fn build(q: &FootageQuery) -> Filter {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
+    // A logo belongs to the brand guideline, not the shot list. It stays reachable
+    // by search and from the brand page, both of which look it up directly.
+    if !q.include_brand_logos {
+        clauses.push(
+            "f.brand_asset = 0 AND NOT EXISTS \
+             (SELECT 1 FROM brand_logos bl WHERE bl.footage_id = f.id)"
+                .into(),
+        );
+    }
+
     // Free text: every whitespace-separated term must match somewhere, so
     // "iphone woman outdoor" narrows instead of widening.
     if let Some(search) = q.search.as_ref() {

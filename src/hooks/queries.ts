@@ -156,8 +156,16 @@ export function useBrandAction() {
           return ipc.saveBrandTypeface(a.typeface);
         case "deleteTypeface":
           return ipc.deleteBrandTypeface(a.id);
-        case "saveLogo":
-          return ipc.saveBrandLogo(a.logo);
+        case "saveLogo": {
+          const id = await ipc.saveBrandLogo(a.logo);
+          // Thumbnails keep transparency only for brand logos, and the asset's
+          // thumbnail is usually made at import — before this row existed, when the
+          // answer to "is this a logo?" was still no. Re-encode now that it is.
+          if (a.logo.footageId != null) {
+            await ipc.refreshThumbnail(a.logo.footageId, true).catch(() => {});
+          }
+          return id;
+        }
         case "deleteLogo":
           return ipc.deleteBrandLogo(a.id);
         case "reorderLogos":
@@ -178,8 +186,13 @@ export function useBrandAction() {
           return ipc.deleteBrandAdditionalInfo(a.id);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, a) => {
       qc.invalidateQueries({ queryKey: keys.brands });
+      // The re-encode above changes the bytes behind a cached data URL, so the
+      // old one has to be dropped or the card keeps drawing the flattened copy.
+      if (a.type === "saveLogo") {
+        qc.invalidateQueries({ queryKey: ["thumb"] });
+      }
     },
     onError: (e) => reportError(e),
   });

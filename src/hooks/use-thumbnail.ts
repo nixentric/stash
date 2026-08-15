@@ -45,6 +45,7 @@ export function useVisible<E extends HTMLElement>(rootMargin = "300px") {
 export function useThumbnail(id: number, enabled: boolean, large = false) {
   const qc = useQueryClient();
   const attempted = useRef(false);
+  const [generating, setGenerating] = useState(false);
 
   const stored = useQuery({
     queryKey: keys.thumb(id, large),
@@ -58,6 +59,7 @@ export function useThumbnail(id: number, enabled: boolean, large = false) {
     attempted.current = true;
 
     let cancelled = false;
+    setGenerating(true);
     ipc
       .refreshThumbnail(id, false)
       .then((found) => {
@@ -67,12 +69,18 @@ export function useThumbnail(id: number, enabled: boolean, large = false) {
         }
       })
       // A failed fetch is an ordinary outcome here; the card shows a placeholder.
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setGenerating(false);
+      });
 
     return () => {
       cancelled = true;
     };
   }, [enabled, id, large, stored.data, stored.isLoading, qc]);
 
-  return stored;
+  // Reading a stored thumbnail and making one that does not exist yet are both
+  // "not ready yet" to the card. Without this the second one rendered as the
+  // no-image icon, which reads as failure rather than work in progress.
+  return generating ? { ...stored, isLoading: true } : stored;
 }

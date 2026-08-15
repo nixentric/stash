@@ -234,9 +234,9 @@ pub fn insert(conn: &Connection, n: &NewFootage) -> Result<i64> {
     let now = now_iso();
 
     conn.execute(
-        "INSERT INTO footages (display_name, media_type, notes, date_added, date_modified)
-         VALUES (?1, ?2, ?3, ?4, ?4)",
-        params![name, media_type.as_str(), n.notes.clone().unwrap_or_default(), now],
+        "INSERT INTO footages (display_name, media_type, notes, date_added, date_modified, brand_asset)
+         VALUES (?1, ?2, ?3, ?4, ?4, ?5)",
+        params![name, media_type.as_str(), n.notes.clone().unwrap_or_default(), now, n.brand_asset],
     )?;
     let id = conn.last_insert_rowid();
 
@@ -351,7 +351,9 @@ pub fn stats(conn: &Connection) -> Result<LibraryStats> {
            SUM(CASE WHEN s.accessibility = 'source_missing' THEN 1 ELSE 0 END),
            SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM thumbnails th WHERE th.footage_id = f.id)
                     THEN 1 ELSE 0 END)
-         FROM footages f LEFT JOIN sources s ON s.footage_id = f.id",
+         FROM footages f LEFT JOIN sources s ON s.footage_id = f.id
+         WHERE f.brand_asset = 0
+           AND NOT EXISTS (SELECT 1 FROM brand_logos bl WHERE bl.footage_id = f.id)",
         [],
         |r| {
             Ok(LibraryStats {
@@ -383,18 +385,23 @@ pub fn folders(conn: &Connection) -> Result<Vec<FolderNode>> {
                 MIN(f.date_added),
                 MAX(MAX(f.date_modified),
                     COALESCE((SELECT m.updated_at FROM source_folder_meta m
-                               WHERE m.container_path = s.container_path), ''))
+                               WHERE m.container_path = s.container_path), '')),
+                (SELECT b.id FROM source_folder_meta m JOIN brands b ON b.id = m.brand_id
+                  WHERE m.container_path = s.container_path),
+                (SELECT b.name FROM source_folder_meta m JOIN brands b ON b.id = m.brand_id
+                  WHERE m.container_path = s.container_path)
          FROM sources s JOIN footages f ON f.id = s.footage_id
          WHERE container_path IS NOT NULL AND container_path <> ''
          GROUP BY s.container_path ORDER BY s.container_path COLLATE NOCASE",
     )?;
-    let rows: Vec<(String, i64, i64, i64, Option<String>, String, String)> = stmt
+    #[allow(clippy::type_complexity)]
+    let rows: Vec<(String, i64, i64, i64, Option<String>, String, String, Option<i64>, Option<String>)> = stmt
         .query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(container_path, footage_count, used_count, unused_count, tags, added_at, updated_at)| {
+        .map(|(container_path, footage_count, used_count, unused_count, tags, added_at, updated_at, brand_id, brand_name)| {
             Ok(FolderNode {
                 fields: super::source_folder::values(conn, &container_path)?,
                 container_path,
@@ -402,6 +409,8 @@ pub fn folders(conn: &Connection) -> Result<Vec<FolderNode>> {
                 used_count,
                 unused_count,
                 tags: tags.map(|v| v.split(TAG_SEP).map(str::to_string).collect()).unwrap_or_default(),
+                brand_id,
+                brand_name,
                 added_at,
                 updated_at,
             })

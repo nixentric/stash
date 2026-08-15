@@ -14,6 +14,7 @@ import {
   BookOpen,
   Shapes,
   FolderOpen,
+  Hexagon,
 } from "lucide-react";
 import {
   DndContext,
@@ -36,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBrand, useBrandAction, useFootageDetail } from "@/hooks/queries";
 import { useThumbnail } from "@/hooks/use-thumbnail";
+import { useBrandFonts } from "@/lib/fonts";
 import { colorFormats, readableOn } from "@/lib/format";
 import { COLOR_ROLES, ELEMENT_CATEGORIES, LOGO_VARIANTS, TYPE_ROLES } from "@/lib/types";
 import type {
@@ -202,7 +204,8 @@ function LogoPreview({ id, className }: { id: number | null; className?: string 
   useEffect(() => {
     if (!thumb.data) return;
     const img = new Image();
-    img.src = thumb.data;
+    // Handler before src: a cached image can finish loading synchronously, and
+    // then onload has already fired by the time it is attached.
     img.onload = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -215,34 +218,44 @@ function LogoPreview({ id, className }: { id: number | null; className?: string 
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
-      
+
+      // The corner is the image's own background: transparent for a cut-out logo,
+      // and whatever the export flattened to otherwise. Averaging the whole image
+      // instead measures mostly that background, which is why a black logo on
+      // white read as "light" and got a black card behind it.
+      const bg = [data[0]!, data[1]!, data[2]!, data[3]!];
+      const bgOpaque = bg[3]! > 20;
+
       let totalLuminance = 0;
-      let nonTransparentPixels = 0;
-      
+      let inkPixels = 0;
+
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i]!;
         const g = data[i + 1]!;
         const b = data[i + 2]!;
         const a = data[i + 3]!;
-        
-        if (a > 20) {
-          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-          totalLuminance += lum;
-          nonTransparentPixels++;
+
+        if (a < 20) continue;
+        if (bgOpaque) {
+          const distance =
+            Math.abs(r - bg[0]!) + Math.abs(g - bg[1]!) + Math.abs(b - bg[2]!);
+          // 30 clears JPEG ringing around the edges without eating the mark.
+          if (distance <= 30) continue;
         }
+
+        totalLuminance += 0.299 * r + 0.587 * g + 0.114 * b;
+        inkPixels++;
       }
-      
-      if (nonTransparentPixels > 0) {
-        const avgLuminance = totalLuminance / nonTransparentPixels;
-        if (avgLuminance > 128) {
-          setBackground("dark");
-        } else {
-          setBackground("light");
-        }
-      } else {
-         setBackground("transparent");
+
+      if (inkPixels === 0) {
+        setBackground("transparent");
+        return;
       }
+
+      const avgLuminance = totalLuminance / inkPixels;
+      setBackground(avgLuminance > 128 ? "dark" : "light");
     };
+    img.src = thumb.data;
   }, [thumb.data]);
 
   return (
@@ -297,7 +310,9 @@ function SortableLogoRow({ logo, onEdit, onDelete }: { logo: BrandLogo; onEdit: 
       >
         <GripVertical className="size-3.5" />
       </div>
-      <div className="h-40 w-full border-b border-border bg-pattern relative pointer-events-none">
+      {/* No pointer-events-none here: dragging is driven by the grip above, and
+          blocking events killed hover on the preview's own background swatches. */}
+      <div className="h-40 w-full border-b border-border bg-pattern relative">
         <LogoPreview id={logo.footageId} className="h-full w-full" />
       </div>
       <div className="flex items-center gap-3 p-3">
@@ -545,7 +560,24 @@ function LogoRules({ rules }: { rules: BrandLogoRules }) {
           </label>
         ))}
       </div>
-      <div className="mt-2 flex justify-end gap-2">
+      <div className="mt-2 flex items-center justify-end gap-2">
+        {written && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mr-auto text-destructive"
+            onClick={() => {
+              // One row per brand, so clearing the three fields is the delete.
+              const empty = { ...draft, clearSpace: "", minimumSize: "", backgroundUsage: "" };
+              action.mutate(
+                { type: "saveLogoRules", rules: empty },
+                { onSuccess: () => setEditing(false) },
+              );
+            }}
+          >
+            <Trash2 /> Clear rules
+          </Button>
+        )}
         <Button
           size="sm"
           variant="secondary"
@@ -798,6 +830,7 @@ export function BrandPage({
   const detail = useBrand(brandId);
   const action = useBrandAction();
   const [sample, setSample] = useState("Building Meaningful Brand Experiences");
+  useBrandFonts(detail.data?.typefaces);
 
   const d = detail.data;
   if (!d) return <div className="p-6 text-[13px] text-muted-foreground">Loading…</div>;
@@ -887,7 +920,7 @@ export function BrandPage({
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => onEditTypeface({ ...blank, role: "heading", family: "", weight: "", size: "", lineHeight: "", letterSpacing: "" })}
+              onClick={() => onEditTypeface({ ...blank, role: "heading", family: "", weight: "", size: "", lineHeight: "", letterSpacing: "", fontFile: null })}
             >
               <Plus /> Add style
             </Button>
@@ -922,7 +955,9 @@ export function BrandPage({
 
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-[13px] font-semibold">Logos</h2>
+          <h2 className="flex items-center gap-1.5 text-[13px] font-semibold">
+            <Hexagon className="size-4" /> Logos
+          </h2>
           <Button
             size="sm"
             variant="secondary"
@@ -1006,7 +1041,7 @@ export function BrandPage({
             size="sm"
             variant="secondary"
             onClick={() =>
-              onEditAdditionalInfo({ id: 0, brandId, title: "", editorMode: "rich_text", contentType: "text", content: "", fileReference: null, position: 0, updatedAt: "" })
+              onEditAdditionalInfo({ id: 0, brandId, title: "", editorMode: "minimal", contentType: "url", content: "", fileReference: null, position: 0, updatedAt: "" })
             }
           >
             <Plus /> Add info

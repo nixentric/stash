@@ -20,8 +20,22 @@ pub fn delete_folder_field(state: State<'_, AppState>, id: i64) -> Result<()> {
 }
 
 #[tauri::command]
+pub fn delete_folder(state: State<'_, AppState>, path: String) -> Result<usize> {
+    state.with_library_mut(|lib| repo::delete_folder(&mut lib.conn, &path))
+}
+
+#[tauri::command]
 pub fn set_folder_tags(state: State<'_, AppState>, path: String, tags: Vec<String>) -> Result<()> {
     state.with_library(|lib| repo::set_tags(&lib.conn, &path, &tags))
+}
+
+#[tauri::command]
+pub fn set_folder_brand(
+    state: State<'_, AppState>,
+    path: String,
+    brand_id: Option<i64>,
+) -> Result<()> {
+    state.with_library(|lib| repo::set_brand(&lib.conn, &path, brand_id))
 }
 
 #[tauri::command]

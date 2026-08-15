@@ -26,8 +26,9 @@ import { Badge, Separator } from "@/components/ui/misc";
 import { cn } from "@/lib/utils";
 import { bytes } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
-import { keys, reportError, useGoogleStatus, usePrefs } from "@/hooks/queries";
+import { invalidateLibrary, keys, reportError, useGoogleStatus, usePrefs } from "@/hooks/queries";
 import { applyTheme } from "@/lib/theme";
+import { emptyQuery } from "@/lib/types";
 import type { PortableThumbnailSize, Theme } from "@/lib/types";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -322,6 +323,7 @@ function LibraryPane() {
 
 function PreviewPane() {
   const [info, setInfo] = useState<number | null>(null);
+  const [rebuilding, setRebuilding] = useState(false);
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -352,6 +354,36 @@ function PreviewPane() {
             Clear cache
           </Button>
         </div>
+      </Field>
+
+      <Field
+        label="Rebuild thumbnails"
+        hint="Re-encodes every thumbnail in the library from its source. Worth doing once after an update that changes how previews are made — logos with transparent backgrounds keep their transparency now, and older thumbnails were flattened."
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={rebuilding}
+          onClick={async () => {
+            setRebuilding(true);
+            try {
+              // Brand logos are the ones that most need re-encoding, and they are
+              // hidden from ordinary listings.
+              const ids = await ipc.listFootageIds({ ...emptyQuery(), includeBrandLogos: true });
+              toast.info(`Rebuilding ${ids.length} thumbnail(s)…`);
+              const n = await ipc.fetchThumbnails(ids, true);
+              qc.invalidateQueries({ queryKey: ["thumb"] });
+              invalidateLibrary(qc);
+              toast.success(`Rebuilt ${n} of ${ids.length} thumbnail(s)`);
+            } catch (e) {
+              reportError(e, "Could not rebuild thumbnails");
+            } finally {
+              setRebuilding(false);
+            }
+          }}
+        >
+          {rebuilding ? "Rebuilding…" : "Rebuild all"}
+        </Button>
       </Field>
     </Pane>
   );

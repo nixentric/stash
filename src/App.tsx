@@ -19,7 +19,7 @@ import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import { JobBanner } from "@/components/library/JobBanner";
 import { SourceFoldersPage } from "@/components/library/SourceFoldersPage";
-import { FolderMetadataDialog } from "@/components/dialogs/FolderMetadataDialog";
+import { ManageTagsDialog } from "@/components/dialogs/ManageTagsDialog";
 import {
   BrandDialog,
   ColorDialog,
@@ -54,7 +54,6 @@ import type {
   BrandLogo,
   BrandTypeface,
   BrandAdditionalInfo,
-  FolderNode,
   JobProgress,
 } from "@/lib/types";
 
@@ -66,8 +65,8 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [markUsedOpen, setMarkUsedOpen] = useState(false);
   const [newCollectionOpen, setNewCollectionOpen] = useState(false);
+  const [manageTagsOpen, setManageTagsOpen] = useState(false);
   const [job, setJob] = useState<JobProgress | null>(null);
-  const [folderMetadata, setFolderMetadata] = useState<FolderNode | null>(null);
   const [brandDraft, setBrandDraft] = useState<Brand | null>(null);
   const [colorDraft, setColorDraft] = useState<BrandColor | null>(null);
   const [typefaceDraft, setTypefaceDraft] = useState<BrandTypeface | null>(null);
@@ -327,6 +326,7 @@ export default function App() {
           <Sidebar
             onNewCollection={() => setNewCollectionOpen(true)}
             onNewBrand={() => setBrandDraft(emptyBrand())}
+            onManageTags={() => setManageTagsOpen(true)}
           />
         </div>
 
@@ -349,7 +349,7 @@ export default function App() {
                 onEditElement={setElementDraft}
                 onEditAdditionalInfo={setAdditionalInfoDraft}
               />
-            ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage onEdit={setFolderMetadata} /> : <FootageGrid
+            ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage /> : <FootageGrid
               items={items}
               total={page.data?.total ?? 0}
               loading={page.isLoading}
@@ -376,7 +376,8 @@ export default function App() {
           setSettingsOpen(true);
         }}
       />
-      <FolderMetadataDialog folder={folderMetadata} onClose={() => setFolderMetadata(null)} />
+
+      <ManageTagsDialog open={manageTagsOpen} onClose={() => setManageTagsOpen(false)} />
       <BrandDialog brand={brandDraft} onClose={() => setBrandDraft(null)} />
       <ColorDialog color={colorDraft} onClose={() => setColorDraft(null)} />
       <TypefaceDialog typeface={typefaceDraft} onClose={() => setTypefaceDraft(null)} />
