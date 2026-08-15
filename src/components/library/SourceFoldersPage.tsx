@@ -338,13 +338,13 @@ export function SourceFoldersPage() {
         <div>
           <h1 className="text-lg font-semibold">Source Folders</h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Track usage, tags, and custom columns for every source folder. Click the settings button to manage columns. Click a tag or column value to filter.
+            Track usage, tags, and custom columns for every source folder. Click the settings button for the default brand and custom columns. Click a tag or column value to filter.
           </p>
         </div>
         <Button
           variant="secondary"
           size="icon"
-          title="Manage custom columns"
+          title="Source folder settings"
           onClick={() => setManageColumnsOpen(true)}
           className="shrink-0"
         >
@@ -581,6 +581,12 @@ export function SourceFoldersPage() {
                         <div className="relative flex items-center gap-1">
                           <input
                             type="text"
+                            // Same reason as ui/input.tsx: tag names are labels, not prose,
+                            // and macOS rewriting one mid-type creates a tag you never wanted.
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
                             placeholder="Add tag..."
                             value={tagInputText}
                             onChange={(e) => {
@@ -760,6 +766,10 @@ export function SourceFoldersPage() {
                             <div className="relative flex items-center gap-1">
                               <input
                                 type="text"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck={false}
                                 placeholder="Add..."
                                 value={columnInputText}
                                 onChange={(e) => {
@@ -869,6 +879,10 @@ export function SourceFoldersPage() {
                           <div className="relative inline-block">
                             <input
                               type="text"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
                               placeholder="Set value..."
                               value={columnInputText}
                               onChange={(e) => {

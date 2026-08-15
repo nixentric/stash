@@ -39,6 +39,16 @@ pub fn set_folder_brand(
 }
 
 #[tauri::command]
+pub fn default_folder_brand(state: State<'_, AppState>) -> Result<Option<i64>> {
+    state.with_library(|lib| repo::default_brand(&lib.conn))
+}
+
+#[tauri::command]
+pub fn set_default_folder_brand(state: State<'_, AppState>, brand_id: Option<i64>) -> Result<()> {
+    state.with_library(|lib| repo::set_default_brand(&lib.conn, brand_id))
+}
+
+#[tauri::command]
 pub fn set_folder_field_value(
     state: State<'_, AppState>,
     path: String,

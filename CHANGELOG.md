@@ -3,6 +3,19 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.7 — 2026-08-16
+
+**A default brand for new folders**
+
+- **Set the brand once, not folder by folder.** The gear button on Source Folders now opens **Source Folder Settings**, and the first thing in it is a default brand. Pick one, and every folder catalogued from then on arrives already assigned to it — a library that belongs to a single brand no longer needs the brand set by hand on every folder that shows up.
+- **It never touches folders you have settled.** A folder that already carries a brand keeps it, and a folder you deliberately left blank stays blank, even when you import more files into it later. The default only claims folders that Stash has never seen before.
+- **Stored inside the library file.** A brand id only means something in the library that defines it, so the default travels with the `.footagedb` rather than with the app. Open a different library and you get that library's default, not this one's.
+- **Same picker as everywhere else.** The brand dropdown is the one the brand dialogs already use, so it renders in the app's own dark chrome instead of the grey system menu a native `<select>` produces on macOS.
+
+**Fixed autocorrect in the folder table**
+
+- **Tags and column values are no longer rewritten as you type.** The three inline editors in the Source Folders table — the tag field, the multi-tag column field, and the single-value column field — were plain inputs that never opted out of macOS autocorrect, so a tag could be silently changed into a different word on the way in. They now decline autocorrect, autocapitalisation and spellcheck, matching every other text field in Stash.
+
 ## v0.5.6 — 2026-08-16
 
 **Newest Source Folders First**

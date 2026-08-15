@@ -11,8 +11,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/dialogs/BrandDialogs";
 import { ipc } from "@/lib/ipc";
-import { invalidateLibrary, reportError, useFolderFields } from "@/hooks/queries";
+import {
+  invalidateLibrary,
+  keys,
+  reportError,
+  useBrands,
+  useDefaultFolderBrand,
+  useFolderFields,
+} from "@/hooks/queries";
+
+/** Same wording the folder brand pickers use, so the option reads identically. */
+const NO_BRAND = "No brand";
 
 export function ManageColumnsDialog({
   open,
@@ -27,6 +38,8 @@ export function ManageColumnsDialog({
 }) {
   const qc = useQueryClient();
   const fields = useFolderFields(open);
+  const brands = useBrands(open);
+  const defaultBrand = useDefaultFolderBrand(open);
   const [column, setColumn] = useState("");
   const [colType, setColType] = useState<"single" | "multiple">("single");
   const [busy, setBusy] = useState(false);
@@ -67,12 +80,37 @@ export function ManageColumnsDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="w-[min(32rem,92vw)]">
         <DialogHeader>
-          <DialogTitle>Manage Custom Columns</DialogTitle>
+          <DialogTitle>Source Folder Settings</DialogTitle>
         </DialogHeader>
         <DialogBody className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
-          <p className="text-[12px] text-subtle-foreground">
-            Custom columns let you track extra metadata for your source folders. Deleting a column clears its values across all folders.
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium">Default brand</span>
+            <p className="text-[12px] text-subtle-foreground">
+              New folders are catalogued under this brand automatically, so a library that belongs to
+              one brand does not need the brand set folder by folder. Folders you have already given a
+              brand — or deliberately left without one — are never changed.
+            </p>
+            <Select
+              value={(brands.data ?? []).find((b) => b.id === defaultBrand.data)?.name ?? NO_BRAND}
+              options={[NO_BRAND, ...(brands.data ?? []).map((b) => b.name)]}
+              onChange={async (name) => {
+                const id = (brands.data ?? []).find((b) => b.name === name)?.id ?? null;
+                try {
+                  await ipc.setDefaultFolderBrand(id);
+                  qc.invalidateQueries({ queryKey: keys.defaultFolderBrand });
+                } catch (e) {
+                  reportError(e, "Could not save the default brand");
+                }
+              }}
+            />
+          </div>
+
+          <div className="border-t border-border pt-3">
+            <span className="text-[13px] font-medium">Custom columns</span>
+            <p className="mt-1 text-[12px] text-subtle-foreground">
+              Custom columns let you track extra metadata for your source folders. Deleting a column clears its values across all folders.
+            </p>
+          </div>
 
           <div className="flex flex-col gap-2">
             {rows.length === 0 && (

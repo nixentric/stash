@@ -2,7 +2,7 @@ use crate::db::models::{FolderField, FolderFieldValue};
 use crate::db::repo::taxonomy;
 use crate::error::{AppError, Result};
 use crate::util::now_iso;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn fields(conn: &Connection) -> Result<Vec<FolderField>> {
     let mut stmt = conn.prepare("SELECT id, name FROM source_folder_fields ORDER BY name COLLATE NOCASE")?;
@@ -80,6 +80,61 @@ pub fn set_brand(conn: &Connection, path: &str, brand_id: Option<i64>) -> Result
     conn.execute(
         "UPDATE source_folder_meta SET brand_id = ?2 WHERE container_path = ?1",
         params![path, brand_id],
+    )?;
+    Ok(())
+}
+
+/// The brand newly catalogued folders start on, or none.
+///
+/// Kept in the library file rather than app prefs because a brand id only means
+/// anything inside the library that defines it — a default in prefs would point
+/// at an unrelated brand the moment a second library is opened.
+pub fn default_brand(conn: &Connection) -> Result<Option<i64>> {
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT value FROM app_metadata WHERE key = 'default_brand_id'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(raw.and_then(|v| v.parse().ok()))
+}
+
+pub fn set_default_brand(conn: &Connection, brand_id: Option<i64>) -> Result<()> {
+    match brand_id {
+        Some(id) => conn.execute(
+            "INSERT INTO app_metadata (key, value) VALUES ('default_brand_id', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [id.to_string()],
+        )?,
+        None => conn.execute("DELETE FROM app_metadata WHERE key = 'default_brand_id'", [])?,
+    };
+    Ok(())
+}
+
+/// Stamps the folders these footage rows landed in with the library's default
+/// brand, if one is set.
+///
+/// `DO NOTHING` on conflict is the whole point: a folder that already has a meta
+/// row has been touched by hand, and overwriting it would re-brand folders the
+/// user deliberately left blank every time they import one more file into them.
+pub fn apply_default_brand(conn: &Connection, footage_ids: &[i64]) -> Result<()> {
+    let Some(brand_id) = default_brand(conn)? else { return Ok(()) };
+    if footage_ids.is_empty() {
+        return Ok(());
+    }
+    // Ids come from this database, not from the caller, so joining them into the
+    // statement cannot carry anything but digits.
+    let ids = footage_ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    conn.execute(
+        &format!(
+            "INSERT INTO source_folder_meta (container_path, updated_at, brand_id)
+             SELECT DISTINCT container_path, ?1, ?2 FROM sources
+             WHERE footage_id IN ({ids})
+               AND container_path IS NOT NULL AND container_path <> ''
+             ON CONFLICT(container_path) DO NOTHING"
+        ),
+        params![now_iso(), brand_id],
     )?;
     Ok(())
 }

@@ -8,9 +8,9 @@
 
 use stash_lib::db::connection::{self, Library};
 use stash_lib::db::models::{
-    FootagePatch, FootageQuery, MediaType, NewFootage, SortKey, UsageFilter,
+    Brand, FootagePatch, FootageQuery, MediaType, NewFootage, SortKey, UsageFilter,
 };
-use stash_lib::db::repo::{footage, taxonomy, thumbnail, usage};
+use stash_lib::db::repo::{brand, footage, source_folder, taxonomy, thumbnail, usage};
 use stash_lib::source;
 use std::path::PathBuf;
 
@@ -425,6 +425,65 @@ fn brand_imports_never_show_up_in_the_library() {
     assert!(all.items.iter().any(|i| i.id == logo));
 
     assert_eq!(footage::stats(&lib.conn).unwrap().total, 1, "counts agree");
+}
+
+/// A library that belongs to one brand can name that brand once, and every
+/// folder catalogued afterwards arrives already assigned — without the default
+/// ever reaching back and re-branding a folder somebody set by hand.
+#[test]
+fn the_default_brand_claims_new_folders_and_leaves_settled_ones_alone() {
+    let dir = TempDir::new();
+    let lib = connection::create(&dir.join("Branded")).unwrap();
+
+    let etive = brand::save(
+        &lib.conn,
+        &Brand { name: "ETIVE".into(), ..Default::default() },
+    )
+    .unwrap();
+    let other = brand::save(
+        &lib.conn,
+        &Brand { name: "Other".into(), ..Default::default() },
+    )
+    .unwrap();
+    source_folder::set_default_brand(&lib.conn, Some(etive)).unwrap();
+
+    let in_folder = |link: &str, name: &str, path: &str| NewFootage {
+        container_path: Some(path.to_string()),
+        ..from_link(link, name)
+    };
+
+    // A folder somebody already claimed for another brand, and one they left
+    // blank on purpose — set_brand writes the meta row either way.
+    let claimed = footage::insert(&lib.conn, &in_folder(LINK_A, "Claimed", "/Shoots/Claimed")).unwrap();
+    source_folder::set_brand(&lib.conn, "/Shoots/Claimed", Some(other)).unwrap();
+    let blank = footage::insert(&lib.conn, &in_folder(LINK_B, "Blank", "/Shoots/Blank")).unwrap();
+    source_folder::set_brand(&lib.conn, "/Shoots/Blank", None).unwrap();
+
+    // Now catalogue a brand new folder, and one more file into each old one.
+    let fresh = footage::insert(&lib.conn, &in_folder(LINK_C, "Fresh", "/Shoots/Fresh")).unwrap();
+    source_folder::apply_default_brand(&lib.conn, &[claimed, blank, fresh]).unwrap();
+
+    let brand_of = |path: &str| {
+        footage::folders(&lib.conn)
+            .unwrap()
+            .into_iter()
+            .find(|f| f.container_path == path)
+            .unwrap_or_else(|| panic!("{path} should be listed"))
+            .brand_id
+    };
+    assert_eq!(brand_of("/Shoots/Fresh"), Some(etive), "new folder takes the default");
+    assert_eq!(brand_of("/Shoots/Claimed"), Some(other), "an assigned brand survives");
+    assert_eq!(brand_of("/Shoots/Blank"), None, "a deliberately blank folder stays blank");
+
+    // Turning the default off leaves later folders alone entirely.
+    source_folder::set_default_brand(&lib.conn, None).unwrap();
+    let later = footage::insert(
+        &lib.conn,
+        &in_folder("https://cdn.example.com/clips/later.mp4", "Later", "/Shoots/Later"),
+    )
+    .unwrap();
+    source_folder::apply_default_brand(&lib.conn, &[later]).unwrap();
+    assert_eq!(brand_of("/Shoots/Later"), None, "no default, no brand");
 }
 
 /// A mixed library — Drive links, a web URL, a local file — behaves uniformly.

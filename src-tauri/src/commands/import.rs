@@ -90,6 +90,7 @@ pub fn import_footage(state: State<'_, AppState>, items: Vec<NewFootage>) -> Res
                 }),
             }
         }
+        crate::db::repo::source_folder::apply_default_brand(&tx, &outcome.imported)?;
         tx.commit()?;
         Ok(())
     })?;

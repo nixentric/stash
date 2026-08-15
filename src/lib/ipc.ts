@@ -38,6 +38,9 @@ export const ipc = {
     invoke<void>("set_folder_field_value", { path, fieldId, value }),
   setFolderBrand: (path: string, brandId: number | null) =>
     invoke<void>("set_folder_brand", { path, brandId }),
+  defaultFolderBrand: () => invoke<number | null>("default_folder_brand"),
+  setDefaultFolderBrand: (brandId: number | null) =>
+    invoke<void>("set_default_folder_brand", { brandId }),
 
   // ── tags / collections / projects / usage ─────────────────────────────────
   allTags: () => invoke<T.Tag[]>("all_tags"),

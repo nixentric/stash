@@ -73,6 +73,8 @@ pub fn run() {
             commands::source_folder::set_folder_tags,
             commands::source_folder::set_folder_field_value,
             commands::source_folder::set_folder_brand,
+            commands::source_folder::default_folder_brand,
+            commands::source_folder::set_default_folder_brand,
             // brands
             commands::brand::all_brands,
             commands::brand::brand_detail,

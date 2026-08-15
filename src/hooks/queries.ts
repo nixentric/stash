@@ -22,6 +22,7 @@ export const keys = {
   projects: ["projects"] as const,
   folders: ["folders"] as const,
   folderFields: ["folderFields"] as const,
+  defaultFolderBrand: ["defaultFolderBrand"] as const,
   google: ["google"] as const,
   caps: ["caps"] as const,
   prefs: ["prefs"] as const,
@@ -98,6 +99,9 @@ export const useFolders = (enabled: boolean) =>
 
 export const useFolderFields = (enabled: boolean) =>
   useQuery({ queryKey: keys.folderFields, queryFn: ipc.folderFields, enabled });
+
+export const useDefaultFolderBrand = (enabled: boolean) =>
+  useQuery({ queryKey: keys.defaultFolderBrand, queryFn: ipc.defaultFolderBrand, enabled });
 
 // ── integrations ────────────────────────────────────────────────────────────
 
