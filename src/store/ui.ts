@@ -23,8 +23,31 @@ export type SidebarView =
 
 export type ViewMode = "grid" | "list";
 
+/** Identity of a view, so history can tell "same place" from "new place". */
+const viewKey = (v: SidebarView) =>
+  [v.kind, "id" in v ? v.id : "", "name" in v ? v.name : "", "path" in v ? v.path : ""].join("\u0000");
+
+const sameView = (a: SidebarView, b: SidebarView) => viewKey(a) === viewKey(b);
+
+/**
+ * Switching to a smart view adopts its natural ordering, which is what makes
+ * "Recently Used" actually show recent things first.
+ */
+function sortFor(view: SidebarView, current: SortKey): SortKey {
+  return view.kind === "recentlyUsed"
+    ? "recentlyUsed"
+    : view.kind === "mostUsed"
+      ? "mostUsed"
+      : view.kind === "unused"
+        ? "newestAdded"
+        : current;
+}
+
 interface UiState {
   view: SidebarView;
+  /** Browser-style history around `view`, the one place navigation happens. */
+  back: SidebarView[];
+  forward: SidebarView[];
   search: string;
   sort: SortKey;
   viewMode: ViewMode;
@@ -44,6 +67,8 @@ interface UiState {
   settingsOpen: boolean;
 
   setView: (v: SidebarView) => void;
+  goBack: () => void;
+  goForward: () => void;
   setSearch: (s: string) => void;
   setSort: (s: SortKey) => void;
   setViewMode: (m: ViewMode) => void;
@@ -66,6 +91,8 @@ interface UiState {
 
 export const useUi = create<UiState>((set, get) => ({
   view: { kind: "all" },
+  back: [],
+  forward: [],
   search: "",
   sort: "newestAdded",
   viewMode: "grid",
@@ -84,20 +111,44 @@ export const useUi = create<UiState>((set, get) => ({
   settingsOpen: false,
 
   setView: (view) =>
-    set({
-      view,
-      selection: [],
-      lastAnchor: null,
-      // Switching to a smart view adopts its natural ordering, which is what
-      // makes "Recently Used" actually show recent things first.
-      sort:
-        view.kind === "recentlyUsed"
-          ? "recentlyUsed"
-          : view.kind === "mostUsed"
-            ? "mostUsed"
-            : view.kind === "unused"
-              ? "newestAdded"
-              : get().sort,
+    set((s) => {
+      // Re-clicking the entry you are already on is not a navigation, so it
+      // must not push a duplicate onto the back stack.
+      if (sameView(s.view, view)) return { selection: [], lastAnchor: null };
+      return {
+        view,
+        back: [...s.back, s.view],
+        forward: [],
+        selection: [],
+        lastAnchor: null,
+        sort: sortFor(view, s.sort),
+      };
+    }),
+  goBack: () =>
+    set((s) => {
+      const prev = s.back.at(-1);
+      if (!prev) return {};
+      return {
+        view: prev,
+        back: s.back.slice(0, -1),
+        forward: [s.view, ...s.forward],
+        selection: [],
+        lastAnchor: null,
+        sort: sortFor(prev, s.sort),
+      };
+    }),
+  goForward: () =>
+    set((s) => {
+      const [next, ...rest] = s.forward;
+      if (!next) return {};
+      return {
+        view: next,
+        back: [...s.back, s.view],
+        forward: rest,
+        selection: [],
+        lastAnchor: null,
+        sort: sortFor(next, s.sort),
+      };
     }),
   setSearch: (search) => set({ search }),
   setSort: (sort) => set({ sort }),

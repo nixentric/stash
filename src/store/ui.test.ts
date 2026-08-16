@@ -88,6 +88,33 @@ describe("view switching", () => {
     expect(useUi.getState().sort).toBe("mostUsed");
   });
 
+  it("walks back and forward through visited views", () => {
+    const ui = () => useUi.getState();
+    ui().setView({ kind: "all" });
+    ui().setView({ kind: "favorites" });
+    ui().setView({ kind: "tag", name: "logo" });
+    // Re-clicking the same entry must not stack up a no-op step.
+    ui().setView({ kind: "tag", name: "logo" });
+
+    ui().goBack();
+    expect(ui().view).toEqual({ kind: "favorites" });
+    ui().goBack();
+    expect(ui().view).toEqual({ kind: "all" });
+    ui().goForward();
+    expect(ui().view).toEqual({ kind: "favorites" });
+
+    // A fresh navigation drops the forward trail, like a browser.
+    ui().setView({ kind: "missing" });
+    expect(ui().forward).toEqual([]);
+  });
+
+  it("does nothing at the ends of the history", () => {
+    useUi.setState({ view: { kind: "all" }, back: [], forward: [] });
+    useUi.getState().goBack();
+    useUi.getState().goForward();
+    expect(useUi.getState().view).toEqual({ kind: "all" });
+  });
+
   it("clears the selection when the view changes", () => {
     useUi.getState().select([1, 2, 3]);
     expect(useUi.getState().selection).toHaveLength(3);

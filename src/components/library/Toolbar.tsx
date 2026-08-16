@@ -6,6 +6,8 @@ import {
   ArrowUpDown,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Cloud,
   CloudOff,
   Filter,
@@ -100,6 +102,10 @@ export function Toolbar({
     clearFilters,
     hasActiveFilters,
     selection,
+    back,
+    forward,
+    goBack,
+    goForward,
   } = useUi();
 
   useEffect(() => {
@@ -109,10 +115,23 @@ export function Toolbar({
         searchRef.current?.focus();
         searchRef.current?.select();
       }
+      // ⌘[ / ⌘] on macOS, and Alt+Arrow everywhere — the two bindings people
+      // already have in their fingers from every browser and Finder.
+      const backKey = (e.metaKey || e.ctrlKey) && e.key === "[";
+      const fwdKey = (e.metaKey || e.ctrlKey) && e.key === "]";
+      const backAlt = e.altKey && e.key === "ArrowLeft";
+      const fwdAlt = e.altKey && e.key === "ArrowRight";
+      if (backKey || backAlt) {
+        e.preventDefault();
+        goBack();
+      } else if (fwdKey || fwdAlt) {
+        e.preventDefault();
+        goForward();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [goBack, goForward]);
 
   const filterCount =
     (usage !== "all" ? 1 : 0) +
@@ -159,7 +178,30 @@ export function Toolbar({
     <header className="shrink-0 bg-titlebar hairline-b">
       {/* Row 1 — identity, search, actions */}
       <div className="drag-region flex h-10 items-center gap-2 pl-2 pr-2">
-        <div className="no-drag flex items-center">
+        <div className="no-drag flex items-center gap-0.5">
+          <Tooltip content="Back" shortcut={`${mod} [`}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={goBack}
+              disabled={back.length === 0}
+              aria-label="Back"
+            >
+              <ChevronLeft />
+            </Button>
+          </Tooltip>
+          <Tooltip content="Forward" shortcut={`${mod} ]`}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={goForward}
+              disabled={forward.length === 0}
+              aria-label="Forward"
+            >
+              <ChevronRight />
+            </Button>
+          </Tooltip>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="max-w-[15rem] gap-1 px-2">

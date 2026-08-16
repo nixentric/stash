@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CircleSlash,
   Clock3,
+  Film,
   Folder,
   FolderTree,
   Hash,
@@ -248,9 +249,26 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand
                   // the files inside" is on. Showing a bare 0 makes that look
                   // broken; the folder count says where the tag actually lives.
                   badge={
-                    t.footageCount === 0 && t.folderCount > 0
-                      ? `${t.folderCount} folder${t.folderCount > 1 ? "s" : ""}`
-                      : t.footageCount
+                    <span className="flex items-center gap-1.5 [&_svg]:size-3">
+                      {t.folderCount > 0 && (
+                        <span
+                          className="flex items-center gap-0.5"
+                          title={`${t.folderCount} folder${t.folderCount > 1 ? "s" : ""}`}
+                        >
+                          <Folder />
+                          {count(t.folderCount)}
+                        </span>
+                      )}
+                      {t.footageCount > 0 && (
+                        <span
+                          className="flex items-center gap-0.5"
+                          title={`${t.footageCount} file${t.footageCount > 1 ? "s" : ""}`}
+                        >
+                          <Film />
+                          {count(t.footageCount)}
+                        </span>
+                      )}
+                    </span>
                   }
                 />
               </ContextMenuTrigger>
@@ -383,7 +401,7 @@ function Row({
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
-  badge?: number | string;
+  badge?: React.ReactNode;
   tone?: "warn";
   style?: React.CSSProperties;
 }) {
@@ -405,7 +423,7 @@ function Row({
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge != null && badge !== 0 && (
-        <span className="tnum shrink-0 text-[11px] text-subtle-foreground">
+        <span className="tnum flex shrink-0 items-center text-[11px] text-subtle-foreground">
           {typeof badge === "number" ? count(badge) : badge}
         </span>
       )}
