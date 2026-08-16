@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowUpDown,
   Check,
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
   ExternalLink,
+  Filter,
   FolderTree,
   ImageOff,
   Pencil,
@@ -15,12 +17,22 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/misc";
+import { cn } from "@/lib/utils";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/menu";
 import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import {
@@ -37,7 +49,7 @@ import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
 import { Select } from "@/components/dialogs/BrandDialogs";
 import { useUi } from "@/store/ui";
 import { emptyQuery, type FolderNode } from "@/lib/types";
-import { date, relativeDate } from "@/lib/format";
+import { count, date, relativeDate } from "@/lib/format";
 import { ManageColumnsDialog } from "@/components/dialogs/ManageColumnsDialog";
 
 /**
@@ -338,6 +350,44 @@ export function SourceFoldersPage() {
     return Array.from(uniqueValues).slice(0, 6);
   }, [columnInputText, editingColumnId, folders.data, multipleTagFields, editingColumnPath]);
 
+  /**
+   * What there is to filter by, read off the folders themselves.
+   *
+   * Nothing here is configured: a new tag, a new brand or a new custom column
+   * shows up as soon as one folder carries a value for it, and disappears with
+   * the last one. Values are split on commas the same way `matches()` does, so
+   * the menu can never offer a value the filter would not match.
+   */
+  const facetGroups = useMemo(() => {
+    const list = folders.data ?? [];
+    const distinct = (pick: (f: FolderNode) => string[]) => {
+      const seen = new Set<string>();
+      for (const f of list) for (const v of pick(f)) if (v) seen.add(v);
+      return [...seen].sort((a, b) => a.localeCompare(b));
+    };
+    const groups: { label: string; fieldId: Facet["fieldId"]; values: string[] }[] = [
+      { label: "Brand", fieldId: "brand", values: distinct((f) => (f.brandName ? [f.brandName] : [])) },
+      { label: "Tag", fieldId: null, values: distinct((f) => f.tags) },
+      ...(fields.data ?? []).map((c) => ({
+        label: c.name,
+        fieldId: c.id as Facet["fieldId"],
+        values: distinct((f) =>
+          (f.fields.find((v) => v.fieldId === c.id)?.value ?? "").split(",").map((x) => x.trim()),
+        ),
+      })),
+    ];
+    return groups.filter((g) => g.values.length > 0);
+  }, [folders.data, fields.data]);
+
+  const sortOptions: { key: SortKey; label: string }[] = [
+    { key: "added", label: "Added" },
+    { key: "updated", label: "Updated" },
+    { key: "path", label: "Folder name" },
+    { key: "brand", label: "Brand" },
+    { key: "used", label: "Used" },
+    ...(fields.data ?? []).map((c) => ({ key: `field:${c.id}` as SortKey, label: c.name })),
+  ];
+
   const commitTag = async (folderPath: string, existingTags: string[], tagText: string) => {
     const tag = tagText.trim().toLowerCase().replace(/\s+/g, " ");
     if (!tag) return;
@@ -387,29 +437,96 @@ export function SourceFoldersPage() {
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      <div className="mb-5 flex items-start justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Source Folders</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Track usage, tags, and custom columns for every source folder. Click the settings button for the default brand and custom columns. Click a tag or column value to filter.
-          </p>
-        </div>
+      {/* Same bar the library has, minus the grid/list switch — there is only
+          ever one way to read a table. */}
+      <div className="mb-3 flex h-9 items-center gap-1">
+        <span className="tnum mr-1 shrink-0 text-[11.5px] text-subtle-foreground">
+          {facets.length > 0
+            ? `${count(rows.length)} of ${count(folders.data?.length ?? 0)} folders`
+            : `${count(rows.length)} ${rows.length === 1 ? "folder" : "folders"}`}
+        </span>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className={cn(facets.length > 0 && "text-foreground")}>
+              <Filter />
+              Filters
+              {facets.length > 0 && <Badge className="ml-0.5">{facets.length}</Badge>}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-[70vh] min-w-[13rem] overflow-y-auto">
+            {facetGroups.length === 0 ? (
+              <DropdownMenuLabel>Nothing to filter by yet</DropdownMenuLabel>
+            ) : (
+              facetGroups.map((g, i) => (
+                <DropdownMenuGroup key={`${g.fieldId}`}>
+                  {i > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel>{g.label}</DropdownMenuLabel>
+                  {g.values.map((value) => {
+                    const facet: Facet = { fieldId: g.fieldId, label: g.label, value };
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={value}
+                        checked={isActive(facet)}
+                        onCheckedChange={() => toggleFacet(facet)}
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {value}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+                </DropdownMenuGroup>
+              ))
+            )}
+            {facets.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setFacets([])}>Reset filters</DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <ArrowUpDown />
+              {sortOptions.find((o) => o.key === sort.key)?.label ?? "Sort"}
+              {sort.dir === 1 ? <ChevronUp /> : <ChevronDown />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-[70vh] overflow-y-auto">
+            {sortOptions.map((o) => (
+              // Same click twice flips the direction, exactly like the column
+              // headers — one behaviour, two ways in.
+              <DropdownMenuItem key={o.key} onSelect={() => toggleSort(o.key)}>
+                <Check className={cn("size-3.5", sort.key !== o.key && "opacity-0")} />
+                {o.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {facets.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setFacets([])}>
+            <X />
+            Clear
+          </Button>
+        )}
+
         <Button
-          variant="secondary"
-          size="icon"
-          title="Source folder settings"
+          variant="ghost"
+          size="icon-sm"
+          title="Source folder settings — default brand and custom columns"
           onClick={() => setManageColumnsOpen(true)}
-          className="shrink-0"
+          className="ml-auto shrink-0"
         >
-          <Settings className="size-4" />
+          <Settings />
         </Button>
       </div>
 
       {facets.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
-          <span>
-            {rows.length} of {folders.data?.length ?? 0} folders
-          </span>
           {facets.map((f) => (
             <button
               key={`${f.fieldId}:${f.value}`}
@@ -428,9 +545,6 @@ export function SourceFoldersPage() {
               <X className="size-3" />
             </button>
           ))}
-          <Button size="sm" variant="ghost" onClick={() => setFacets([])}>
-            Clear all
-          </Button>
         </div>
       )}
 
