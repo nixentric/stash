@@ -52,6 +52,28 @@ client brand rules in more places than they can remember.
 
 ---
 
+## 📸 Screenshots
+
+**A library is one file you open.** Recent libraries are one click away, and a
+`.footagedb` can be moved, backed up, or handed to a collaborator — the catalog
+travels with it.
+
+![The Stash welcome screen: New Library, Open Library, and recent libraries](screenshots/sc-01.png)
+
+**The library itself.** 1,824 items here, every one previewed, tagged, and
+marked used or unused — with source folders, brands, and tags down the left.
+
+![The Stash library grid, showing previews with used and unused states](screenshots/sc-03.png)
+
+**Brand guidelines that answer questions.** The Quick Brand Kit up top is the
+10% used 90% of the time; every colour carries hex, RGB, and CMYK with a copy
+button, so "what is this brand's blue?" costs one click while the timeline
+stays open.
+
+![A brand page in Stash: Quick Brand Kit, primary and secondary colors with hex, RGB and CMYK](screenshots/sc-02.png)
+
+---
+
 ## 📦 Install
 
 Download for your platform from the
