@@ -1,11 +1,27 @@
 # Stash
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Stash-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/nixentric)
+
 A lightweight, offline-first **creative asset manager** for editors and
 designers — asset organization, usage tracking, fast search, and interactive
 brand guidelines in one portable workspace.
 
 Stash is a desktop application, not a cloud service. Your files never move, your
 library is a single file you own, and nothing is uploaded anywhere.
+
+---
+
+## Help me pay for an Apple Developer membership
+
+Stash is built by one person, and the builds are unsigned — which is why macOS
+nags you. It warns on first launch, and because every unsigned build gets a
+different code identity, the keychain stops recognising Stash after each update
+and asks for your login password all over again. Signing and notarising fixes
+both, and that needs an Apple Developer membership at **$99/year**.
+
+If Stash saves you time, [buying me a coffee](https://ko-fi.com/nixentric) goes
+straight at that. Everything else stays as it is either way — same MIT licence,
+same offline app, no telemetry, no paid tier.
 
 ---
 
