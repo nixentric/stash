@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.19 — 2026-08-16
+
+**Clear out what will never have a preview**
+
+- **Every row in "Still without a preview" has a Remove button**, and the footer removes everything listed at once. A file that is gone from its source is never going to get a preview, and that list is where you find out — so it is where the record can be dropped, without hunting for it in the grid afterwards.
+- **Removing all of them asks first.** It is the only action in that dialog that refreshing again cannot undo. The originals on Drive or on disk are not touched either way, and the list shrinks as you go.
+
 ## v0.5.18 — 2026-08-16
 
 **Source folders get a filter bar**
