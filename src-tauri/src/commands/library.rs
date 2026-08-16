@@ -55,7 +55,7 @@ pub fn current_library(state: State<'_, AppState>) -> Result<Option<LibraryInfo>
     if !state.is_open() {
         return Ok(None);
     }
-    state.with_library(|lib| connection::info(lib)).map(Some)
+    state.with_library(connection::info).map(Some)
 }
 
 /// `Save As` — snapshot to a new file and continue working in it.

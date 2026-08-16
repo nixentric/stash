@@ -13,12 +13,6 @@ use std::sync::{Mutex, OnceLock};
 #[cfg(not(debug_assertions))]
 const SERVICE: &str = "app.stash.footage";
 
-/// Every keychain read can raise an OS authorization dialog, and `google_status`
-/// reads one on each call — so a user who opens Settings, or lets a status query
-/// refetch, was asked for the login password again and again. Reads are memoised
-/// for the life of the process instead: one prompt per secret per launch, and
-/// none at all once the user picks "Always Allow".
-
 pub const KEY_REFRESH_TOKEN: &str = "google-refresh-token";
 pub const KEY_CLIENT_SECRET: &str = "google-client-secret";
 
@@ -71,6 +65,11 @@ pub use dev_store::*;
 mod prod_store {
     use super::*;
 
+    /// Every keychain read can raise an OS authorization dialog, and
+    /// `google_status` reads one on each call — so a user who opens Settings, or
+    /// lets a status query refetch, was asked for the login password again and
+    /// again. Reads are memoised for the life of the process instead: one prompt
+    /// per secret per launch, and none at all once the user picks "Always Allow".
     fn memo() -> &'static Mutex<HashMap<String, Option<String>>> {
         static MEMO: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
         MEMO.get_or_init(Default::default)

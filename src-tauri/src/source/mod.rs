@@ -154,9 +154,8 @@ pub fn parse_input(raw: &str) -> Option<ParsedSource> {
         if matches!(u.scheme(), "http" | "https") {
             let name = u
                 .path_segments()
-                .and_then(|s| s.filter(|x| !x.is_empty()).next_back())
-                .filter(|s| !s.is_empty())
-                .map(|s| percent_decode(s))
+                .and_then(|mut s| s.rfind(|x: &&str| !x.is_empty()))
+                .map(percent_decode)
                 .unwrap_or_else(|| u.host_str().unwrap_or("Link").to_string());
             return Some(ParsedSource {
                 provider: Provider::Url.as_str().to_string(),

@@ -595,7 +595,7 @@ fn large_libraries_page_in_sql_and_stay_responsive() {
             file_size: Some(1024 * 1024),
             width: Some(3840),
             height: Some(2160),
-            duration_ms: Some((i % 120) as i64 * 1000),
+            duration_ms: Some((i % 120) * 1000),
             source_created_at: None,
             source_modified_at: None,
             tags: None,

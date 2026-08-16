@@ -176,6 +176,14 @@ pub fn set_field_value(conn: &Connection, path: &str, field_id: i64, value: &str
     touch(conn, path)
 }
 
+pub fn values(conn: &Connection, path: &str) -> Result<Vec<FolderFieldValue>> {
+    let mut stmt = conn.prepare("SELECT f.id, f.name, v.value FROM source_folder_field_values v JOIN source_folder_fields f ON f.id = v.field_id WHERE v.container_path = ?1 ORDER BY f.name COLLATE NOCASE")?;
+    let rows = stmt
+        .query_map([path], |r| Ok(FolderFieldValue { field_id: r.get(0)?, name: r.get(1)?, value: r.get(2)? }))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,7 +221,7 @@ mod tests {
         set_tags(&c, "Drive/KOL", &["test".into()]).unwrap();
         let f = footage::folders(&c).unwrap().remove(0);
         assert_eq!(f.added_at, "2026-01-05", "editing metadata never moves added");
-        assert!(f.updated_at > "2026-02-10".to_string(), "tag edit moved updated: {}", f.updated_at);
+        assert!(f.updated_at.as_str() > "2026-02-10", "tag edit moved updated: {}", f.updated_at);
 
         let field = create_field(&c, "Branch").unwrap();
         set_field_value(&c, "Drive/KOL", field, "Serang").unwrap();
@@ -238,12 +246,4 @@ mod tests {
         // The column itself is library-wide, so it must survive.
         assert_eq!(fields(&c).unwrap().len(), 1);
     }
-}
-
-pub fn values(conn: &Connection, path: &str) -> Result<Vec<FolderFieldValue>> {
-    let mut stmt = conn.prepare("SELECT f.id, f.name, v.value FROM source_folder_field_values v JOIN source_folder_fields f ON f.id = v.field_id WHERE v.container_path = ?1 ORDER BY f.name COLLATE NOCASE")?;
-    let rows = stmt
-        .query_map([path], |r| Ok(FolderFieldValue { field_id: r.get(0)?, name: r.get(1)?, value: r.get(2)? }))?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
 }
