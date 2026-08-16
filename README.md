@@ -102,7 +102,9 @@ Three states are used throughout the documentation, and they mean exactly this:
 | Logo usage rules and do/don't examples | **Available** |
 | Graphic elements referencing the asset library | **Available** |
 | Quick Brand Kit | **Available** |
-| Universal search across assets and brand entities | **Available** |
+| Universal search — assets, source folders, brands, colors, type, logos, elements, additional info | **Available** |
+| Scoped search — aim the field at one kind before typing | **Available** |
+| Folder tags — tag a folder, optionally covering every file inside | **Available** |
 | Clickable tag/value filters | **In development** — Source Folders table only |
 | Per-asset custom fields | **In development** — folder-level only today |
 | Photography, motion, tone of voice, icon, social guidelines | **Planned** |
