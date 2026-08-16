@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.9 — 2026-08-16
+
+**Support Stash**
+
+- **A Support pane in Settings.** Stash is built by one person, in the open, for free, and now says so. **Settings → Support** explains why macOS warns on first launch and asks for your login password again after every update — the builds are unsigned, so every build has a different code identity and the keychain stops recognising the app — and that an Apple Developer membership at $99/year is what makes both stop. There is a Ko-fi button under it.
+- **Nothing is gated behind it.** No paid tier, no accounts, no telemetry, and no plan to add any. The pane is an explanation and a link, and that is all it is.
+- **Same ask on the repo.** The README leads with it, and the GitHub page carries a Sponsor button.
+
 ## v0.5.8 — 2026-08-16
 
 **Folder tags decide for themselves whether they reach the files**
