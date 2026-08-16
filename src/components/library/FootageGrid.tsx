@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Heart, ImageOff, Play, Star, TriangleAlert } from "lucide-react";
+import { HardDriveDownload, Heart, ImageOff, Play, Star, TriangleAlert } from "lucide-react";
 import { FootageCard } from "./FootageCard";
 import { FootageContextMenu } from "./FootageContextMenu";
 import { EmptyState } from "./EmptyState";
 import { cn } from "@/lib/utils";
 import { duration as fmtDuration, accessibilityLabel, date } from "@/lib/format";
 import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
+import { useDownloadedIds } from "@/hooks/queries";
 import { useSelectionHandlers } from "@/hooks/use-selection";
 import { useUi } from "@/store/ui";
 import type { FootageListItem } from "@/lib/types";
@@ -26,6 +27,7 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
   const { selection, viewMode, gridSize, quickLookId, setQuickLookId, hasActiveFilters, search, lastAnchor, select } = useUi();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const downloaded = useDownloadedIds(items.length > 0);
 
   const orderedIds = useMemo(() => items.map((i) => i.id), [items]);
   const { handleClick, handleContextMenu } = useSelectionHandlers(orderedIds);
@@ -280,6 +282,7 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
                   <div key={row.key} style={{ ...style, height: rowHeight }}>
                     <ListRow
                       item={item}
+                      downloaded={downloaded.data?.has(item.id) ?? false}
                       selected={selection.includes(item.id)}
                       onClick={(e) => onCardClick(item.id, e)}
                       onDoubleClick={() => setQuickLookId(item.id)}
@@ -308,6 +311,7 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
                     <FootageCard
                       key={item.id}
                       item={item}
+                      downloaded={downloaded.data?.has(item.id) ?? false}
                       selected={selection.includes(item.id)}
                       onClick={(e) => onCardClick(item.id, e)}
                       onDoubleClick={() => setQuickLookId(item.id)}
@@ -344,12 +348,14 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
 
 function ListRow({
   item,
+  downloaded,
   selected,
   onClick,
   onDoubleClick,
   onContextMenu,
 }: {
   item: FootageListItem;
+  downloaded: boolean;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
@@ -388,6 +394,9 @@ function ListRow({
 
       {item.favorite && <Heart className="size-3 shrink-0 fill-destructive text-destructive" />}
       {warning && <TriangleAlert className="size-3 shrink-0 text-warning" />}
+      {downloaded && (
+        <HardDriveDownload className="size-3 shrink-0 text-success" aria-label="Downloaded" />
+      )}
 
       <span className="min-w-0 flex-1 truncate">{item.displayName}</span>
 

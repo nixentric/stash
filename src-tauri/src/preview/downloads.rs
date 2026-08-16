@@ -105,6 +105,32 @@ pub fn find(state: &AppState, footage_id: i64) -> Option<PathBuf> {
         })
 }
 
+/// The footage id a downloaded file belongs to, from its name alone.
+///
+/// The same rule `find` matches on, read the other way round.
+fn id_from_name(name: &str) -> Option<i64> {
+    // `.part` is a download still in flight, not a file you have.
+    if name.ends_with(".part") {
+        return None;
+    }
+    name.split_once('-')?.0.parse::<i64>().ok()
+}
+
+/// Every footage id that has a downloaded original, from one directory read.
+///
+/// `find` scans the folder per call, so asking it once per row would be
+/// quadratic on a grid of thousands. Missing folder means nothing downloaded.
+pub fn downloaded_ids(state: &AppState) -> Vec<i64> {
+    let Ok(entries) = dir(state).and_then(|d| Ok(std::fs::read_dir(d)?)) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| id_from_name(&e.file_name().into_string().ok()?))
+        .collect()
+}
+
 /// Downloads the original to disk, reporting progress as it goes.
 ///
 /// Written to a `.part` file and renamed at the end, so an interrupted download
@@ -258,6 +284,17 @@ pub fn set_dir(state: &AppState, new_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_id_off_a_downloaded_file() {
+        assert_eq!(id_from_name("12-photo.jpg"), Some(12));
+        // A name with its own dashes still belongs to the id in front.
+        assert_eq!(id_from_name("7-shoot-final-v2.mp4"), Some(7));
+        // Still downloading, and things that were never ours.
+        assert_eq!(id_from_name("12-photo.jpg.part"), None);
+        assert_eq!(id_from_name("notes.txt"), None);
+        assert_eq!(id_from_name(".DS_Store"), None);
+    }
 
     #[test]
     fn a_blocked_folder_is_reported_as_something_to_fix() {

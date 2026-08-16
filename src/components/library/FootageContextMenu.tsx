@@ -118,6 +118,7 @@ export function FootageContextMenu({
       // The scheme handler prefers the downloaded file, so re-asking for the
       // playback target is what switches previews over to it.
       qc.invalidateQueries({ queryKey: keys.playback(id) });
+      qc.invalidateQueries({ queryKey: keys.downloaded });
       toast.success(`Downloaded ${path.split(/[/\\]/).pop()}`, { id: t });
     } catch (e) {
       toast.dismiss(t);

@@ -89,6 +89,7 @@ export const ipc = {
     invoke<void>("set_thumbnail_from_bytes", { id, dataBase64 }),
   clearThumbnail: (id: number) => invoke<void>("clear_thumbnail", { id }),
   downloadOriginal: (id: number) => invoke<string>("download_original", { id }),
+  downloadedIds: () => invoke<number[]>("downloaded_ids"),
   previewFailure: (id: number) => invoke<string>("preview_failure", { id }),
   downloadDir: () => invoke<string>("download_dir"),
   setDownloadDir: (path: string) => invoke<string>("set_download_dir", { path }),

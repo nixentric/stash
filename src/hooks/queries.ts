@@ -17,6 +17,7 @@ export const keys = {
   detail: (id: number) => ["footage", "detail", id] as const,
   thumb: (id: number, large: boolean) => ["thumb", id, large] as const,
   playback: (id: number) => ["playback", id] as const,
+  downloaded: ["downloaded"] as const,
   tags: ["tags"] as const,
   collections: ["collections"] as const,
   projects: ["projects"] as const,
@@ -70,6 +71,21 @@ export const useFootage = (query: T.FootageQuery, enabled: boolean) =>
     // Keeps the previous page visible while a new filter loads, so the grid
     // never flashes empty mid-typing.
     placeholderData: (prev) => prev,
+  });
+
+/**
+ * Which footage has its original on disk, as one set for the whole grid.
+ *
+ * One directory read answers every card: asking per row would be a filesystem
+ * scan per row. Nothing outside Stash writes there, so it only needs
+ * refreshing when a download finishes.
+ */
+export const useDownloadedIds = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.downloaded,
+    queryFn: async () => new Set(await ipc.downloadedIds()),
+    enabled,
+    staleTime: 60_000,
   });
 
 export const useFootageIds = (query: T.FootageQuery, enabled: boolean) =>

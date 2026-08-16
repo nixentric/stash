@@ -171,6 +171,12 @@ pub async fn download_original(
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Which footage already has its original on disk, for the grid's badge.
+#[tauri::command]
+pub fn downloaded_ids(state: State<'_, AppState>) -> Result<Vec<i64>> {
+    Ok(preview::downloads::downloaded_ids(&state))
+}
+
 /// Why the preview came up empty, in the words the user needs.
 ///
 /// The `<img>` element reports only "it broke", so the reason has to be asked

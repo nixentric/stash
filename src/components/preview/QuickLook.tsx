@@ -313,6 +313,7 @@ function useDownload(id: number | null) {
       // The scheme handler prefers the downloaded file, so re-asking for the
       // playback target is all it takes to switch the preview over to it.
       await qc.invalidateQueries({ queryKey: keys.playback(id) });
+      qc.invalidateQueries({ queryKey: keys.downloaded });
       toast.success(`Downloaded ${path.split(/[/\\]/).pop()}`);
     } catch (e) {
       // Toast as well as inline: the embed fills the stage, so an inline-only

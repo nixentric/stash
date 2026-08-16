@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Heart, ImageOff, Link2, Play, Star, TriangleAlert } from "lucide-react";
+import { HardDriveDownload, Heart, ImageOff, Link2, Play, Star, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DotmSquare3 } from "@/components/ui/dotm-square-3";
 import { duration as fmtDuration, accessibilityLabel } from "@/lib/format";
@@ -8,6 +8,8 @@ import type { FootageListItem } from "@/lib/types";
 
 interface Props {
   item: FootageListItem;
+  /** The original is on this machine. One directory read answers the whole grid. */
+  downloaded: boolean;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
@@ -23,6 +25,7 @@ interface Props {
  */
 export const FootageCard = memo(function FootageCard({
   item,
+  downloaded,
   selected,
   onClick,
   onDoubleClick,
@@ -89,6 +92,17 @@ export const FootageCard = memo(function FootageCard({
         {item.favorite && (
           <span className="pointer-events-none absolute left-1 top-1">
             <Heart className="size-3.5 fill-destructive text-destructive drop-shadow" />
+          </span>
+        )}
+
+        {/* Bottom-left: the one corner the heart, the warning and the duration
+            do not use, so nothing has to move to make room for it. */}
+        {downloaded && (
+          <span
+            className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/55 p-0.5 backdrop-blur-sm"
+            title="Downloaded to this computer"
+          >
+            <HardDriveDownload className="size-3 text-success" />
           </span>
         )}
 
