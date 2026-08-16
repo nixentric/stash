@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.14 — 2026-08-16
+
+**macOS asks for permission instead of quietly refusing**
+
+- **The folder permission dialog finally appears.** The app bundle was missing the keys macOS requires before it will even ask about your Documents, Desktop or Downloads folder — and without them macOS does not ask, it refuses. That is the whole story behind a library that "could not be opened" while being in perfect health, and behind a download that failed with `Operation not permitted`. Stash now declares what it needs the access for, so macOS puts the question to you.
+- **A blocked folder says what to do about it.** `Operation not permitted (os error 1)` is not a sentence anyone can act on. It now names the folder and offers the two ways out — pick a downloads folder in Settings → Library, which grants access as a side effect of choosing it, or allow Stash under System Settings → Privacy & Security → Files and Folders.
+
+If you updated from an earlier version and macOS still will not ask, it is remembering its old answer. `tccutil reset SystemPolicyDocumentsFolder app.stash.footage` in Terminal clears it.
+
 ## v0.5.13 — 2026-08-16
 
 **A library that will not open says why**
