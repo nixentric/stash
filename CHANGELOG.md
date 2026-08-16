@@ -3,6 +3,26 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.12 — 2026-08-16
+
+**Drive photos open immediately, or you keep the file**
+
+- **A Drive photo shows up straight away.** A still cannot be drawn a piece at a time — the whole file has to arrive before the first pixel of it exists — so every Drive photo meant staring at a loader for as long as the download took, and at nothing at all when it failed. Photos now open through Google's own viewer, which paints as fast as Google can serve it. Video is unchanged: it streams, because a player genuinely can use the first few seconds before the rest arrives.
+- **Download keeps the original.** One button puts the real file in a `Downloaded` folder next to your library, and the preview switches to that copy — full quality, opens instantly the second time, and still works with the Google account disconnected. Progress is the real byte count, not a guess.
+- **Open Local shows you where it went.** Reveals the file in Finder, for a downloaded copy or for footage that was on this computer all along, with the full path on hover.
+- **A failed preview says why.** Instead of "Preview unavailable", it now names the cause: the account has no access, the file is in the trash, the sign-in expired, Google is rate-limiting, or the file is a RAW that no preview can decode — which no amount of retrying was ever going to fix.
+- **Where downloads go is yours to choose.** Settings → Library points them anywhere you like and takes the existing files along. There is a switch there to download automatically whenever you open a footage, off by default.
+
+**Settings tells you what it knows**
+
+- **The OAuth client says whether it is actually set.** Saved, secret missing, or not set at all — "an id with no secret" was the state that failed at connect time with nothing on screen to explain it.
+- **Development builds admit their limits.** They keep credentials in a temporary file the system can clear at any time, and cannot see what the released app saved. That is now written down where you would look for it, instead of appearing as a connection that mysteriously forgot itself.
+- **More room between settings.** The panes were tight enough that a label read as if it belonged to the control above it.
+
+**Also**
+
+- **Add Footage remembers which tab it opens on.** Pin it from the dialog or pick it in Settings → Library.
+
 ## v0.5.11 — 2026-08-16
 
 **Quick Look stops going blank**
