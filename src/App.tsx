@@ -18,7 +18,7 @@ import { AddFootageDialog } from "@/components/dialogs/AddFootageDialog";
 import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import { JobBanner } from "@/components/library/JobBanner";
-import { SourceFoldersPage } from "@/components/library/SourceFoldersPage";
+import { SourceFoldersPage, TaggedFolders } from "@/components/library/SourceFoldersPage";
 import { ManageTagsDialog } from "@/components/dialogs/ManageTagsDialog";
 import {
   BrandDialog,
@@ -368,13 +368,20 @@ export default function App() {
                 onEditElement={setElementDraft}
                 onEditAdditionalInfo={setAdditionalInfoDraft}
               />
-            ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage /> : <FootageGrid
-              items={items}
-              total={page.data?.total ?? 0}
-              loading={page.isLoading}
-              onAddFootage={() => setAddOpen(true)}
-              onSetThumbnail={setThumbnailFromDataUrl}
-            />}
+            ) : ui.view.kind === "sourceFolders" ? <SourceFoldersPage /> : (
+              <div className="flex h-full min-h-0 flex-col">
+                {ui.view.kind === "tag" && <TaggedFolders tag={ui.view.name} />}
+                <div className="min-h-0 flex-1">
+                  <FootageGrid
+                    items={items}
+                    total={page.data?.total ?? 0}
+                    loading={page.isLoading}
+                    onAddFootage={() => setAddOpen(true)}
+                    onSetThumbnail={setThumbnailFromDataUrl}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </main>
 

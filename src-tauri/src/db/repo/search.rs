@@ -24,6 +24,37 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
     let pattern = like_pattern(term);
     let mut hits = Vec::new();
 
+    // ── source folders ──────────────────────────────────────────────────────
+    // First in the list: a folder is the coarsest thing a query can mean, and
+    // opening one is usually cheaper than scrolling the assets under it. Folder
+    // tags match too, so a tag on a folder at least finds the folder itself.
+    // The path travels as the subtitle — it is both what to show and where
+    // clicking goes, so the hit needs no id of its own.
+    let mut stmt = conn.prepare(
+        "SELECT s.container_path FROM sources s
+          WHERE s.container_path IS NOT NULL AND s.container_path <> ''
+            AND (s.container_path LIKE ?1 ESCAPE '\\'
+              OR EXISTS (SELECT 1 FROM source_folder_tags sft JOIN tags t ON t.id = sft.tag_id
+                          WHERE sft.container_path = s.container_path
+                            AND t.name LIKE ?1 ESCAPE '\\'))
+          GROUP BY s.container_path ORDER BY s.container_path COLLATE NOCASE LIMIT ?2",
+    )?;
+    for row in stmt.query_map(rusqlite::params![pattern, PER_KIND], |r| {
+        let path: String = r.get(0)?;
+        Ok(SearchHit {
+            kind: "folder".into(),
+            id: 0,
+            title: path.rsplit('/').next().unwrap_or(&path).to_string(),
+            subtitle: path,
+            brand_id: None,
+            brand_name: String::new(),
+            hex: None,
+            url: None,
+        })
+    })? {
+        hits.push(row?);
+    }
+
     // ── assets ──────────────────────────────────────────────────────────────
     let page = footage::list(
         conn,
@@ -48,6 +79,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: None,
             brand_name: String::new(),
             hex: None,
+            url: None,
         });
     }
 
@@ -67,6 +99,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: Some(r.get(0)?),
             brand_name: r.get(1)?,
             hex: None,
+            url: None,
         })
     })? {
         hits.push(row?);
@@ -93,6 +126,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: Some(r.get(4)?),
             brand_name: brand,
             hex: Some(hex),
+            url: None,
         })
     })? {
         hits.push(row?);
@@ -119,6 +153,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: Some(r.get(4)?),
             brand_name: brand,
             hex: None,
+            url: None,
         })
     })? {
         hits.push(row?);
@@ -143,6 +178,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: Some(r.get(3)?),
             brand_name: brand,
             hex: None,
+            url: None,
         })
     })? {
         hits.push(row?);
@@ -167,6 +203,35 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: Some(r.get(3)?),
             brand_name: brand,
             hex: None,
+            url: None,
+        })
+    })? {
+        hits.push(row?);
+    }
+
+    // ── additional info ─────────────────────────────────────────────────────
+    // The body is searched too: a link entry is only ever found by its URL.
+    let mut stmt = conn.prepare(
+        "SELECT i.id, i.title, i.content_type, i.content, b.id, b.name FROM brand_additional_infos i
+           JOIN brands b ON b.id = i.brand_id
+          WHERE i.title LIKE ?1 ESCAPE '\\' OR i.content LIKE ?1 ESCAPE '\\'
+          ORDER BY b.name COLLATE NOCASE, i.position LIMIT ?2",
+    )?;
+    for row in stmt.query_map(rusqlite::params![pattern, PER_KIND], |r| {
+        let content_type: String = r.get(2)?;
+        let content: String = r.get(3)?;
+        let brand: String = r.get(5)?;
+        let is_url = content_type == "url" && !content.trim().is_empty();
+        Ok(SearchHit {
+            kind: "info".into(),
+            id: r.get(0)?,
+            // A link says more as itself than as the word "url".
+            subtitle: if is_url { format!("{brand} — {content}") } else { format!("{brand} — {content_type}") },
+            title: r.get(1)?,
+            brand_id: Some(r.get(4)?),
+            brand_name: brand,
+            hex: None,
+            url: is_url.then_some(content),
         })
     })? {
         hits.push(row?);
@@ -191,6 +256,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
             brand_id: Some(r.get(0)?),
             brand_name: brand,
             hex: None,
+            url: None,
         })
     })? {
         hits.push(row?);
@@ -203,7 +269,7 @@ pub fn universal(conn: &Connection, term: &str) -> Result<Vec<SearchHit>> {
 mod tests {
     use super::*;
     use crate::db::migrations::migrate;
-    use crate::db::models::{Brand, BrandColor, BrandLogo, BrandTypeface};
+    use crate::db::models::{Brand, BrandAdditionalInfo, BrandColor, BrandLogo, BrandTypeface};
     use crate::db::repo::brand;
 
     /// One asset, one brand, and a guideline that mentions red in three places.
@@ -248,6 +314,15 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
+        brand::save_additional_info(&c, &BrandAdditionalInfo {
+            brand_id: b,
+            title: "Press kit".into(),
+            editor_mode: "minimal".into(),
+            content_type: "url".into(),
+            content: "https://acme.example/press-red".into(),
+            ..Default::default()
+        })
+        .unwrap();
         c
     }
 
@@ -282,6 +357,33 @@ mod tests {
         let c = db();
         assert_eq!(kinds(&universal(&c, "inter").unwrap(), "typeface"), ["Inter Bold"]);
         assert_eq!(kinds(&universal(&c, "heading").unwrap(), "typeface"), ["Inter Bold"]);
+    }
+
+    #[test]
+    fn a_source_folder_is_findable_by_path_and_by_its_folder_tag() {
+        let c = db();
+        let by_path = universal(&c, "backgrounds").unwrap();
+        assert_eq!(kinds(&by_path, "folder"), ["Backgrounds"]);
+        assert_eq!(
+            by_path.iter().find(|h| h.kind == "folder").unwrap().subtitle,
+            "/Assets/Backgrounds",
+            "the full path travels with the hit — it is what clicking opens"
+        );
+        assert_eq!(by_path[0].kind, "folder", "folders rank above the assets inside them");
+
+        crate::db::repo::source_folder::set_tags(&c, "/Assets/Backgrounds", &["evergreen".into()])
+            .unwrap();
+        assert_eq!(kinds(&universal(&c, "evergreen").unwrap(), "folder"), ["Backgrounds"]);
+    }
+
+    #[test]
+    fn additional_info_matches_on_title_and_on_its_body() {
+        let c = db();
+        assert_eq!(kinds(&universal(&c, "press kit").unwrap(), "info"), ["Press kit"]);
+        assert_eq!(kinds(&universal(&c, "acme.example").unwrap(), "info"), ["Press kit"]);
+
+        let hit = universal(&c, "press kit").unwrap().into_iter().find(|h| h.kind == "info").unwrap();
+        assert_eq!(hit.url.as_deref(), Some("https://acme.example/press-red"), "a link hit opens the link");
     }
 
     #[test]

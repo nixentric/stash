@@ -31,6 +31,43 @@ import { emptyQuery, type FolderNode } from "@/lib/types";
 import { date, relativeDate } from "@/lib/format";
 import { ManageColumnsDialog } from "@/components/dialogs/ManageColumnsDialog";
 
+/**
+ * The folders carrying a tag, shown above the grid on a tag view.
+ *
+ * Without it a folder-only tag looks empty: the files are only tagged through
+ * their folder, and that link is off unless "folder tags cover the files
+ * inside" is on. The folders themselves carry the tag either way, so they are
+ * always worth showing.
+ */
+export function TaggedFolders({ tag }: { tag: string }) {
+  const { setView } = useUi();
+  const folders = useFolders(true);
+  const carrying = (folders.data ?? []).filter((f) => f.tags.includes(tag));
+  if (carrying.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3.5 py-2">
+      <span className="mr-0.5 text-[11px] uppercase tracking-wide text-subtle-foreground">
+        Folders
+      </span>
+      {carrying.map((f) => (
+        <button
+          key={f.containerPath}
+          type="button"
+          title={f.containerPath}
+          onClick={() => setView({ kind: "folder", path: f.containerPath })}
+          className="flex max-w-[16rem] items-center gap-1.5 rounded-md border border-border px-2 py-1
+                     text-[12px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+        >
+          <FolderTree className="size-3.5 shrink-0" />
+          <span className="truncate">{f.containerPath.split("/").pop() || f.containerPath}</span>
+          <span className="tnum shrink-0 text-[11px] text-subtle-foreground">{f.footageCount}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** One thumbnail in a folder's preview strip. */
 function Thumb({ id }: { id: number }) {
   const thumb = useThumbnail(id, true);

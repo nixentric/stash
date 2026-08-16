@@ -569,4 +569,6 @@ export interface SearchHit {
   brandId: number | null;
   brandName: string;
   hex: string | null;
+  /** Link-shaped hits (a URL Additional Info): clicking opens this. */
+  url: string | null;
 }

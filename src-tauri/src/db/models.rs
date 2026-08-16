@@ -480,6 +480,8 @@ pub struct SearchHit {
     pub brand_name: String,
     /// Present on colours, so the panel can paint a swatch and offer a copy.
     pub hex: Option<String>,
+    /// Present on link-shaped hits: clicking opens this instead of navigating.
+    pub url: Option<String>,
 }
 
 // ── query ───────────────────────────────────────────────────────────────────

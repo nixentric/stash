@@ -44,7 +44,7 @@ import {
   useStats,
 } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
-import { UniversalSearch } from "@/components/library/UniversalSearch";
+import { GROUPS, UniversalSearch } from "@/components/library/UniversalSearch";
 import { emptyQuery, type MediaType, type SortKey } from "@/lib/types";
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -74,6 +74,10 @@ export function Toolbar({
   const stats = useStats(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [scope, setScope] = useState<string | null>(null);
+  const scopeGroup = GROUPS.find(([k]) => k === scope);
+  const scopeLabel = scopeGroup?.[1] ?? "everything";
+  const ScopeIcon = scopeGroup?.[2] ?? Search;
 
   const {
     view,
@@ -199,7 +203,36 @@ export function Toolbar({
         </div>
 
         <div className="no-drag relative mx-auto w-full max-w-md">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-subtle-foreground" />
+          {/* Scope lives in the field, not in the results: picking "Colors"
+              before typing is how you look for a colour. The label is the
+              placeholder's job — keeping the trigger icon-sized means the
+              field never shifts as the scope changes. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute left-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded
+                         px-1 py-0.5 text-subtle-foreground hover:bg-accent hover:text-foreground"
+              aria-label={`Search in ${scopeLabel}`}
+              title={`Search in ${scopeLabel}`}
+            >
+              <ScopeIcon className="size-3.5" />
+              <ChevronDown className="size-2.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44">
+              <DropdownMenuLabel>Search in</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={scope ?? ""}
+                onValueChange={(v) => setScope(v || null)}
+              >
+                <DropdownMenuRadioItem value="">Everything</DropdownMenuRadioItem>
+                {GROUPS.map(([kind, label]) => (
+                  <DropdownMenuRadioItem key={kind} value={kind}>
+                    {label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Input
             ref={searchRef}
             value={search}
@@ -217,15 +250,21 @@ export function Toolbar({
                 setPanelOpen(false);
               }
             }}
-            placeholder="Search assets, tags, brands, colors, fonts…"
-            className="h-7 pl-7 pr-14"
+            placeholder={
+              scope ? `Search ${scopeLabel.toLowerCase()}…` : "Search assets, tags, brands, colors, fonts…"
+            }
+            className="h-7 pl-11 pr-14"
             aria-label="Search the library"
             autoComplete="off"
             autoCorrect="off"
             spellCheck="false"
           />
           {panelOpen && (
-            <UniversalSearch term={search} onNavigate={() => setPanelOpen(false)} />
+            <UniversalSearch
+              term={search}
+              only={scope}
+              onNavigate={() => setPanelOpen(false)}
+            />
           )}
           {search ? (
             <button

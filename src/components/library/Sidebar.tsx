@@ -244,7 +244,14 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand
                   onClick={() => setView({ kind: "tag", name: t.name })}
                   icon={<Hash />}
                   label={t.name}
-                  badge={t.footageCount}
+                  // A folder-only tag reaches no file until "folder tags cover
+                  // the files inside" is on. Showing a bare 0 makes that look
+                  // broken; the folder count says where the tag actually lives.
+                  badge={
+                    t.footageCount === 0 && t.folderCount > 0
+                      ? `${t.folderCount} folder${t.folderCount > 1 ? "s" : ""}`
+                      : t.footageCount
+                  }
                 />
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -376,7 +383,7 @@ function Row({
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
-  badge?: number;
+  badge?: number | string;
   tone?: "warn";
   style?: React.CSSProperties;
 }) {
@@ -397,9 +404,9 @@ function Row({
     >
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {badge != null && badge > 0 && (
+      {badge != null && badge !== 0 && (
         <span className="tnum shrink-0 text-[11px] text-subtle-foreground">
-          {count(badge)}
+          {typeof badge === "number" ? count(badge) : badge}
         </span>
       )}
     </button>
