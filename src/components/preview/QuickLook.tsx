@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FolderOpen,
   HardDriveDownload,
+  Trash2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { DotmSquare15 } from "@/components/ui/dotm-square-15";
 import { DotmSquare3 } from "@/components/ui/dotm-square-3";
 import { Kbd, Tooltip } from "@/components/ui/misc";
 import { asIpcError, ipc } from "@/lib/ipc";
-import { keys, reportError, useFootageDetail, usePrefs } from "@/hooks/queries";
+import { keys, reportError, useFootageAction, useFootageDetail, usePrefs } from "@/hooks/queries";
 import { useThumbnail } from "@/hooks/use-thumbnail";
 import {
   bytes,
@@ -48,7 +49,30 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
   });
 
   const download = useDownload(quickLookId);
+  const action = useFootageAction();
   const index = quickLookId != null ? orderedIds.indexOf(quickLookId) : -1;
+
+  /**
+   * Remove what is on screen, then land on the next one.
+   *
+   * The move happens before the list refreshes: after the invalidation the id
+   * is gone from `orderedIds`, and asking then would leave nowhere to go.
+   */
+  const remove = useCallback(() => {
+    if (quickLookId == null) return;
+    const next = orderedIds[index + 1] ?? orderedIds[index - 1] ?? null;
+    action.mutate(
+      { type: "remove", ids: [quickLookId] },
+      {
+        // Same wording as the grid: this is a catalog, and nothing in it can
+        // delete a file from Drive or from disk.
+        onSuccess: () =>
+          toast.success("Removed from the library. The original file was not touched."),
+      },
+    );
+    setQuickLookId(next);
+    if (next != null) select([next], next);
+  }, [quickLookId, index, orderedIds, action, setQuickLookId, select]);
 
   const t = target.data;
   const autoDownload = prefs.data?.autoDownload ?? false;
@@ -84,11 +108,14 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         step(1);
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        remove();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [quickLookId, index, orderedIds, setQuickLookId, select]);
+  }, [quickLookId, index, orderedIds, setQuickLookId, select, remove]);
 
   if (quickLookId == null) return null;
   const d = detail.data;
@@ -212,10 +239,26 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
             </Button>
           )}
 
+          <Tooltip content="Remove from the library. The original file is not touched.">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={remove}
+            >
+              <Trash2 />
+              Remove
+            </Button>
+          </Tooltip>
+
           <div className="hidden items-center gap-2 text-[11px] text-subtle-foreground sm:flex">
             <span className="flex items-center gap-1">
               <Kbd>←</Kbd>
               <Kbd>→</Kbd>
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>⌫</Kbd>
+              Remove
             </span>
             <span className="flex items-center gap-1">
               <Kbd>Esc</Kbd>

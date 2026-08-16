@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
@@ -8,6 +9,7 @@ import {
   ExternalLink,
   Eye,
   FolderInput,
+  HardDriveDownload,
   Hash,
   Heart,
   Image,
@@ -26,7 +28,7 @@ import {
   MenuShortcut,
 } from "@/components/ui/menu";
 import { ipc } from "@/lib/ipc";
-import { reportError, useCollections, useFootageAction, useProjects } from "@/hooks/queries";
+import { keys, reportError, useCollections, useFootageAction, useProjects } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
 import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { TagPromptDialog } from "@/components/dialogs/TagPromptDialog";
@@ -51,18 +53,30 @@ export function FootageContextMenu({
   onSetThumbnail: (id: number, dataUrl: string) => void;
 }) {
   const { selection, setQuickLookId } = useUi();
+  const qc = useQueryClient();
   const action = useFootageAction();
   const collections = useCollections(true);
   const projects = useProjects(true);
   const [markUsedOpen, setMarkUsedOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const ids = selection;
   const single = ids.length === 1 ? ids[0] : null;
   const many = ids.length > 1;
 
+  // Only the backend knows whether Download can do anything — it is false for
+  // local files and for anything already on disk. Asked when the menu opens,
+  // not on every selection change, and it shares QuickLook's cache entry.
+  const target = useQuery({
+    queryKey: keys.playback(single ?? -1),
+    queryFn: () => ipc.playbackTarget(single as number),
+    enabled: open && single != null,
+  });
+
   const selectedItems = items.filter((item) => ids.includes(item.id));
   const anyUnfavorited = selectedItems.length === 0 || selectedItems.some((item) => !item.favorite);
+  const anyUnused = selectedItems.length === 0 || selectedItems.some((item) => !item.usageCount);
 
   async function copyLink() {
     if (single == null) return;
@@ -95,6 +109,22 @@ export function FootageContextMenu({
     }
   }
 
+  async function downloadOriginal() {
+    if (single == null) return;
+    const id = single;
+    const t = toast.loading("Downloading the original…");
+    try {
+      const path = await ipc.downloadOriginal(id);
+      // The scheme handler prefers the downloaded file, so re-asking for the
+      // playback target is what switches previews over to it.
+      qc.invalidateQueries({ queryKey: keys.playback(id) });
+      toast.success(`Downloaded ${path.split(/[/\\]/).pop()}`, { id: t });
+    } catch (e) {
+      toast.dismiss(t);
+      reportError(e, "The download failed");
+    }
+  }
+
   async function chooseThumbnail() {
     if (single == null) return;
     const picked = await openFileDialog({
@@ -116,7 +146,7 @@ export function FootageContextMenu({
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu onOpenChange={setOpen}>
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent>
           {ids.length === 0 ? (
@@ -134,15 +164,17 @@ export function FootageContextMenu({
                 </>
               )}
 
-              <ContextMenuItem onSelect={() => setMarkUsedOpen(true)}>
-                <CircleCheck />
-                Mark as Used…
-              </ContextMenuItem>
+              {/* One entry that flips, the way Favorite already does: anything
+                  still unused offers Used, and a selection that is all used
+                  offers the way back. */}
               <ContextMenuItem
-                onSelect={() => action.mutate({ type: "markUnused", ids })}
+                onSelect={() =>
+                  anyUnused ? setMarkUsedOpen(true) : action.mutate({ type: "markUnused", ids })
+                }
               >
-                <CircleSlash />
-                Mark as Unused
+                {anyUnused ? <CircleCheck /> : <CircleSlash />}
+                {anyUnused ? "Mark as Used…" : "Mark as Unused"}
+                <MenuShortcut>U</MenuShortcut>
               </ContextMenuItem>
 
               <ContextMenuSeparator />
@@ -200,6 +232,12 @@ export function FootageContextMenu({
                     <ExternalLink />
                     Open Original
                   </ContextMenuItem>
+                  {target.data?.downloadable && (
+                    <ContextMenuItem onSelect={downloadOriginal}>
+                      <HardDriveDownload />
+                      Download Original
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem onSelect={chooseThumbnail}>
                     <Image />
                     Set Thumbnail…
