@@ -8,6 +8,7 @@ import {
   Cloud,
   Download,
   ExternalLink,
+  Heart,
   KeyRound,
   Loader2,
   Monitor,
@@ -246,6 +247,20 @@ function GeneralPane() {
         hint="Every edit commits to the library file immediately. There is no unsaved state to lose. Use Save a Copy from the library menu to snapshot or share it."
       >
         <span />
+      </Field>
+
+      <Field
+        label="Support Stash"
+        hint="Stash is built by one person and the builds are unsigned, which is why macOS warns on first launch and asks for your password again after every update. An Apple Developer membership ($99/year) is what fixes that. Everything stays as it is either way — same MIT licence, no telemetry, no paid tier."
+      >
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => ipc.openExternal("https://ko-fi.com/nixentric").catch(reportError)}
+        >
+          <Heart className="size-3.5" />
+          Support on Ko-fi
+        </Button>
       </Field>
     </Pane>
   );
