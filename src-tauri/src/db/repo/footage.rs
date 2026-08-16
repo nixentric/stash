@@ -389,22 +389,29 @@ pub fn folders(conn: &Connection) -> Result<Vec<FolderNode>> {
                 (SELECT b.id FROM source_folder_meta m JOIN brands b ON b.id = m.brand_id
                   WHERE m.container_path = s.container_path),
                 (SELECT b.name FROM source_folder_meta m JOIN brands b ON b.id = m.brand_id
-                  WHERE m.container_path = s.container_path)
+                  WHERE m.container_path = s.container_path),
+                (SELECT m.display_name FROM source_folder_meta m
+                  WHERE m.container_path = s.container_path),
+                -- Every Drive file in one container_path shares its parent, so any
+                -- row's container_id is the folder's id.
+                MAX(CASE WHEN s.provider = 'google_drive' THEN s.container_id END)
          FROM sources s JOIN footages f ON f.id = s.footage_id
          WHERE container_path IS NOT NULL AND container_path <> ''
          GROUP BY s.container_path ORDER BY s.container_path COLLATE NOCASE",
     )?;
     #[allow(clippy::type_complexity)]
-    let rows: Vec<(String, i64, i64, i64, Option<String>, String, String, Option<i64>, Option<String>)> = stmt
+    let rows: Vec<(String, i64, i64, i64, Option<String>, String, String, Option<i64>, Option<String>, Option<String>, Option<String>)> = stmt
         .query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(container_path, footage_count, used_count, unused_count, tags, added_at, updated_at, brand_id, brand_name)| {
+        .map(|(container_path, footage_count, used_count, unused_count, tags, added_at, updated_at, brand_id, brand_name, display_name, drive_folder_id)| {
             Ok(FolderNode {
                 fields: super::source_folder::values(conn, &container_path)?,
                 container_path,
+                display_name,
+                drive_folder_id,
                 footage_count,
                 used_count,
                 unused_count,

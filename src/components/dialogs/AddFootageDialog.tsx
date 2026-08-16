@@ -35,7 +35,13 @@ import { cn } from "@/lib/utils";
 import { bytes, duration as fmtDuration } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
 import { invalidateLibrary, keys, reportError, useCapabilities, usePrefs } from "@/hooks/queries";
-import type { AddFootageTab, BulkParseResult, NewFootage, ScannedItem } from "@/lib/types";
+import type {
+  AddFootageTab,
+  BulkParseResult,
+  DriveHit,
+  NewFootage,
+  ScannedItem,
+} from "@/lib/types";
 import { useUi } from "@/store/ui";
 
 interface Props {
@@ -149,6 +155,75 @@ export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) 
   );
 }
 
+// ── already-in-library notice ───────────────────────────────────────────────
+
+/**
+ * Takes the user to what a pasted link already points at.
+ *
+ * The folder view is the landing spot for both shapes: for an item it is where
+ * the file actually sits, and QuickLook then opens the file itself, so "go to
+ * item" ends on the item rather than somewhere near it.
+ */
+function useGoToHit(onDone: () => void) {
+  const { setView, select, setQuickLookId } = useUi();
+  return (hit: DriveHit) => {
+    setView(hit.containerPath ? { kind: "folder", path: hit.containerPath } : { kind: "all" });
+    if (hit.footageId != null) {
+      // After setView: switching a view clears the selection.
+      select([hit.footageId]);
+      setQuickLookId(hit.footageId);
+    }
+    onDone();
+  };
+}
+
+/**
+ * Says which pasted links are already catalogued, before the user imports them.
+ *
+ * The import itself already skips duplicates (§30), but silently — and "Added 0"
+ * with no explanation reads as a failure. Naming what was already here, with a
+ * way to go look at it, is the difference.
+ */
+function AlreadyInLibrary({ hits, onGo }: { hits: DriveHit[]; onGo: (h: DriveHit) => void }) {
+  if (hits.length === 0) return null;
+  return (
+    <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5">
+      <p className="text-[12.5px] font-medium">
+        {hits.length === 1
+          ? "This link is already in your library"
+          : `${hits.length} of these links are already in your library`}
+      </p>
+      <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+        Importing again adds nothing: footage is identified by its Drive id, so nothing is
+        duplicated and nothing is lost.
+      </p>
+      <div className="mt-2 flex flex-col gap-1">
+        {hits.slice(0, 6).map((h) => (
+          <div key={h.externalId} className="flex items-center gap-2">
+            {h.kind === "folder" ? (
+              <FolderTree className="size-3.5 shrink-0 text-subtle-foreground" />
+            ) : (
+              <Link2 className="size-3.5 shrink-0 text-subtle-foreground" />
+            )}
+            <span className="min-w-0 flex-1 truncate text-[12px]">
+              {h.name}
+              {h.kind === "folder" && (
+                <span className="text-subtle-foreground"> · {h.count} file(s) imported</span>
+              )}
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => onGo(h)}>
+              {h.kind === "folder" ? "Open folder" : "Go to item"}
+            </Button>
+          </div>
+        ))}
+        {hits.length > 6 && (
+          <p className="text-[11.5px] text-subtle-foreground">and {hits.length - 6} more</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── links ───────────────────────────────────────────────────────────────────
 
 function LinksTab({
@@ -168,6 +243,8 @@ function LinksTab({
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState<BulkParseResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [known, setKnown] = useState<DriveHit[]>([]);
+  const goToHit = useGoToHit(onDone);
 
   // No clipboard probing here. Reading the clipboard without a user gesture
   // makes WebKit show its own native "Paste" permission button over the app,
@@ -184,6 +261,26 @@ function LinksTab({
     }, 200);
     return () => clearTimeout(t);
   }, [text]);
+
+  // Both shapes are worth checking: a file id says "this clip is here", a folder
+  // id says "you already imported this folder".
+  useEffect(() => {
+    const ids = (parsed?.entries ?? [])
+      .map((e) => e.source.externalId)
+      .filter((id): id is string => !!id);
+    if (ids.length === 0) {
+      setKnown([]);
+      return;
+    }
+    let alive = true;
+    ipc
+      .checkDriveIds(ids)
+      .then((hits) => alive && setKnown(hits))
+      .catch(() => alive && setKnown([]));
+    return () => {
+      alive = false;
+    };
+  }, [parsed]);
 
   const folders = parsed?.entries.filter((e) => e.source.kind === "container") ?? [];
   const items = parsed?.entries.filter((e) => e.source.kind === "item") ?? [];
@@ -240,6 +337,8 @@ function LinksTab({
           }
           className="min-h-[9rem] font-mono text-[12px]"
         />
+
+        <AlreadyInLibrary hits={known} onGo={goToHit} />
 
         {folders.length > 0 && (
           <FolderNotice
@@ -474,8 +573,33 @@ function DriveTab({
     { id: "root", name: "My Drive" },
   ]);
   const [browse, setBrowse] = useState<ScannedItem[] | null>(null);
+  const [known, setKnown] = useState<DriveHit[]>([]);
+  const goToHit = useGoToHit(onDone);
 
   const currentFolder = crumbs.at(-1)?.id ?? "root";
+
+  // A folder link that was already imported is worth saying before the scan, not
+  // after it: the scan can take a minute on a big folder.
+  useEffect(() => {
+    if (!url.trim()) {
+      setKnown([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const parsed = await ipc.parseSourceInput(url.trim());
+        const hits = parsed?.externalId ? await ipc.checkDriveIds([parsed.externalId]) : [];
+        if (alive) setKnown(hits);
+      } catch {
+        if (alive) setKnown([]);
+      }
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [url]);
 
   useEffect(() => {
     if (!connected) return;
@@ -601,6 +725,8 @@ function DriveTab({
             Scan
           </Button>
         </div>
+
+        <AlreadyInLibrary hits={known} onGo={goToHit} />
 
         <label className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
           <Checkbox

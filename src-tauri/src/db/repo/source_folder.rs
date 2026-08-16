@@ -84,6 +84,22 @@ pub fn set_brand(conn: &Connection, path: &str, brand_id: Option<i64>) -> Result
     Ok(())
 }
 
+/// Renames a folder — the label only. The path stays what it is, because it is
+/// what every footage row, tag and column value is keyed by. An empty name drops
+/// back to showing the path alone.
+pub fn set_name(conn: &Connection, path: &str, name: &str) -> Result<()> {
+    let path = path.trim();
+    if path.is_empty() { return Err(AppError::Invalid("Folder path cannot be empty".into())); }
+    let name = name.trim();
+    if name.chars().count() > 128 { return Err(AppError::Invalid("Folder name is too long".into())); }
+    touch(conn, path)?;
+    conn.execute(
+        "UPDATE source_folder_meta SET display_name = ?2 WHERE container_path = ?1",
+        params![path, (!name.is_empty()).then_some(name)],
+    )?;
+    Ok(())
+}
+
 /// The brand newly catalogued folders start on, or none.
 ///
 /// Kept in the library file rather than app prefs because a brand id only means
@@ -227,6 +243,36 @@ mod tests {
         set_field_value(&c, "Drive/KOL", field, "Serang").unwrap();
         let after_field = footage::folders(&c).unwrap().remove(0).updated_at;
         assert!(after_field >= f.updated_at, "column edit moved updated too");
+    }
+
+    /// A rename is a label, not a move: the path every footage row is keyed by
+    /// must survive it, and clearing the name must fall back to the path.
+    #[test]
+    fn renaming_a_folder_keeps_its_path_and_its_drive_link() {
+        let c = db();
+        c.execute(
+            "INSERT INTO footages (id, display_name, media_type, date_added, date_modified)
+             VALUES (2, 'drive clip', 'video', '2026-01-06', '2026-02-11')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO sources (footage_id, provider, external_id, container_id, container_path)
+             VALUES (2, 'google_drive', 'FILE1', 'FOLDER1', 'Drive/KOL')",
+            [],
+        )
+        .unwrap();
+
+        set_name(&c, "Drive/KOL", "Initial Folder").unwrap();
+        let f = footage::folders(&c).unwrap().remove(0);
+        assert_eq!(f.container_path, "Drive/KOL", "the path is the identity, untouched");
+        assert_eq!(f.display_name.as_deref(), Some("Initial Folder"));
+        assert_eq!(f.drive_folder_id.as_deref(), Some("FOLDER1"), "links back to Drive");
+        assert_eq!(f.footage_count, 2, "renaming moved no footage");
+
+        set_name(&c, "Drive/KOL", "  ").unwrap();
+        let f = footage::folders(&c).unwrap().remove(0);
+        assert!(f.display_name.is_none(), "an empty name falls back to the path");
     }
 
     #[test]

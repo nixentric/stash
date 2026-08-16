@@ -33,6 +33,7 @@ export const ipc = {
   createFolderField: (name: string) => invoke<number>("create_folder_field", { name }),
   deleteFolderField: (id: number) => invoke<void>("delete_folder_field", { id }),
   deleteFolder: (path: string) => invoke<number>("delete_folder", { path }),
+  setFolderName: (path: string, name: string) => invoke<void>("set_folder_name", { path, name }),
   setFolderTags: (path: string, tags: string[]) => invoke<void>("set_folder_tags", { path, tags }),
   setFolderFieldValue: (path: string, fieldId: number, value: string) =>
     invoke<void>("set_folder_field_value", { path, fieldId, value }),
@@ -100,6 +101,7 @@ export const ipc = {
   parseBulkInput: (text: string) => invoke<T.BulkParseResult>("parse_bulk_input", { text }),
   importFootage: (items: T.NewFootage[]) =>
     invoke<T.ImportOutcome>("import_footage", { items }),
+  checkDriveIds: (ids: string[]) => invoke<T.DriveHit[]>("check_drive_ids", { ids }),
   scanDriveFolder: (folderId: string, recursive: boolean) =>
     invoke<T.ScanResult>("scan_drive_folder", { folderId, recursive }),
   browseDrive: (folderId: string | null) =>

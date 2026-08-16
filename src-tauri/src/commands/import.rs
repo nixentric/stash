@@ -5,6 +5,7 @@ use crate::gdrive::client::{DriveFile, FOLDER_MIME, SHORTCUT_MIME};
 use crate::jobs::JobProgress;
 use crate::source::{self, bulk, ParsedSource};
 use crate::state::AppState;
+use rusqlite::OptionalExtension;
 use serde::Serialize;
 use tauri::{Emitter, State};
 
@@ -96,6 +97,95 @@ pub fn import_footage(state: State<'_, AppState>, items: Vec<NewFootage>) -> Res
     })?;
 
     Ok(outcome)
+}
+
+/// What a pasted Drive id already is in this library: a catalogued file, or the
+/// folder a batch of them came from.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DriveHit {
+    pub external_id: String,
+    /// "item" or "folder" — what the id turned out to be here.
+    pub kind: &'static str,
+    pub footage_id: Option<i64>,
+    pub name: String,
+    pub container_path: Option<String>,
+    /// Files already catalogued under it. 1 for an item hit.
+    pub count: i64,
+}
+
+/// Which of these Drive ids are already in the library (§30).
+///
+/// Answers for both shapes a pasted link can have: a file id is matched against
+/// `sources.external_id`, a folder id against the `container_id` its files were
+/// imported under — so "this folder is already here" is knowable without the
+/// Drive API, from what the library itself recorded at import time.
+#[tauri::command]
+pub fn check_drive_ids(state: State<'_, AppState>, ids: Vec<String>) -> Result<Vec<DriveHit>> {
+    if ids.is_empty() || !state.is_open() {
+        return Ok(Vec::new());
+    }
+    state.with_library(|lib| {
+        let mut hits = Vec::new();
+        for id in ids.iter().take(500) {
+            let item = lib
+                .conn
+                .query_row(
+                    "SELECT f.id, f.display_name, s.container_path
+                       FROM sources s JOIN footages f ON f.id = s.footage_id
+                      WHERE s.provider = 'google_drive' AND s.external_id = ?1",
+                    [id],
+                    |r| {
+                        Ok((
+                            r.get::<_, i64>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, Option<String>>(2)?,
+                        ))
+                    },
+                )
+                .optional()?;
+
+            if let Some((footage_id, name, container_path)) = item {
+                hits.push(DriveHit {
+                    external_id: id.clone(),
+                    kind: "item",
+                    footage_id: Some(footage_id),
+                    name,
+                    container_path,
+                    count: 1,
+                });
+                continue;
+            }
+
+            let folder = lib
+                .conn
+                .query_row(
+                    "SELECT container_path, COUNT(*) FROM sources
+                      WHERE provider = 'google_drive' AND container_id = ?1
+                        AND container_path IS NOT NULL AND container_path <> ''
+                      GROUP BY container_path ORDER BY COUNT(*) DESC",
+                    [id],
+                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)),
+                )
+                .optional()?;
+
+            if let Some((container_path, count)) = folder {
+                hits.push(DriveHit {
+                    external_id: id.clone(),
+                    kind: "folder",
+                    footage_id: None,
+                    name: container_path
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&container_path)
+                        .to_string(),
+                    container_path: Some(container_path),
+                    count,
+                });
+            }
+        }
+        Ok(hits)
+    })
 }
 
 // ── Drive folder scanning (connected mode only) ─────────────────────────────

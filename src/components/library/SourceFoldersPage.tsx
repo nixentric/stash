@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
+  ExternalLink,
   FolderTree,
   ImageOff,
   Pencil,
@@ -14,6 +15,14 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/menu";
+import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import {
   Dialog,
   DialogBody,
@@ -60,13 +69,18 @@ export function TaggedFolders({ tag }: { tag: string }) {
                      text-[12px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
         >
           <FolderTree className="size-3.5 shrink-0" />
-          <span className="truncate">{f.containerPath.split("/").pop() || f.containerPath}</span>
+          <span className="truncate">
+            {f.displayName ?? (f.containerPath.split("/").pop() || f.containerPath)}
+          </span>
           <span className="tnum shrink-0 text-[11px] text-subtle-foreground">{f.footageCount}</span>
         </button>
       ))}
     </div>
   );
 }
+
+/** Where a Drive folder lives on the web. Its id is all the URL needs. */
+export const driveFolderUrl = (id: string) => `https://drive.google.com/drive/folders/${id}`;
 
 /** One thumbnail in a folder's preview strip. */
 function Thumb({ id }: { id: number }) {
@@ -165,7 +179,8 @@ type Sort = { key: SortKey; dir: 1 | -1 };
 /** Dates are ISO-8601, so string order is chronological order — no parsing. */
 function sortValue(folder: FolderNode, key: SortKey): string | number {
   switch (key) {
-    case "path": return folder.containerPath.toLowerCase();
+    // Sorts by the name on screen, so a renamed folder lands where the eye looks for it.
+    case "path": return (folder.displayName ?? folder.containerPath).toLowerCase();
     case "used": return folder.usedCount;
     case "brand": return folder.brandName?.toLowerCase() ?? "";
     case "added": return folder.addedAt;
@@ -254,6 +269,7 @@ export function SourceFoldersPage() {
   const [sort, setSort] = useState<Sort>({ key: "added", dir: -1 });
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [renaming, setRenaming] = useState<FolderNode | null>(null);
 
   // States for inline editing
   const [multipleTagFields, setMultipleTagFields] = useState<number[]>(() => {
@@ -468,274 +484,101 @@ export function SourceFoldersPage() {
           </thead>
           <tbody>
             {rows.map((folder) => (
-              <tr
-                key={folder.containerPath}
-                role="button"
-                tabIndex={0}
-                onClick={() => setView({ kind: "folder", path: folder.containerPath })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setView({ kind: "folder", path: folder.containerPath });
-                  }
-                }}
-                className="cursor-pointer border-b border-border outline-none
-                           transition-colors last:border-0 hover:bg-accent/50 focus-visible:ring-2
-                           focus-visible:ring-ring/50"
-              >
-                <td className="w-[116px] min-w-[116px] px-3 py-2.5">
-                  <FolderPreview path={folder.containerPath} />
-                </td>
-                <td className="max-w-[22rem] min-w-[12rem] px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FolderTree className="size-4 shrink-0 text-subtle-foreground" />
-                    <span className="truncate text-[13px]">{folder.containerPath}</span>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5 min-w-[10rem]" onClick={(e) => e.stopPropagation()}>
-                  {editingBrandPath === folder.containerPath ? (
-                    <div className="flex items-center gap-1.5 w-36">
-                      <div className="flex-1 min-w-0">
-                        <Select
-                          value={folder.brandName ?? NO_BRAND}
-                          options={brandOptions}
-                          onChange={async (newBrandName) => {
-                            try {
-                              const selectedBrandId = (brands.data ?? []).find((b) => b.name === newBrandName)?.id ?? null;
-                              await ipc.setFolderBrand(folder.containerPath, selectedBrandId);
-                              invalidateLibrary(qc);
-                            } catch (err) {
-                              reportError(err, "Could not update folder brand");
-                            }
-                            setEditingBrandPath(null);
-                          }}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        title="Cancel"
-                        onClick={() => setEditingBrandPath(null)}
-                        className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground shrink-0"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 group/cell">
-                      {folder.brandName ? (
-                        <>
-                          <FacetChip
-                            facet={{ fieldId: "brand", label: "Brand", value: folder.brandName }}
-                            active={isActive({ fieldId: "brand", label: "Brand", value: folder.brandName })}
-                            onToggle={toggleFacet}
-                          />
-                          <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
-                            <button
-                              type="button"
-                              title="Change brand"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingBrandPath(folder.containerPath);
-                              }}
-                              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                              <Pencil className="size-3" />
-                            </button>
-                            <button
-                              type="button"
-                              title="Clear brand"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await ipc.setFolderBrand(folder.containerPath, null);
-                                  invalidateLibrary(qc);
-                                } catch (err) {
-                                  reportError(err, "Could not clear brand");
-                                }
-                              }}
-                              className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            >
-                              <X className="size-3" />
-                            </button>
+              <ContextMenu key={folder.containerPath}>
+                <ContextMenuTrigger asChild>
+                <tr
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setView({ kind: "folder", path: folder.containerPath })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setView({ kind: "folder", path: folder.containerPath });
+                    }
+                  }}
+                  className="cursor-pointer border-b border-border outline-none
+                             transition-colors last:border-0 hover:bg-accent/50 focus-visible:ring-2
+                             focus-visible:ring-ring/50"
+                >
+                  <td className="w-[116px] min-w-[116px] px-3 py-2.5">
+                    <FolderPreview path={folder.containerPath} />
+                  </td>
+                  <td className="max-w-[22rem] min-w-[12rem] px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FolderTree className="size-4 shrink-0 text-subtle-foreground" />
+                      {/* The custom name never replaces the path: a label that hides
+                          where the files came from is worse than no label. */}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px]" title={folder.containerPath}>
+                          {folder.displayName ?? folder.containerPath}
+                        </div>
+                        {folder.displayName && (
+                          <div className="truncate text-[11px] text-subtle-foreground">
+                            {folder.containerPath}
                           </div>
-                        </>
-                      ) : (
+                        )}
+                      </div>
+                      {folder.driveFolderId && (
                         <button
                           type="button"
-                          title="Set brand"
+                          title="Open original folder in Google Drive"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setEditingBrandPath(folder.containerPath);
+                            ipc
+                              .openExternal(driveFolderUrl(folder.driveFolderId!))
+                              .catch((err) => reportError(err, "Could not open Drive"));
                           }}
-                          className="flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[11px] text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground"
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
-                          <Plus className="size-3" />
+                          <ExternalLink className="size-3.5" />
                         </button>
                       )}
                     </div>
-                  )}
-                </td>
-                {/* One column, because "0 used" next to "3 unused" spent two
-                    columns repeating the headers. */}
-                <td
-                  className="whitespace-nowrap px-3 py-2.5 text-[13px] tnum"
-                  title={`${folder.usedCount} used, ${folder.unusedCount} unused`}
-                >
-                  <span className={folder.usedCount > 0 ? "text-success" : "text-subtle-foreground"}>
-                    {folder.usedCount}
-                  </span>
-                  <span className="text-subtle-foreground"> / {folder.footageCount}</span>
-                </td>
-                <td className="px-3 py-2.5 min-w-[14rem]" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex flex-wrap items-center gap-1.5 group/cell">
-                    {editingTagsPath === folder.containerPath ? (
-                      <>
-                        {folder.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px]"
-                          >
-                            {t}
-                            <button
-                              type="button"
-                              aria-label={`Remove tag ${t}`}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const newTags = folder.tags.filter((x) => x !== t);
-                                try {
-                                  await ipc.setFolderTags(folder.containerPath, newTags);
-                                  invalidateLibrary(qc);
-                                } catch (err) {
-                                  reportError(err, "Could not remove tag");
-                                }
-                              }}
-                              className="text-subtle-foreground transition-colors hover:text-foreground"
-                            >
-                              <X className="size-2.5" />
-                            </button>
-                          </span>
-                        ))}
-                        <div className="relative flex items-center gap-1">
-                          <input
-                            type="text"
-                            // Same reason as ui/input.tsx: tag names are labels, not prose,
-                            // and macOS rewriting one mid-type creates a tag you never wanted.
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="off"
-                            spellCheck={false}
-                            placeholder="Add tag..."
-                            value={tagInputText}
-                            onChange={(e) => {
-                              setTagInputText(e.target.value);
-                              setHighlightIdx(0);
-                            }}
-                            onKeyDown={async (e) => {
-                              e.stopPropagation();
-                              if (e.key === "Enter" || e.key === ",") {
-                                e.preventDefault();
-                                const selected = tagSuggestions[highlightIdx] ?? tagInputText;
-                                if (selected.trim()) {
-                                  await commitTag(folder.containerPath, folder.tags, selected);
-                                } else {
-                                  setEditingTagsPath(null);
-                                }
-                              } else if (e.key === "Escape") {
-                                setEditingTagsPath(null);
-                              } else if (e.key === "ArrowDown" && tagSuggestions.length) {
-                                e.preventDefault();
-                                setHighlightIdx((h) => (h + 1) % tagSuggestions.length);
-                              } else if (e.key === "ArrowUp" && tagSuggestions.length) {
-                                e.preventDefault();
-                                setHighlightIdx((h) => (h - 1 + tagSuggestions.length) % tagSuggestions.length);
+                  </td>
+                  <td className="px-3 py-2.5 min-w-[10rem]" onClick={(e) => e.stopPropagation()}>
+                    {editingBrandPath === folder.containerPath ? (
+                      <div className="flex items-center gap-1.5 w-36">
+                        <div className="flex-1 min-w-0">
+                          <Select
+                            value={folder.brandName ?? NO_BRAND}
+                            options={brandOptions}
+                            onChange={async (newBrandName) => {
+                              try {
+                                const selectedBrandId = (brands.data ?? []).find((b) => b.name === newBrandName)?.id ?? null;
+                                await ipc.setFolderBrand(folder.containerPath, selectedBrandId);
+                                invalidateLibrary(qc);
+                              } catch (err) {
+                                reportError(err, "Could not update folder brand");
                               }
+                              setEditingBrandPath(null);
                             }}
-                            onBlur={() => {
-                              setTimeout(() => setEditingTagsPath(null), 200);
-                            }}
-                            className="h-5 w-24 rounded border border-input bg-surface px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            autoFocus
                           />
-                          <button
-                            type="button"
-                            title="Done editing"
-                            onMouseDown={async (e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (tagInputText.trim()) {
-                                await commitTag(folder.containerPath, folder.tags, tagInputText);
-                              }
-                              setEditingTagsPath(null);
-                            }}
-                            className="rounded p-0.5 text-success hover:bg-success/15 hover:text-success/90 shrink-0"
-                          >
-                            <Check className="size-3.5" />
-                          </button>
-                          {tagSuggestions.length > 0 && (
-                            <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
-                              {tagSuggestions.map((s, idx) => (
-                                <button
-                                  key={s}
-                                  type="button"
-                                  onMouseDown={async (ev) => {
-                                    ev.preventDefault();
-                                    ev.stopPropagation();
-                                    await commitTag(folder.containerPath, folder.tags, s);
-                                  }}
-                                  className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
-                                    idx === highlightIdx
-                                      ? "bg-primary text-primary-foreground"
-                                      : "text-foreground hover:bg-accent"
-                                  }`}
-                                >
-                                  {s}
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
-                      </>
+                        <button
+                          type="button"
+                          title="Cancel"
+                          onClick={() => setEditingBrandPath(null)}
+                          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground shrink-0"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
                     ) : (
-                      <>
-                        {folder.tags.length === 0 ? (
+                      <div className="flex items-center gap-1.5 group/cell">
+                        {folder.brandName ? (
                           <>
-                            <span className="text-[12px] text-subtle-foreground">—</span>
-                            <button
-                              type="button"
-                              title="Add tag"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingTagsPath(folder.containerPath);
-                                setTagInputText("");
-                                setHighlightIdx(0);
-                              }}
-                              className="flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[11px] text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground"
-                            >
-                              <Plus className="size-3" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            {folder.tags.map((t) => {
-                              const f: Facet = { fieldId: null, label: "Tag", value: t };
-                              return (
-                                <FacetChip
-                                  key={t}
-                                  facet={f}
-                                  active={isActive(f)}
-                                  onToggle={toggleFacet}
-                                />
-                              );
-                            })}
+                            <FacetChip
+                              facet={{ fieldId: "brand", label: "Brand", value: folder.brandName }}
+                              active={isActive({ fieldId: "brand", label: "Brand", value: folder.brandName })}
+                              onToggle={toggleFacet}
+                            />
                             <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
                               <button
                                 type="button"
-                                title="Edit tags"
+                                title="Change brand"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setEditingTagsPath(folder.containerPath);
-                                  setTagInputText("");
-                                  setHighlightIdx(0);
+                                  setEditingBrandPath(folder.containerPath);
                                 }}
                                 className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                               >
@@ -743,14 +586,14 @@ export function SourceFoldersPage() {
                               </button>
                               <button
                                 type="button"
-                                title="Clear all tags"
+                                title="Clear brand"
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   try {
-                                    await ipc.setFolderTags(folder.containerPath, []);
+                                    await ipc.setFolderBrand(folder.containerPath, null);
                                     invalidateLibrary(qc);
                                   } catch (err) {
-                                    reportError(err, "Could not clear tags");
+                                    reportError(err, "Could not clear brand");
                                   }
                                 }}
                                 className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
@@ -759,67 +602,309 @@ export function SourceFoldersPage() {
                               </button>
                             </div>
                           </>
+                        ) : (
+                          <button
+                            type="button"
+                            title="Set brand"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingBrandPath(folder.containerPath);
+                            }}
+                            className="flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[11px] text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground"
+                          >
+                            <Plus className="size-3" />
+                          </button>
                         )}
-                      </>
+                      </div>
                     )}
-                  </div>
-                </td>
-                {customColumns.map((c) => {
-                  const rawValue = folder.fields.find((f) => f.fieldId === c.id)?.value ?? "";
-                  const isMultiple = multipleTagFields.includes(c.id);
-                  const currentTags = rawValue.split(",").map((t) => t.trim()).filter(Boolean);
-                  const isEditing = editingColumnPath === folder.containerPath && editingColumnId === c.id;
-
-                  return (
-                    <td key={c.id} className="px-3 py-2.5 min-w-[10rem]" onClick={(e) => e.stopPropagation()}>
-                      {isEditing ? (
-                        isMultiple ? (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {currentTags.map((t) => (
-                              <span
-                                key={t}
-                                className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px]"
+                  </td>
+                  {/* One column, because "0 used" next to "3 unused" spent two
+                      columns repeating the headers. */}
+                  <td
+                    className="whitespace-nowrap px-3 py-2.5 text-[13px] tnum"
+                    title={`${folder.usedCount} used, ${folder.unusedCount} unused`}
+                  >
+                    <span className={folder.usedCount > 0 ? "text-success" : "text-subtle-foreground"}>
+                      {folder.usedCount}
+                    </span>
+                    <span className="text-subtle-foreground"> / {folder.footageCount}</span>
+                  </td>
+                  <td className="px-3 py-2.5 min-w-[14rem]" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-wrap items-center gap-1.5 group/cell">
+                      {editingTagsPath === folder.containerPath ? (
+                        <>
+                          {folder.tags.map((t) => (
+                            <span
+                              key={t}
+                              className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px]"
+                            >
+                              {t}
+                              <button
+                                type="button"
+                                aria-label={`Remove tag ${t}`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const newTags = folder.tags.filter((x) => x !== t);
+                                  try {
+                                    await ipc.setFolderTags(folder.containerPath, newTags);
+                                    invalidateLibrary(qc);
+                                  } catch (err) {
+                                    reportError(err, "Could not remove tag");
+                                  }
+                                }}
+                                className="text-subtle-foreground transition-colors hover:text-foreground"
                               >
-                                {t}
+                                <X className="size-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                          <div className="relative flex items-center gap-1">
+                            <input
+                              type="text"
+                              // Same reason as ui/input.tsx: tag names are labels, not prose,
+                              // and macOS rewriting one mid-type creates a tag you never wanted.
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                              placeholder="Add tag..."
+                              value={tagInputText}
+                              onChange={(e) => {
+                                setTagInputText(e.target.value);
+                                setHighlightIdx(0);
+                              }}
+                              onKeyDown={async (e) => {
+                                e.stopPropagation();
+                                if (e.key === "Enter" || e.key === ",") {
+                                  e.preventDefault();
+                                  const selected = tagSuggestions[highlightIdx] ?? tagInputText;
+                                  if (selected.trim()) {
+                                    await commitTag(folder.containerPath, folder.tags, selected);
+                                  } else {
+                                    setEditingTagsPath(null);
+                                  }
+                                } else if (e.key === "Escape") {
+                                  setEditingTagsPath(null);
+                                } else if (e.key === "ArrowDown" && tagSuggestions.length) {
+                                  e.preventDefault();
+                                  setHighlightIdx((h) => (h + 1) % tagSuggestions.length);
+                                } else if (e.key === "ArrowUp" && tagSuggestions.length) {
+                                  e.preventDefault();
+                                  setHighlightIdx((h) => (h - 1 + tagSuggestions.length) % tagSuggestions.length);
+                                }
+                              }}
+                              onBlur={() => {
+                                setTimeout(() => setEditingTagsPath(null), 200);
+                              }}
+                              className="h-5 w-24 rounded border border-input bg-surface px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              title="Done editing"
+                              onMouseDown={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (tagInputText.trim()) {
+                                  await commitTag(folder.containerPath, folder.tags, tagInputText);
+                                }
+                                setEditingTagsPath(null);
+                              }}
+                              className="rounded p-0.5 text-success hover:bg-success/15 hover:text-success/90 shrink-0"
+                            >
+                              <Check className="size-3.5" />
+                            </button>
+                            {tagSuggestions.length > 0 && (
+                              <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                                {tagSuggestions.map((s, idx) => (
+                                  <button
+                                    key={s}
+                                    type="button"
+                                    onMouseDown={async (ev) => {
+                                      ev.preventDefault();
+                                      ev.stopPropagation();
+                                      await commitTag(folder.containerPath, folder.tags, s);
+                                    }}
+                                    className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+                                      idx === highlightIdx
+                                        ? "bg-primary text-primary-foreground"
+                                        : "text-foreground hover:bg-accent"
+                                    }`}
+                                  >
+                                    {s}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {folder.tags.length === 0 ? (
+                            <>
+                              <span className="text-[12px] text-subtle-foreground">—</span>
+                              <button
+                                type="button"
+                                title="Add tag"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTagsPath(folder.containerPath);
+                                  setTagInputText("");
+                                  setHighlightIdx(0);
+                                }}
+                                className="flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[11px] text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground"
+                              >
+                                <Plus className="size-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {folder.tags.map((t) => {
+                                const f: Facet = { fieldId: null, label: "Tag", value: t };
+                                return (
+                                  <FacetChip
+                                    key={t}
+                                    facet={f}
+                                    active={isActive(f)}
+                                    onToggle={toggleFacet}
+                                  />
+                                );
+                              })}
+                              <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
                                 <button
                                   type="button"
-                                  aria-label={`Remove tag ${t}`}
+                                  title="Edit tags"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingTagsPath(folder.containerPath);
+                                    setTagInputText("");
+                                    setHighlightIdx(0);
+                                  }}
+                                  className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                  <Pencil className="size-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Clear all tags"
                                   onClick={async (e) => {
                                     e.stopPropagation();
-                                    const newTags = currentTags.filter((x) => x !== t);
                                     try {
-                                      await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
+                                      await ipc.setFolderTags(folder.containerPath, []);
                                       invalidateLibrary(qc);
                                     } catch (err) {
-                                      reportError(err, "Could not remove tag");
+                                      reportError(err, "Could not clear tags");
                                     }
                                   }}
-                                  className="text-subtle-foreground transition-colors hover:text-foreground"
+                                  className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                 >
-                                  <X className="size-2.5" />
+                                  <X className="size-3" />
                                 </button>
-                              </span>
-                            ))}
-                            <div className="relative flex items-center gap-1">
-                              <input
-                                type="text"
-                                autoComplete="off"
-                                autoCorrect="off"
-                                autoCapitalize="off"
-                                spellCheck={false}
-                                placeholder="Add..."
-                                value={columnInputText}
-                                onChange={(e) => {
-                                  setColumnInputText(e.target.value);
-                                  setColHighlightIdx(0);
-                                }}
-                                onKeyDown={async (e) => {
-                                  e.stopPropagation();
-                                  if (e.key === "Enter" || e.key === ",") {
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </td>
+                  {customColumns.map((c) => {
+                    const rawValue = folder.fields.find((f) => f.fieldId === c.id)?.value ?? "";
+                    const isMultiple = multipleTagFields.includes(c.id);
+                    const currentTags = rawValue.split(",").map((t) => t.trim()).filter(Boolean);
+                    const isEditing = editingColumnPath === folder.containerPath && editingColumnId === c.id;
+
+                    return (
+                      <td key={c.id} className="px-3 py-2.5 min-w-[10rem]" onClick={(e) => e.stopPropagation()}>
+                        {isEditing ? (
+                          isMultiple ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {currentTags.map((t) => (
+                                <span
+                                  key={t}
+                                  className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px]"
+                                >
+                                  {t}
+                                  <button
+                                    type="button"
+                                    aria-label={`Remove tag ${t}`}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const newTags = currentTags.filter((x) => x !== t);
+                                      try {
+                                        await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
+                                        invalidateLibrary(qc);
+                                      } catch (err) {
+                                        reportError(err, "Could not remove tag");
+                                      }
+                                    }}
+                                    className="text-subtle-foreground transition-colors hover:text-foreground"
+                                  >
+                                    <X className="size-2.5" />
+                                  </button>
+                                </span>
+                              ))}
+                              <div className="relative flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  autoComplete="off"
+                                  autoCorrect="off"
+                                  autoCapitalize="off"
+                                  spellCheck={false}
+                                  placeholder="Add..."
+                                  value={columnInputText}
+                                  onChange={(e) => {
+                                    setColumnInputText(e.target.value);
+                                    setColHighlightIdx(0);
+                                  }}
+                                  onKeyDown={async (e) => {
+                                    e.stopPropagation();
+                                    if (e.key === "Enter" || e.key === ",") {
+                                      e.preventDefault();
+                                      const selected = columnSuggestions[colHighlightIdx] ?? columnInputText;
+                                      if (selected.trim()) {
+                                        const newTag = selected.trim();
+                                        if (!currentTags.includes(newTag)) {
+                                          const newTags = [...currentTags, newTag];
+                                          try {
+                                            await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
+                                            invalidateLibrary(qc);
+                                          } catch (err) {
+                                            reportError(err, "Could not add tag");
+                                          }
+                                        }
+                                        setColumnInputText("");
+                                      } else {
+                                        setEditingColumnPath(null);
+                                        setEditingColumnId(null);
+                                      }
+                                    } else if (e.key === "Escape") {
+                                      setEditingColumnPath(null);
+                                      setEditingColumnId(null);
+                                    } else if (e.key === "ArrowDown" && columnSuggestions.length) {
+                                      e.preventDefault();
+                                      setColHighlightIdx((h) => (h + 1) % columnSuggestions.length);
+                                    } else if (e.key === "ArrowUp" && columnSuggestions.length) {
+                                      e.preventDefault();
+                                      setColHighlightIdx((h) => (h - 1 + columnSuggestions.length) % columnSuggestions.length);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    setTimeout(() => {
+                                      setEditingColumnPath(null);
+                                      setEditingColumnId(null);
+                                    }, 200);
+                                  }}
+                                  className="h-5 w-24 rounded border border-input bg-surface px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  title="Done editing"
+                                  onMouseDown={async (e) => {
                                     e.preventDefault();
-                                    const selected = columnSuggestions[colHighlightIdx] ?? columnInputText;
-                                    if (selected.trim()) {
-                                      const newTag = selected.trim();
+                                    e.stopPropagation();
+                                    if (columnInputText.trim()) {
+                                      const newTag = columnInputText.trim();
                                       if (!currentTags.includes(newTag)) {
                                         const newTags = [...currentTags, newTag];
                                         try {
@@ -829,11 +914,74 @@ export function SourceFoldersPage() {
                                           reportError(err, "Could not add tag");
                                         }
                                       }
-                                      setColumnInputText("");
-                                    } else {
-                                      setEditingColumnPath(null);
-                                      setEditingColumnId(null);
                                     }
+                                    setEditingColumnPath(null);
+                                    setEditingColumnId(null);
+                                  }}
+                                  className="rounded p-0.5 text-success hover:bg-success/15 hover:text-success/90 shrink-0"
+                                >
+                                  <Check className="size-3.5" />
+                                </button>
+                                {columnSuggestions.length > 0 && (
+                                  <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                                    {columnSuggestions.map((s, idx) => (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        onMouseDown={async (ev) => {
+                                          ev.preventDefault();
+                                          ev.stopPropagation();
+                                          if (!currentTags.includes(s)) {
+                                            const newTags = [...currentTags, s];
+                                            try {
+                                              await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
+                                              invalidateLibrary(qc);
+                                            } catch (err) {
+                                              reportError(err, "Could not add tag");
+                                            }
+                                          }
+                                          setColumnInputText("");
+                                        }}
+                                        className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+                                          idx === colHighlightIdx
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-foreground hover:bg-accent"
+                                        }`}
+                                      >
+                                        {s}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative inline-block">
+                              <input
+                                type="text"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck={false}
+                                placeholder="Set value..."
+                                value={columnInputText}
+                                onChange={(e) => {
+                                  setColumnInputText(e.target.value);
+                                  setColHighlightIdx(0);
+                                }}
+                                onKeyDown={async (e) => {
+                                  e.stopPropagation();
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const selected = columnSuggestions[colHighlightIdx] ?? columnInputText;
+                                    try {
+                                      await ipc.setFolderFieldValue(folder.containerPath, c.id, selected.trim());
+                                      invalidateLibrary(qc);
+                                    } catch (err) {
+                                      reportError(err, "Could not update column value");
+                                    }
+                                    setEditingColumnPath(null);
+                                    setEditingColumnId(null);
                                   } else if (e.key === "Escape") {
                                     setEditingColumnPath(null);
                                     setEditingColumnId(null);
@@ -846,39 +994,20 @@ export function SourceFoldersPage() {
                                   }
                                 }}
                                 onBlur={() => {
-                                  setTimeout(() => {
+                                  setTimeout(async () => {
+                                    try {
+                                      await ipc.setFolderFieldValue(folder.containerPath, c.id, columnInputText.trim());
+                                      invalidateLibrary(qc);
+                                    } catch (err) {
+                                      // ignore
+                                    }
                                     setEditingColumnPath(null);
                                     setEditingColumnId(null);
                                   }, 200);
                                 }}
-                                className="h-5 w-24 rounded border border-input bg-surface px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                className="h-6 w-28 rounded border border-input bg-surface px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 autoFocus
                               />
-                              <button
-                                type="button"
-                                title="Done editing"
-                                onMouseDown={async (e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  if (columnInputText.trim()) {
-                                    const newTag = columnInputText.trim();
-                                    if (!currentTags.includes(newTag)) {
-                                      const newTags = [...currentTags, newTag];
-                                      try {
-                                        await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
-                                        invalidateLibrary(qc);
-                                      } catch (err) {
-                                        reportError(err, "Could not add tag");
-                                      }
-                                    }
-                                  }
-                                  setEditingColumnPath(null);
-                                  setEditingColumnId(null);
-                                }}
-                                className="rounded p-0.5 text-success hover:bg-success/15 hover:text-success/90 shrink-0"
-                              >
-                                <Check className="size-3.5" />
-                              </button>
                               {columnSuggestions.length > 0 && (
                                 <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
                                   {columnSuggestions.map((s, idx) => (
@@ -888,16 +1017,14 @@ export function SourceFoldersPage() {
                                       onMouseDown={async (ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
-                                        if (!currentTags.includes(s)) {
-                                          const newTags = [...currentTags, s];
-                                          try {
-                                            await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
-                                            invalidateLibrary(qc);
-                                          } catch (err) {
-                                            reportError(err, "Could not add tag");
-                                          }
+                                        try {
+                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, s.trim());
+                                          invalidateLibrary(qc);
+                                        } catch (err) {
+                                          reportError(err, "Could not update column value");
                                         }
-                                        setColumnInputText("");
+                                        setEditingColumnPath(null);
+                                        setEditingColumnId(null);
                                       }}
                                       className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
                                         idx === colHighlightIdx
@@ -911,100 +1038,119 @@ export function SourceFoldersPage() {
                                 </div>
                               )}
                             </div>
-                          </div>
+                          )
                         ) : (
-                          <div className="relative inline-block">
-                            <input
-                              type="text"
-                              autoComplete="off"
-                              autoCorrect="off"
-                              autoCapitalize="off"
-                              spellCheck={false}
-                              placeholder="Set value..."
-                              value={columnInputText}
-                              onChange={(e) => {
-                                setColumnInputText(e.target.value);
-                                setColHighlightIdx(0);
-                              }}
-                              onKeyDown={async (e) => {
-                                e.stopPropagation();
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const selected = columnSuggestions[colHighlightIdx] ?? columnInputText;
-                                  try {
-                                    await ipc.setFolderFieldValue(folder.containerPath, c.id, selected.trim());
-                                    invalidateLibrary(qc);
-                                  } catch (err) {
-                                    reportError(err, "Could not update column value");
-                                  }
-                                  setEditingColumnPath(null);
-                                  setEditingColumnId(null);
-                                } else if (e.key === "Escape") {
-                                  setEditingColumnPath(null);
-                                  setEditingColumnId(null);
-                                } else if (e.key === "ArrowDown" && columnSuggestions.length) {
-                                  e.preventDefault();
-                                  setColHighlightIdx((h) => (h + 1) % columnSuggestions.length);
-                                } else if (e.key === "ArrowUp" && columnSuggestions.length) {
-                                  e.preventDefault();
-                                  setColHighlightIdx((h) => (h - 1 + columnSuggestions.length) % columnSuggestions.length);
-                                }
-                              }}
-                              onBlur={() => {
-                                setTimeout(async () => {
-                                  try {
-                                    await ipc.setFolderFieldValue(folder.containerPath, c.id, columnInputText.trim());
-                                    invalidateLibrary(qc);
-                                  } catch (err) {
-                                    // ignore
-                                  }
-                                  setEditingColumnPath(null);
-                                  setEditingColumnId(null);
-                                }, 200);
-                              }}
-                              className="h-6 w-28 rounded border border-input bg-surface px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              autoFocus
-                            />
-                            {columnSuggestions.length > 0 && (
-                              <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
-                                {columnSuggestions.map((s, idx) => (
+                          <div className="flex items-center gap-1.5 group/cell">
+                            {isMultiple ? (
+                              currentTags.length === 0 ? (
+                                <>
+                                  <span className="text-[12px] text-subtle-foreground">—</span>
                                   <button
-                                    key={s}
                                     type="button"
-                                    onMouseDown={async (ev) => {
-                                      ev.preventDefault();
-                                      ev.stopPropagation();
-                                      try {
-                                        await ipc.setFolderFieldValue(folder.containerPath, c.id, s.trim());
-                                        invalidateLibrary(qc);
-                                      } catch (err) {
-                                        reportError(err, "Could not update column value");
-                                      }
-                                      setEditingColumnPath(null);
-                                      setEditingColumnId(null);
+                                    title="Add tag value"
+                                    onClick={() => {
+                                      setEditingColumnPath(folder.containerPath);
+                                      setEditingColumnId(c.id);
+                                      setColumnInputText("");
+                                      setColHighlightIdx(0);
                                     }}
-                                    className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
-                                      idx === colHighlightIdx
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-foreground hover:bg-accent"
-                                    }`}
+                                    className="flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[11px] text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground"
                                   >
-                                    {s}
+                                    <Plus className="size-3" />
                                   </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      ) : (
-                        <div className="flex items-center gap-1.5 group/cell">
-                          {isMultiple ? (
-                            currentTags.length === 0 ? (
-                              <>
-                                <span className="text-[12px] text-subtle-foreground">—</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex flex-wrap gap-1">
+                                    {currentTags.map((tag) => {
+                                      const f: Facet = { fieldId: c.id, label: c.name, value: tag };
+                                      return (
+                                        <FacetChip
+                                          key={tag}
+                                          facet={f}
+                                          active={isActive(f)}
+                                          onToggle={toggleFacet}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
+                                    <button
+                                      type="button"
+                                      title="Edit tags"
+                                      onClick={() => {
+                                        setEditingColumnPath(folder.containerPath);
+                                        setEditingColumnId(c.id);
+                                        setColumnInputText("");
+                                        setColHighlightIdx(0);
+                                      }}
+                                      className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                      <Pencil className="size-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Clear all values"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, "");
+                                          invalidateLibrary(qc);
+                                        } catch (err) {
+                                          reportError(err, "Could not clear values");
+                                        }
+                                      }}
+                                      className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                      <X className="size-3" />
+                                    </button>
+                                  </div>
+                                </>
+                              )
+                            ) : (
+                              rawValue ? (
+                                <>
+                                  <FacetChip
+                                    facet={{ fieldId: c.id, label: c.name, value: rawValue }}
+                                    active={isActive({ fieldId: c.id, label: c.name, value: rawValue })}
+                                    onToggle={toggleFacet}
+                                  />
+                                  <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
+                                    <button
+                                      type="button"
+                                      title="Edit value"
+                                      onClick={() => {
+                                        setEditingColumnPath(folder.containerPath);
+                                        setEditingColumnId(c.id);
+                                        setColumnInputText(rawValue);
+                                        setColHighlightIdx(0);
+                                      }}
+                                      className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                      <Pencil className="size-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Clear value"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, "");
+                                          invalidateLibrary(qc);
+                                        } catch (err) {
+                                          reportError(err, "Could not clear value");
+                                        }
+                                      }}
+                                      className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                      <X className="size-3" />
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
                                 <button
                                   type="button"
-                                  title="Add tag value"
+                                  title="Set value"
                                   onClick={() => {
                                     setEditingColumnPath(folder.containerPath);
                                     setEditingColumnId(c.id);
@@ -1015,144 +1161,77 @@ export function SourceFoldersPage() {
                                 >
                                   <Plus className="size-3" />
                                 </button>
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex flex-wrap gap-1">
-                                  {currentTags.map((tag) => {
-                                    const f: Facet = { fieldId: c.id, label: c.name, value: tag };
-                                    return (
-                                      <FacetChip
-                                        key={tag}
-                                        facet={f}
-                                        active={isActive(f)}
-                                        onToggle={toggleFacet}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                                <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
-                                  <button
-                                    type="button"
-                                    title="Edit tags"
-                                    onClick={() => {
-                                      setEditingColumnPath(folder.containerPath);
-                                      setEditingColumnId(c.id);
-                                      setColumnInputText("");
-                                      setColHighlightIdx(0);
-                                    }}
-                                    className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                                  >
-                                    <Pencil className="size-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title="Clear all values"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        await ipc.setFolderFieldValue(folder.containerPath, c.id, "");
-                                        invalidateLibrary(qc);
-                                      } catch (err) {
-                                        reportError(err, "Could not clear values");
-                                      }
-                                    }}
-                                    className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                  >
-                                    <X className="size-3" />
-                                  </button>
-                                </div>
-                              </>
-                            )
-                          ) : (
-                            rawValue ? (
-                              <>
-                                <FacetChip
-                                  facet={{ fieldId: c.id, label: c.name, value: rawValue }}
-                                  active={isActive({ fieldId: c.id, label: c.name, value: rawValue })}
-                                  onToggle={toggleFacet}
-                                />
-                                <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
-                                  <button
-                                    type="button"
-                                    title="Edit value"
-                                    onClick={() => {
-                                      setEditingColumnPath(folder.containerPath);
-                                      setEditingColumnId(c.id);
-                                      setColumnInputText(rawValue);
-                                      setColHighlightIdx(0);
-                                    }}
-                                    className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                                  >
-                                    <Pencil className="size-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title="Clear value"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        await ipc.setFolderFieldValue(folder.containerPath, c.id, "");
-                                        invalidateLibrary(qc);
-                                      } catch (err) {
-                                        reportError(err, "Could not clear value");
-                                      }
-                                    }}
-                                    className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                  >
-                                    <X className="size-3" />
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                title="Set value"
-                                onClick={() => {
-                                  setEditingColumnPath(folder.containerPath);
-                                  setEditingColumnId(c.id);
-                                  setColumnInputText("");
-                                  setColHighlightIdx(0);
-                                }}
-                                className="flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[11px] text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground"
-                              >
-                                <Plus className="size-3" />
-                              </button>
-                            )
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
-                <td
-                  className="whitespace-nowrap px-3 py-2.5 text-[12px] text-muted-foreground"
-                  title={folder.addedAt}
-                >
-                  {date(folder.addedAt)}
-                </td>
-                <td
-                  className="whitespace-nowrap px-3 py-2.5 text-[12px] text-muted-foreground"
-                  title={folder.updatedAt}
-                >
-                  {relativeDate(folder.updatedAt)}
-                </td>
-                <td className="w-px whitespace-nowrap px-3 py-2.5">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Delete ${folder.containerPath}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDoomed(folder);
+                              )
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td
+                    className="whitespace-nowrap px-3 py-2.5 text-[12px] text-muted-foreground"
+                    title={folder.addedAt}
+                  >
+                    {date(folder.addedAt)}
+                  </td>
+                  <td
+                    className="whitespace-nowrap px-3 py-2.5 text-[12px] text-muted-foreground"
+                    title={folder.updatedAt}
+                  >
+                    {relativeDate(folder.updatedAt)}
+                  </td>
+                  <td className="w-px whitespace-nowrap px-3 py-2.5">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Delete ${folder.containerPath}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDoomed(folder);
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => setRenaming(folder)}>
+                    <Pencil /> Rename Folder...
+                  </ContextMenuItem>
+                  {folder.displayName && (
+                    <ContextMenuItem
+                      onSelect={async () => {
+                        try {
+                          await ipc.setFolderName(folder.containerPath, "");
+                          invalidateLibrary(qc);
+                        } catch (err) {
+                          reportError(err, "Could not reset the folder name");
+                        }
                       }}
                     >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
+                      <X /> Use Original Name
+                    </ContextMenuItem>
+                  )}
+                  {folder.driveFolderId && (
+                    <ContextMenuItem
+                      onSelect={() =>
+                        ipc
+                          .openExternal(driveFolderUrl(folder.driveFolderId!))
+                          .catch((err) => reportError(err, "Could not open Drive"))
+                      }
+                    >
+                      <ExternalLink /> Open in Google Drive
+                    </ContextMenuItem>
+                  )}
+                  <ContextMenuSeparator />
+                  <ContextMenuItem destructive onSelect={() => setDoomed(folder)}>
+                    <Trash2 /> Delete Folder
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </tbody>
         </table>
@@ -1172,6 +1251,7 @@ export function SourceFoldersPage() {
             <DialogTitle>Delete source folder?</DialogTitle>
           </DialogHeader>
           <DialogBody className="flex flex-col gap-2 text-[13px]">
+            {doomed?.displayName && <p className="truncate font-medium">{doomed.displayName}</p>}
             <p className="truncate text-subtle-foreground">{doomed?.containerPath}</p>
             <p className="text-muted-foreground">
               Removes {doomed?.footageCount ?? 0} footage records, plus this folder's tags and
@@ -1188,6 +1268,24 @@ export function SourceFoldersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PromptDialog
+        open={!!renaming}
+        onOpenChange={(open) => !open && setRenaming(null)}
+        title="Rename source folder"
+        description={`The original folder stays ${renaming?.containerPath ?? ""} and is still shown under the new name.`}
+        placeholder="Folder name"
+        initialValue={renaming?.displayName ?? ""}
+        onSubmit={async (name) => {
+          if (!renaming) return;
+          try {
+            await ipc.setFolderName(renaming.containerPath, name);
+            invalidateLibrary(qc);
+          } catch (err) {
+            reportError(err, "Could not rename folder");
+          }
+        }}
+      />
 
       <ManageColumnsDialog
         open={manageColumnsOpen}

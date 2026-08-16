@@ -10,6 +10,8 @@ const folder = (
   addedAt = "2026-01-01",
 ): FolderNode => ({
   containerPath: path,
+  displayName: null,
+  driveFolderId: null,
   footageCount: 1,
   usedCount: 0,
   unusedCount: 1,

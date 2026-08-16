@@ -10,7 +10,7 @@ use crate::error::{AppError, Result};
 use rusqlite::Connection;
 
 /// Schema version this build understands. Bump when adding a migration.
-pub const APP_SCHEMA_VERSION: u32 = 9;
+pub const APP_SCHEMA_VERSION: u32 = 10;
 
 /// `PRAGMA application_id` — "STAH" as big-endian ASCII. Marks the file as ours
 /// without needing to read a table, and survives copying between machines.
@@ -26,6 +26,7 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (7, M7_TYPEFACE_FONT_FILE),
     (8, M8_BRAND_ASSET_FLAG),
     (9, M9_FOLDER_BRAND),
+    (10, M10_FOLDER_DISPLAY_NAME),
 ];
 
 const M1_INITIAL: &str = r#"
@@ -365,6 +366,13 @@ ALTER TABLE footages ADD COLUMN brand_asset INTEGER NOT NULL DEFAULT 0
 const M9_FOLDER_BRAND: &str = r#"
 ALTER TABLE source_folder_meta ADD COLUMN brand_id INTEGER
   REFERENCES brands(id) ON DELETE SET NULL;
+"#;
+
+/// A label the user gives a source folder. The path stays the identity — it is
+/// what every footage row points at — so this is a second name shown next to it,
+/// never a replacement for it.
+const M10_FOLDER_DISPLAY_NAME: &str = r#"
+ALTER TABLE source_folder_meta ADD COLUMN display_name TEXT;
 "#;
 
 pub fn application_id(conn: &Connection) -> Result<i32> {

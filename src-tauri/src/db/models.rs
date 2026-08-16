@@ -253,6 +253,13 @@ pub struct Tag {
 #[serde(rename_all = "camelCase")]
 pub struct FolderNode {
     pub container_path: String,
+    /// The name the user gave this folder, if any. The path underneath it is
+    /// still shown: a custom label that hides where the files came from is worse
+    /// than no label at all.
+    pub display_name: Option<String>,
+    /// Drive id of the folder its files were imported from, so the row can link
+    /// back to the original. `None` for local folders.
+    pub drive_folder_id: Option<String>,
     pub footage_count: i64,
     pub used_count: i64,
     pub unused_count: i64,

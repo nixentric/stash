@@ -25,6 +25,11 @@ pub fn delete_folder(state: State<'_, AppState>, path: String) -> Result<usize> 
 }
 
 #[tauri::command]
+pub fn set_folder_name(state: State<'_, AppState>, path: String, name: String) -> Result<()> {
+    state.with_library(|lib| repo::set_name(&lib.conn, &path, &name))
+}
+
+#[tauri::command]
 pub fn set_folder_tags(state: State<'_, AppState>, path: String, tags: Vec<String>) -> Result<()> {
     state.with_library(|lib| repo::set_tags(&lib.conn, &path, &tags))
 }

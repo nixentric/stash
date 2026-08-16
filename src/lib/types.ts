@@ -141,6 +141,10 @@ export interface FootageDetail {
 
 export interface FolderNode {
   containerPath: string;
+  /** The name the user gave the folder. The original path is still shown under it. */
+  displayName: string | null;
+  /** Drive id of the folder these files came from — the link back to the original. */
+  driveFolderId: string | null;
   footageCount: number;
   usedCount: number;
   unusedCount: number;
@@ -410,6 +414,16 @@ export interface ImportOutcome {
   imported: number[];
   duplicates: DuplicateHit[];
   failed: { input: string; reason: string }[];
+}
+
+/** A pasted Drive id that turns out to already be in the library. */
+export interface DriveHit {
+  externalId: string;
+  kind: "item" | "folder";
+  footageId: number | null;
+  name: string;
+  containerPath: string | null;
+  count: number;
 }
 
 export type SourceKind = "item" | "container";
