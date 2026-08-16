@@ -36,7 +36,7 @@ import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Update } from "@tauri-apps/plugin-updater";
 
-type Pane = "general" | "appearance" | "library" | "preview" | "integrations";
+type Pane = "general" | "appearance" | "library" | "preview" | "integrations" | "support";
 
 export function Settings({
   open,
@@ -63,6 +63,9 @@ export function Settings({
               ["library", "Library"],
               ["preview", "Preview"],
               ["integrations", "Integrations"],
+              // The one item that asks for something rather than configuring
+              // something, so it carries a mark to set it apart from the rest.
+              ["support", "Support"],
             ] as [Pane, string][]
           ).map(([id, label]) => (
             <button
@@ -76,6 +79,7 @@ export function Settings({
                   : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
               )}
             >
+              {id === "support" && <Heart className="size-3.5 fill-[#FF5E5B] text-[#FF5E5B]" />}
               {label}
               {pane === id && <ChevronRight className="ml-auto size-3 opacity-50" />}
             </button>
@@ -88,6 +92,7 @@ export function Settings({
           {pane === "library" && <LibraryPane />}
           {pane === "preview" && <PreviewPane />}
           {pane === "integrations" && <IntegrationsPane />}
+          {pane === "support" && <SupportPane />}
         </div>
       </DialogContent>
     </Dialog>
@@ -248,20 +253,65 @@ function GeneralPane() {
       >
         <span />
       </Field>
+    </Pane>
+  );
+}
 
-      <Field
-        label="Support Stash"
-        hint="Stash is built by one person and the builds are unsigned, which is why macOS warns on first launch and asks for your password again after every update. An Apple Developer membership ($99/year) is what fixes that. Everything stays as it is either way — same MIT licence, no telemetry, no paid tier."
+/**
+ * The only pane that asks for something instead of setting something, so it is
+ * allowed the one loud button in the app — Ko-fi's own red rather than the
+ * app's primary, because it is a link out to Ko-fi, not a Stash action.
+ */
+function SupportPane() {
+  return (
+    <Pane title="Support Stash">
+      <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+        Stash is built by one person, in the open, for free. No paid tier, no accounts, no
+        telemetry — and no plan to add any.
+      </p>
+
+      <button
+        type="button"
+        onClick={() => ipc.openExternal("https://ko-fi.com/nixentric").catch(reportError)}
+        className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r
+                   from-[#FF5E5B] via-[#FF7A5B] to-[#FFA25B] px-5 py-3.5 text-[13.5px] font-semibold
+                   text-white shadow-lg shadow-[#FF5E5B]/25 outline-none transition-all
+                   hover:-translate-y-0.5 hover:shadow-xl hover:shadow-[#FF5E5B]/40
+                   focus-visible:ring-2 focus-visible:ring-[#FF5E5B]/60 focus-visible:ring-offset-2
+                   focus-visible:ring-offset-background active:translate-y-0 active:scale-[0.99]"
       >
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => ipc.openExternal("https://ko-fi.com/nixentric").catch(reportError)}
-        >
-          <Heart className="size-3.5" />
-          Support on Ko-fi
-        </Button>
-      </Field>
+        {/* Sweeps across on hover; parked off the left edge the rest of the time. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r
+                     from-transparent via-white/25 to-transparent transition-transform duration-700
+                     group-hover:translate-x-full"
+        />
+        <span className="relative flex items-center justify-center gap-2">
+          <Heart className="size-4 fill-current transition-transform duration-300 group-hover:scale-125" />
+          Buy me a coffee on Ko-fi
+          <ExternalLink className="size-3.5 opacity-70" />
+        </span>
+      </button>
+
+      <div className="rounded-md border border-border bg-muted/40 p-3">
+        <p className="flex items-center gap-1.5 text-[12.5px] font-medium">
+          <ShieldCheck className="size-3.5 text-success" />
+          What the money is for
+        </p>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+          An Apple Developer membership, <span className="font-medium text-foreground">$99/year</span>.
+          Stash's builds are unsigned, which is why macOS warns you on first launch — and why, because
+          every unsigned build gets a different code identity, the keychain stops recognising Stash
+          after an update and asks for your login password all over again. Signing and notarising is
+          what makes both stop, and that membership is the only thing standing in the way.
+        </p>
+      </div>
+
+      <p className="text-[11.5px] leading-relaxed text-subtle-foreground">
+        Nothing here is gated behind it. Whether or not anyone chips in, Stash stays MIT-licensed,
+        offline, and complete.
+      </p>
     </Pane>
   );
 }
