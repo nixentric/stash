@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DotmSquare3 } from "@/components/ui/dotm-square-3";
 import { Kbd } from "@/components/ui/misc";
 import { ipc } from "@/lib/ipc";
 import { keys, reportError, useFootageDetail } from "@/hooks/queries";
@@ -184,32 +185,12 @@ function Stage({
   url: string | null | undefined;
   poster?: string;
 }) {
-  if (!kind || !url) {
-    return (
-      <div className="flex flex-col items-center gap-2 text-center">
-        <ImageOff className="size-7 text-subtle-foreground/60" />
-        <p className="text-[13px] text-muted-foreground">Preview unavailable</p>
-        <p className="max-w-sm text-[12px] text-subtle-foreground">
-          Connect Google Drive, or set a thumbnail manually from the Inspector.
-        </p>
-      </div>
-    );
-  }
+  if (!kind || !url) return <Unavailable />;
 
   if (kind === "image") {
     // RAW and PSD are stills the webview cannot decode; the thumbnail is the
     // only thing left to show for them.
-    return (
-      <img
-        src={url}
-        alt=""
-        className="max-h-full max-w-full object-contain"
-        onError={(e) => {
-          const img = e.currentTarget;
-          if (poster && img.src !== poster) img.src = poster;
-        }}
-      />
-    );
+    return <ImageStage url={url} poster={poster} />;
   }
 
   if (kind === "embed") {
@@ -245,6 +226,80 @@ function Stage({
   return poster ? (
     <img src={poster} alt="" className="max-h-full max-w-full object-contain" />
   ) : null;
+}
+
+/**
+ * A Drive still is fetched whole before a single byte reaches the webview, so
+ * a 5 MB photo is a blank screen for as long as the download takes. Show the
+ * wait instead of hiding it — and, when it fails, say so rather than leaving
+ * the same blank behind.
+ */
+function ImageStage({ url, poster }: { url: string; poster?: string }) {
+  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+
+  useEffect(() => setState("loading"), [url]);
+
+  return (
+    <div className="relative flex h-full w-full items-center justify-center">
+      <img
+        key={url}
+        src={url}
+        alt=""
+        className={`max-h-full max-w-full object-contain ${state === "ok" ? "" : "invisible"}`}
+        onLoad={() => setState("ok")}
+        onError={(e) => {
+          const img = e.currentTarget;
+          // One retry at the thumbnail, which is already on disk.
+          if (poster && img.src !== poster) img.src = poster;
+          else setState("error");
+        }}
+      />
+      {state === "loading" && <Loading />}
+      {state === "error" && <Unavailable />}
+    </div>
+  );
+}
+
+function Loading() {
+  const [ms, setMs] = useState(0);
+
+  useEffect(() => {
+    const started = Date.now();
+    const t = setInterval(() => setMs(Date.now() - started), 100);
+    return () => clearInterval(t);
+  }, []);
+
+  // ponytail: the backend buffers the whole file, so there is no byte count to
+  // report — the bar eases toward 95% on elapsed time. Wire it to real bytes
+  // only if the scheme handler ever streams.
+  const pct = 95 * (1 - Math.exp(-ms / 6000));
+
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+      <DotmSquare3 size={40} colorPreset="grad-ocean" ariaLabel="Loading preview" />
+      <div className="h-[3px] w-44 overflow-hidden rounded-full bg-border">
+        <div
+          className="h-full rounded-full bg-foreground/60 transition-[width] duration-100 ease-linear"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="tnum text-[11.5px] text-subtle-foreground">
+        Loading full image · {(ms / 1000).toFixed(1)}s
+      </p>
+    </div>
+  );
+}
+
+function Unavailable() {
+  return (
+    <div className="flex flex-col items-center gap-2 text-center">
+      <ImageOff className="size-7 text-subtle-foreground/60" />
+      <p className="text-[13px] text-muted-foreground">Preview unavailable</p>
+      <p className="max-w-sm text-[12px] text-subtle-foreground">
+        Connect Google Drive, or set a thumbnail manually from the Inspector.
+      </p>
+    </div>
+  );
 }
 
 function NavButton({
