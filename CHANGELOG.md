@@ -3,6 +3,25 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.10 — 2026-08-16
+
+**Search finds the rest of the library**
+
+- **Source folders are searchable.** Typing part of a folder's path finds the folder itself, and folder tags match too — so a tag on a folder at least reaches the folder even with "Folder tags cover the files inside" switched off. Folders are the first group in the panel: a folder is the coarsest thing a query can mean, and opening one is usually faster than scrolling the assets under it.
+- **Additional Info is searchable.** Matched on the title *and* on the body, so a link entry is findable by its URL — and clicking one opens the link straight away instead of dropping you on the brand page to hunt for the card.
+- **Elements and logo rules show up at all.** Both were already being found; the panel was quietly throwing the results away.
+
+**The search panel is worth clicking**
+
+- **Assets moved to the bottom.** They are the bulk of any library and the grid behind the panel is already full of them. Looking for a colour no longer means scrolling past five clips first.
+- **Every hit does something.** An asset opens Quick Look with the file left selected in the grid — it used to be a dead row that ignored clicks. A folder opens the folder, a link opens the link, everything else jumps to its brand.
+- **Thumbnails on asset results.** The fastest way to know it is the file you meant.
+- **Search one kind at a time.** The magnifier at the left of the search field is now a picker: choose Source Folders, Colors, Typography — any single kind — and both the results and the placeholder narrow to it.
+
+**Folder-only tags stop looking broken**
+
+- **The sidebar says what the tag actually holds.** A tag carried only by folders showed a bare `0` next to it and an empty grid when clicked. It now reads `5 folders`, and opening it lists those folders above the grid — click one to open it. What the tag does to the files inside is still the "Folder tags cover the files inside" switch, unchanged.
+
 ## v0.5.9 — 2026-08-16
 
 **Support Stash**
