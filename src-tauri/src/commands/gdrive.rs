@@ -22,6 +22,13 @@ pub struct GoogleStatus {
     /// not survive a restart, and the UI says so rather than pretending.
     pub keychain_available: bool,
     pub client_id_source: &'static str,
+    /// Whether the client secret is actually stored. Separate from `configured`
+    /// because "an id with no secret" is the state that silently fails to
+    /// connect, and the pane has to be able to name it.
+    pub client_secret_saved: bool,
+    /// True in development builds, where secrets live in a temp file rather
+    /// than the keychain — so they disappear whenever the system clears it.
+    pub secrets_temporary: bool,
 }
 
 #[tauri::command]
@@ -42,6 +49,10 @@ pub async fn google_status(state: State<'_, AppState>) -> Result<GoogleStatus> {
             display_name: None,
         }),
         keychain_available: secrets::available(),
+        client_secret_saved: std::env::var("STASH_GOOGLE_CLIENT_SECRET")
+            .is_ok_and(|s| !s.trim().is_empty())
+            || secrets::get(secrets::KEY_CLIENT_SECRET).is_some(),
+        secrets_temporary: secrets::temporary(),
         client_id_source: if std::env::var("STASH_GOOGLE_CLIENT_ID").is_ok() {
             "environment"
         } else if prefs.google_client_id.is_some() {

@@ -127,6 +127,10 @@ pub fn run() {
             commands::preview::set_thumbnail_from_path,
             commands::preview::set_thumbnail_from_bytes,
             commands::preview::clear_thumbnail,
+            commands::preview::download_original,
+            commands::preview::preview_failure,
+            commands::preview::download_dir,
+            commands::preview::set_download_dir,
             commands::preview::cache_info,
             commands::preview::clear_preview_cache,
             // import

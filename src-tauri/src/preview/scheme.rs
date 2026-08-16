@@ -76,6 +76,12 @@ fn ext_mime(name: &str) -> Option<&'static str> {
     }
 }
 
+/// Whether an `<img>` can decode this still at all. A DNG or PSD cannot, and
+/// that is a fact about the format, not a failure worth retrying.
+pub fn is_web_still(name: &str) -> bool {
+    ext_mime(name).is_some()
+}
+
 fn footage_id_from(request: &Request<Vec<u8>>) -> Option<i64> {
     let uri = request.uri().to_string();
     // macOS/Linux: stash://media/12  ·  Windows: http://stash.localhost/media/12
@@ -102,6 +108,34 @@ fn partial(body: Vec<u8>, start: u64, end: u64, total: u64, mime: &str) -> Respo
         .unwrap_or_else(|_| Response::new(Vec::new()))
 }
 
+/// Reads a file off disk, whole for a still and ranged for anything else.
+fn serve_file(
+    path: &std::path::Path,
+    still: bool,
+    mime: &str,
+    range_header: Option<&str>,
+) -> Result<Response<Vec<u8>>> {
+    let total = std::fs::metadata(path)?.len();
+
+    if still && range_header.is_none() && total <= MAX_IMAGE_BYTES {
+        return Ok(Response::builder()
+            .status(200)
+            .header("Content-Type", mime)
+            .header("Content-Length", total.to_string())
+            .body(std::fs::read(path)?)
+            .unwrap_or_else(|_| Response::new(Vec::new())));
+    }
+
+    let r = parse_range(range_header, total);
+
+    let mut file = std::fs::File::open(path)?;
+    file.seek(SeekFrom::Start(r.start))?;
+    let mut buf = vec![0u8; (r.end - r.start + 1) as usize];
+    let n = file.read(&mut buf)?;
+    buf.truncate(n);
+    Ok(partial(buf, r.start, r.end, total, mime))
+}
+
 async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) -> Result<Response<Vec<u8>>> {
     let src = state.with_library(|lib| footage_repo::get_source(&lib.conn, footage_id))?;
 
@@ -120,31 +154,19 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
         .or_else(|| ext_mime(&name).map(str::to_string))
         .unwrap_or_else(|| "application/octet-stream".into());
 
+    // A downloaded original outranks every remote route: it is already here, it
+    // needs no account, and it is the whole file rather than a preview of it.
+    if let Some(path) = crate::preview::downloads::find(state, footage_id) {
+        return serve_file(&path, still, &mime, range_header.as_deref());
+    }
+
     match src.provider.as_str() {
         "local" => {
             let path = src
                 .local_path
                 .clone()
                 .ok_or_else(|| AppError::NotFound("No file path".into()))?;
-            let total = std::fs::metadata(&path)?.len();
-
-            if still && range_header.is_none() && total <= MAX_IMAGE_BYTES {
-                return Ok(Response::builder()
-                    .status(200)
-                    .header("Content-Type", mime)
-                    .header("Content-Length", total.to_string())
-                    .body(std::fs::read(&path)?)
-                    .unwrap_or_else(|_| Response::new(Vec::new())));
-            }
-
-            let r = parse_range(range_header.as_deref(), total);
-
-            let mut file = std::fs::File::open(&path)?;
-            file.seek(SeekFrom::Start(r.start))?;
-            let mut buf = vec![0u8; (r.end - r.start + 1) as usize];
-            let n = file.read(&mut buf)?;
-            buf.truncate(n);
-            Ok(partial(buf, r.start, r.end, total, &mime))
+            serve_file(std::path::Path::new(&path), still, &mime, range_header.as_deref())
         }
 
         "google_drive" => {

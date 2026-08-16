@@ -5,6 +5,7 @@
 //! obtainable preview simply reports `None` and the UI draws a typed placeholder.
 
 pub mod cache;
+pub mod downloads;
 pub mod encode;
 pub mod providers;
 pub mod scheme;

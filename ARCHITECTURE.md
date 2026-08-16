@@ -586,8 +586,28 @@ Fallbacks, in order:
 2. **Link mode, public file** → Google's own published embed,
    `https://drive.google.com/file/d/{ID}/preview`, in a sandboxed iframe. This is
    the snippet Drive's own "Embed item" UI produces. Best-effort.
-3. **Anything else** → the honest state:
-   `Preview unavailable · [Open in Google Drive]`.
+3. **Anything else** → the honest state, with the reason spelled out: the
+   backend re-probes the source with a one-byte ranged read and answers "the
+   connected account has no access to this file" rather than
+   `Preview unavailable`.
+
+### 5.4.1 Drive stills go through the embed, not the scheme
+
+A still cannot be shown progressively: `<img>` needs the whole file before it
+paints one pixel, so a Drive photo behind `stash://` is a blank screen for the
+length of the fetch — and a permanent blank if it fails. Stills therefore route
+to the same sandboxed Drive embed as link-mode video, which renders as fast as
+Google can serve it. Video keeps the ranged stream above, where partial bytes
+are exactly what the player wants.
+
+The full file is reachable on demand: **Download** (`preview/downloads.rs`)
+streams the original to `Downloaded/` beside the library file — configurable,
+and moved with its contents when changed. The scheme handler prefers that copy
+over every remote route, so once downloaded a footage previews from disk, at
+full quality, with the account disconnected. Nothing is downloaded on its own
+unless the user switches on "Download when opened"; the folder is derived data
+in the sense that deleting it costs only a re-download, but unlike the preview
+cache it holds real originals, so nothing here ever deletes it.
 
 ### 5.5 The best-effort provider is quarantined on purpose
 
@@ -596,7 +616,11 @@ This endpoint is **not part of the documented API** and Google may change it.
 It therefore lives alone in `preview/providers/best_effort_drive.rs` behind the
 same `PreviewProvider` trait as everything else, and requirement §30's rule is
 enforced structurally: deleting that one file degrades link-mode auto-thumbnails
-to manual ones and breaks nothing else. It is never used when connected mode is
+to manual ones, and link-mode Download to "connect the account first" — and
+breaks nothing else. The second undocumented address, `uc?export=download`,
+lives there for the same reason: in link mode there is no token to download
+with, and refusing to fetch a file the embed already renders would be a strange
+principle to hold. It is never used when connected mode is
 available, and a non-image response (an HTML sign-in page) is classified as
 `PermissionRequired`, not as a missing file.
 

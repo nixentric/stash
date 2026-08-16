@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { DotmCircular2 } from "@/components/ui/dotm-circular-2";
 import {
@@ -8,6 +9,7 @@ import {
   Cloud,
   Download,
   ExternalLink,
+  FolderOpen,
   Heart,
   KeyRound,
   Loader2,
@@ -31,7 +33,8 @@ import { ipc } from "@/lib/ipc";
 import { invalidateLibrary, keys, reportError, useGoogleStatus, usePrefs } from "@/hooks/queries";
 import { applyTheme } from "@/lib/theme";
 import { emptyQuery } from "@/lib/types";
-import type { PortableThumbnailSize, Theme } from "@/lib/types";
+import { ADD_FOOTAGE_TABS } from "@/components/dialogs/AddFootageDialog";
+import type { GoogleStatus, PortableThumbnailSize, Theme } from "@/lib/types";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -101,8 +104,10 @@ export function Settings({
 
 function Pane({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="text-[14px] font-semibold tracking-[-0.01em]">{title}</h2>
+    // Wide gap between settings, pulled back under the heading: the space is
+    // what groups a label with its own control rather than the next one down.
+    <div className="flex flex-col gap-7">
+      <h2 className="-mb-3 text-[14px] font-semibold tracking-[-0.01em]">{title}</h2>
       {children}
     </div>
   );
@@ -358,10 +363,34 @@ function AppearancePane() {
   );
 }
 
+/**
+ * Whether the OAuth client is actually usable, at a glance.
+ *
+ * The section used to look identical whether nothing was saved, half of it was,
+ * or all of it — and half of it is the state that fails at connect time with no
+ * hint as to why.
+ */
+function ClientBadge({ status }: { status: GoogleStatus }) {
+  const hasId = status.clientIdSource !== "none";
+
+  if (!hasId && !status.clientSecretSaved) {
+    return <Badge tone="unused">Not set</Badge>;
+  }
+  if (!hasId) return <Badge tone="warn">Client ID missing</Badge>;
+  if (!status.clientSecretSaved) return <Badge tone="warn">Secret missing</Badge>;
+  return (
+    <Badge tone="used">
+      <Check className="size-2.5" />
+      Saved
+    </Badge>
+  );
+}
+
 function LibraryPane() {
   const qc = useQueryClient();
   const prefs = usePrefs();
   const size = prefs.data?.portableThumbnailSize ?? "standard";
+  const addTab = prefs.data?.addFootageTab ?? "links";
 
   const options: [PortableThumbnailSize, string, string][] = [
     ["standard", "Standard — 480 px", "Best balance. About 35 KB per item."],
@@ -404,7 +433,91 @@ function LibraryPane() {
           ))}
         </div>
       </Field>
+
+      <Field
+        label="Add Footage opens on"
+        hint="Which tab the Add Footage dialog starts on. The pin next to its tabs sets this too."
+      >
+        <div className="flex gap-1.5">
+          {ADD_FOOTAGE_TABS.map(([id, label]) => (
+            <button
+              key={id}
+              onClick={async () => {
+                await ipc.setPrefs({ addFootageTab: id });
+                qc.invalidateQueries({ queryKey: keys.prefs });
+              }}
+              className={cn(
+                "flex-1 rounded-md border p-2 text-[12px] transition-colors",
+                addTab === id
+                  ? "border-primary/70 bg-selection"
+                  : "border-border hover:border-border-strong hover:bg-accent/50",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <DownloadsField />
     </Pane>
+  );
+}
+
+/**
+ * Where originals land when they are downloaded, and whether that happens on
+ * its own. The folder defaults to `Downloaded/` beside the library file, so a
+ * library carried to another machine carries its files with it.
+ */
+function DownloadsField() {
+  const qc = useQueryClient();
+  const prefs = usePrefs();
+  const dir = useQuery({ queryKey: ["downloadDir"], queryFn: ipc.downloadDir, retry: false });
+  const auto = prefs.data?.autoDownload ?? false;
+
+  async function pick() {
+    const chosen = await openDialog({ directory: true, multiple: false, title: "Downloads folder" });
+    if (typeof chosen !== "string") return;
+    try {
+      await ipc.setDownloadDir(chosen);
+      qc.invalidateQueries({ queryKey: ["downloadDir"] });
+      qc.invalidateQueries({ queryKey: keys.prefs });
+      toast.success("Downloads folder moved");
+    } catch (e) {
+      reportError(e, "Could not move the downloads folder");
+    }
+  }
+
+  return (
+    <Field
+      label="Downloads"
+      hint="Previewing a Drive file goes through Google's viewer. Downloading keeps the original next to your library, and the preview then opens that file — full quality, and it still works with the account disconnected."
+    >
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <code className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/40 px-2 py-1.5 text-[11.5px]">
+            {dir.data ?? "Open a library to see the folder"}
+          </code>
+          <Button size="sm" variant="secondary" onClick={pick} disabled={!dir.data}>
+            <FolderOpen className="size-3.5" />
+            Change…
+          </Button>
+        </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
+          <input
+            type="checkbox"
+            checked={auto}
+            onChange={async (e) => {
+              await ipc.setPrefs({ autoDownload: e.target.checked });
+              qc.invalidateQueries({ queryKey: keys.prefs });
+            }}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Download the original as soon as a footage is opened
+        </label>
+      </div>
+    </Field>
   );
 }
 
@@ -573,7 +686,7 @@ function IntegrationsPane() {
         ))}
       </ul>
 
-      {s?.clientIdSource === "settings" && !s.configured && (
+      {s && s.clientIdSource !== "none" && !s.clientSecretSaved && (
         <p className="rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
           A Google client ID is saved, but its client secret is missing. Expand OAuth client and
           save both values from your Google OAuth Desktop client before connecting.
@@ -597,6 +710,7 @@ function IntegrationsPane() {
         >
           <KeyRound className="size-3.5" />
           OAuth client
+          {s && <ClientBadge status={s} />}
           <ChevronRight
             className={cn("size-3 transition-transform", showSetup && "rotate-90")}
           />
@@ -609,6 +723,15 @@ function IntegrationsPane() {
                 ? "Using the client ID from your environment variables. Set STASH_GOOGLE_CLIENT_SECRET too before connecting."
                 : "Advanced integration needs your own Google OAuth client (Desktop app type). Paste both its client ID and client secret below."}
             </p>
+
+            {s?.secretsTemporary && (
+              <p className="rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+                Development build. The client secret is kept in a temporary file
+                instead of the keychain, so it disappears whenever the system clears
+                temporary files — and this build cannot see what the released app
+                saved. Paste both values again here when that happens.
+              </p>
+            )}
 
             {s?.clientIdSource !== "environment" && (
               <>

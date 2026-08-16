@@ -27,6 +27,21 @@ const REQUEST_WIDTH: u32 = 1600;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(20);
 
+/// Anonymous download address for a file shared as "Anyone with the link".
+///
+/// Also undocumented, and here for the same reason as the thumbnail endpoint:
+/// in link mode there is no token to authenticate with, and refusing to
+/// download a file the user can already see in the embed would be an odd kind
+/// of principle. The caller must treat an HTML response as "not public" — this
+/// URL answers 200 with a sign-in page for anything private.
+pub fn public_download_url(file_id: &str, resource_key: Option<&str>) -> String {
+    let mut url = format!("https://drive.google.com/uc?export=download&id={file_id}");
+    if let Some(key) = resource_key {
+        url.push_str(&format!("&resourcekey={key}"));
+    }
+    url
+}
+
 pub struct BestEffortDriveProvider;
 
 impl PreviewProvider for BestEffortDriveProvider {

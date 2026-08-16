@@ -35,6 +35,11 @@ mod dev_store {
 
     pub fn available() -> bool { true }
 
+    /// True: a temp file is not a keychain. The UI says so, because a secret
+    /// that vanishes when the system sweeps `/var/folders` looks exactly like
+    /// a bug otherwise.
+    pub fn temporary() -> bool { true }
+
     pub fn get(key: &str) -> Option<Secret> {
         load_map().get(key).map(|s| Secret::new(s.clone()))
     }
@@ -102,6 +107,10 @@ mod prod_store {
 
     pub fn available() -> bool {
         entry(KEY_REFRESH_TOKEN).is_some()
+    }
+
+    pub fn temporary() -> bool {
+        false
     }
 
     pub fn get(key: &str) -> Option<Secret> {

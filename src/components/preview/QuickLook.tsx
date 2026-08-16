@@ -1,11 +1,23 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  HardDriveDownload,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dotm3x3_18 } from "@/components/ui/dotm-3x3-18";
+import { DotmSquare15 } from "@/components/ui/dotm-square-15";
 import { DotmSquare3 } from "@/components/ui/dotm-square-3";
-import { Kbd } from "@/components/ui/misc";
-import { ipc } from "@/lib/ipc";
-import { keys, reportError, useFootageDetail } from "@/hooks/queries";
+import { Kbd, Tooltip } from "@/components/ui/misc";
+import { asIpcError, ipc } from "@/lib/ipc";
+import { keys, reportError, useFootageDetail, usePrefs } from "@/hooks/queries";
 import { useThumbnail } from "@/hooks/use-thumbnail";
 import {
   bytes,
@@ -14,6 +26,7 @@ import {
   providerLabel,
   resolution,
 } from "@/lib/format";
+import type { DownloadProgress } from "@/lib/types";
 import { useUi } from "@/store/ui";
 
 /**
@@ -26,6 +39,7 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
   const { quickLookId, setQuickLookId, select } = useUi();
   const detail = useFootageDetail(quickLookId);
   const thumb = useThumbnail(quickLookId ?? -1, quickLookId != null, true);
+  const prefs = usePrefs();
 
   const target = useQuery({
     queryKey: keys.playback(quickLookId ?? -1),
@@ -33,7 +47,19 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
     enabled: quickLookId != null,
   });
 
+  const download = useDownload(quickLookId);
   const index = quickLookId != null ? orderedIds.indexOf(quickLookId) : -1;
+
+  const t = target.data;
+  const autoDownload = prefs.data?.autoDownload ?? false;
+
+  // "Download automatically when opened" — the same call the button makes, so
+  // there is one download path, not two.
+  useEffect(() => {
+    if (autoDownload && t?.downloadable && !download.busy && !download.error) {
+      download.start();
+    }
+  }, [autoDownload, t?.downloadable, download.busy, download.error, download.start]);
 
   useEffect(() => {
     if (quickLookId == null) return;
@@ -66,7 +92,6 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
 
   if (quickLookId == null) return null;
   const d = detail.data;
-  const t = target.data;
 
   return (
     <div
@@ -103,7 +128,19 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
         />
 
         <div className="flex h-full max-h-full min-h-0 w-full max-w-5xl items-center justify-center">
-          <Stage kind={t?.kind} url={t?.url} poster={thumb.data ?? undefined} />
+          {download.busy ? (
+            <Downloading progress={download.progress} />
+          ) : (
+            <Stage
+              id={quickLookId}
+              kind={t?.kind}
+              url={t?.url}
+              poster={thumb.data ?? undefined}
+              downloadable={t?.downloadable ?? false}
+              onDownload={download.start}
+              downloadError={download.error}
+            />
+          )}
         </div>
 
         <NavButton
@@ -131,12 +168,38 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
                 d && resolution(d.source.width, d.source.height),
                 d && fmtDuration(d.source.durationMs),
                 d && bytes(d.source.fileSize),
+                t?.downloaded ? "Downloaded" : null,
                 d?.source.containerPath,
               ]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
           </div>
+
+          {t?.downloadable && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={download.start}
+              disabled={download.busy}
+            >
+              <Download />
+              Download
+            </Button>
+          )}
+
+          {t?.localPath && (
+            <Tooltip content={t.localPath}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => ipc.revealInFileManager(t.localPath!).catch(reportError)}
+              >
+                <FolderOpen />
+                Open Local
+              </Button>
+            </Tooltip>
+          )}
 
           {t?.externalUrl && (
             <Button
@@ -171,40 +234,126 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
 }
 
 /**
+ * Fetching the original, with the byte counts the backend reports.
+ *
+ * Lives here rather than in `queries.ts` because the progress is an event
+ * stream, not a query — react-query has nothing to cache until it finishes.
+ */
+function useDownload(id: number | null) {
+  const qc = useQueryClient();
+  const [progress, setProgress] = useState<DownloadProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setProgress(null);
+    setError(null);
+    setBusy(false);
+  }, [id]);
+
+  useEffect(() => {
+    const unlisten = listen<DownloadProgress>("download:progress", (e) => {
+      if (e.payload.id === id) setProgress(e.payload);
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [id]);
+
+  const start = useCallback(async () => {
+    if (id == null) return;
+    setError(null);
+    setBusy(true);
+    setProgress({ id, received: 0, total: null });
+    try {
+      const path = await ipc.downloadOriginal(id);
+      // The scheme handler prefers the downloaded file, so re-asking for the
+      // playback target is all it takes to switch the preview over to it.
+      await qc.invalidateQueries({ queryKey: keys.playback(id) });
+      toast.success(`Downloaded ${path.split(/[/\\]/).pop()}`);
+    } catch (e) {
+      // Toast as well as inline: the embed fills the stage, so an inline-only
+      // message would leave a failed download looking like nothing happened.
+      setError(asIpcError(e).message || "The download failed");
+      reportError(e, "The download failed");
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }, [id, qc]);
+
+  return { start, progress, busy, error };
+}
+
+/**
  * Renders whatever the backend said is possible.
  *
  * Note what is absent: no Drive URL construction, no "is the account
  * connected?" check. The component receives a `kind` and renders it.
  */
 function Stage({
+  id,
   kind,
   url,
   poster,
+  downloadable,
+  onDownload,
+  downloadError,
 }: {
+  id: number;
   kind: string | undefined;
   url: string | null | undefined;
   poster?: string;
+  downloadable: boolean;
+  onDownload: () => void;
+  downloadError: string | null;
 }) {
-  if (!kind || !url) return <Unavailable />;
+  if (!kind || !url) {
+    return (
+      <Unavailable
+        id={id}
+        downloadable={downloadable}
+        onDownload={onDownload}
+        downloadError={downloadError}
+      />
+    );
+  }
 
   if (kind === "image") {
-    // RAW and PSD are stills the webview cannot decode; the thumbnail is the
-    // only thing left to show for them.
-    return <ImageStage url={url} poster={poster} />;
+    return (
+      <ImageStage
+        id={id}
+        url={url}
+        downloadable={downloadable}
+        onDownload={onDownload}
+        downloadError={downloadError}
+      />
+    );
   }
 
   if (kind === "embed") {
     // Google's own embed. Sandboxed: the page is third-party and must not be
     // able to script the app (ARCHITECTURE.md §8).
     return (
-      <iframe
-        src={url}
-        title="Preview"
-        sandbox="allow-scripts allow-same-origin allow-presentation"
-        referrerPolicy="no-referrer"
-        allow="autoplay; fullscreen"
-        className="h-full max-h-[70vh] w-full rounded-md border border-border bg-black"
-      />
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2">
+        <iframe
+          src={url}
+          title="Preview"
+          sandbox="allow-scripts allow-same-origin allow-presentation"
+          referrerPolicy="no-referrer"
+          allow="autoplay; fullscreen"
+          className="h-full max-h-[70vh] w-full rounded-md border border-border bg-black"
+        />
+        {downloadError ? (
+          <p className="text-[11.5px] text-destructive">{downloadError}</p>
+        ) : (
+          downloadable && (
+            <p className="text-[11.5px] text-subtle-foreground">
+              Shown by Google Drive. Download it for the full-quality file, kept offline.
+            </p>
+          )
+        )}
+      </div>
     );
   }
 
@@ -229,12 +378,23 @@ function Stage({
 }
 
 /**
- * A Drive still is fetched whole before a single byte reaches the webview, so
- * a 5 MB photo is a blank screen for as long as the download takes. Show the
- * wait instead of hiding it — and, when it fails, say so rather than leaving
- * the same blank behind.
+ * A still served through `stash://` arrives whole before a single byte reaches
+ * the webview, so a big photo is a blank screen for as long as it takes. Show
+ * the wait instead of hiding it — and, when it fails, say why.
  */
-function ImageStage({ url, poster }: { url: string; poster?: string }) {
+function ImageStage({
+  id,
+  url,
+  downloadable,
+  onDownload,
+  downloadError,
+}: {
+  id: number;
+  url: string;
+  downloadable: boolean;
+  onDownload: () => void;
+  downloadError: string | null;
+}) {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
 
   useEffect(() => setState("loading"), [url]);
@@ -247,15 +407,17 @@ function ImageStage({ url, poster }: { url: string; poster?: string }) {
         alt=""
         className={`max-h-full max-w-full object-contain ${state === "ok" ? "" : "invisible"}`}
         onLoad={() => setState("ok")}
-        onError={(e) => {
-          const img = e.currentTarget;
-          // One retry at the thumbnail, which is already on disk.
-          if (poster && img.src !== poster) img.src = poster;
-          else setState("error");
-        }}
+        onError={() => setState("error")}
       />
       {state === "loading" && <Loading />}
-      {state === "error" && <Unavailable />}
+      {state === "error" && (
+        <Unavailable
+          id={id}
+          downloadable={downloadable}
+          onDownload={onDownload}
+          downloadError={downloadError}
+        />
+      )}
     </div>
   );
 }
@@ -290,14 +452,70 @@ function Loading() {
   );
 }
 
-function Unavailable() {
+/** The download itself, with the byte counts the backend actually reports. */
+function Downloading({ progress }: { progress: DownloadProgress | null }) {
+  const received = progress?.received ?? 0;
+  const total = progress?.total ?? null;
+  const pct = total ? Math.min(100, (received / total) * 100) : null;
+
   return (
-    <div className="flex flex-col items-center gap-2 text-center">
-      <ImageOff className="size-7 text-subtle-foreground/60" />
-      <p className="text-[13px] text-muted-foreground">Preview unavailable</p>
-      <p className="max-w-sm text-[12px] text-subtle-foreground">
-        Connect Google Drive, or set a thumbnail manually from the Inspector.
+    <div className="flex flex-col items-center gap-3">
+      <DotmSquare15 size={44} colorPreset="grad-neon" ariaLabel="Downloading" />
+      <div className="h-[3px] w-56 overflow-hidden rounded-full bg-border">
+        <div
+          className={`h-full rounded-full bg-success ${pct == null ? "animate-pulse" : "transition-[width] duration-200"}`}
+          style={{ width: pct == null ? "35%" : `${pct}%` }}
+        />
+      </div>
+      <p className="tnum text-[11.5px] text-subtle-foreground">
+        {pct == null
+          ? `Downloading · ${bytes(received)}`
+          : `Downloading · ${pct.toFixed(0)}% · ${bytes(received)} of ${bytes(total)}`}
       </p>
+    </div>
+  );
+}
+
+/**
+ * Failure, with the reason spelled out.
+ *
+ * The `<img>` element reports only that something broke, so the backend is
+ * asked why — "the account has no access to this file" is actionable in a way
+ * that "Preview unavailable" never was.
+ */
+function Unavailable({
+  id,
+  downloadable,
+  onDownload,
+  downloadError,
+}: {
+  id: number;
+  downloadable: boolean;
+  onDownload: () => void;
+  downloadError: string | null;
+}) {
+  const reason = useQuery({
+    queryKey: ["previewFailure", id],
+    queryFn: () => ipc.previewFailure(id),
+    enabled: downloadError == null,
+    staleTime: 30_000,
+  });
+
+  return (
+    <div className="flex max-w-md flex-col items-center gap-3 text-center">
+      <Dotm3x3_18 size={40} colorPreset="grad-fire" ariaLabel="Preview failed" />
+      <p className="text-[13px] font-medium text-muted-foreground">
+        {downloadError ? "The download failed" : "This preview could not be shown"}
+      </p>
+      <p className="text-[12px] leading-relaxed text-subtle-foreground">
+        {downloadError ?? reason.data ?? "Checking why…"}
+      </p>
+      {downloadable && (
+        <Button size="sm" variant="secondary" onClick={onDownload}>
+          <HardDriveDownload />
+          {downloadError ? "Try again" : "Download the file"}
+        </Button>
+      )}
     </div>
   );
 }

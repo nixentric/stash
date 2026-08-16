@@ -9,6 +9,7 @@ import {
   HardDrive,
   Link2,
   Loader2,
+  Pin,
   Search,
   TriangleAlert,
 } from "lucide-react";
@@ -22,12 +23,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
-import { Checkbox, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/misc";
+import {
+  Checkbox,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+} from "@/components/ui/misc";
 import { cn } from "@/lib/utils";
 import { bytes, duration as fmtDuration } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
-import { invalidateLibrary, reportError, useCapabilities } from "@/hooks/queries";
-import type { BulkParseResult, NewFootage, ScannedItem } from "@/lib/types";
+import { invalidateLibrary, keys, reportError, useCapabilities, usePrefs } from "@/hooks/queries";
+import type { AddFootageTab, BulkParseResult, NewFootage, ScannedItem } from "@/lib/types";
 import { useUi } from "@/store/ui";
 
 interface Props {
@@ -36,15 +44,30 @@ interface Props {
   onOpenSettings: () => void;
 }
 
+/** The tabs, in the order they are shown. Settings reuses this list. */
+export const ADD_FOOTAGE_TABS: [AddFootageTab, string][] = [
+  ["links", "Links"],
+  ["local", "This Computer"],
+  ["drive", "Drive Folder"],
+];
+
 export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) {
   const caps = useCapabilities();
-  const [tab, setTab] = useState("links");
+  const qc = useQueryClient();
+  const prefs = usePrefs();
+  const defaultTab = prefs.data?.addFootageTab ?? "links";
+  const [tab, setTab] = useState<AddFootageTab>(defaultTab);
   const ui = useUi();
   const collectionId = ui.view.kind === "collection" ? ui.view.id : undefined;
 
   useEffect(() => {
-    if (open) setTab("links");
-  }, [open]);
+    if (open) setTab(defaultTab);
+  }, [open, defaultTab]);
+
+  async function pinDefault() {
+    await ipc.setPrefs({ addFootageTab: tab }).catch(reportError);
+    qc.invalidateQueries({ queryKey: keys.prefs });
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,8 +76,12 @@ export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) 
           <DialogTitle>Add Footage</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-          <div className="px-4">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as AddFootageTab)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="flex items-center gap-2 px-4">
             <TabsList>
               <TabsTrigger value="links">
                 <Link2 className="size-3.5" />
@@ -69,6 +96,30 @@ export function AddFootageDialog({ open, onOpenChange, onOpenSettings }: Props) 
                 Drive Folder
               </TabsTrigger>
             </TabsList>
+
+            <Tooltip
+              content={
+                tab === defaultTab
+                  ? "This tab opens by default"
+                  : "Open this tab by default"
+              }
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={pinDefault}
+                disabled={tab === defaultTab}
+                aria-label="Open this tab by default"
+                className="disabled:opacity-100"
+              >
+                <Pin
+                  className={cn(
+                    "size-3.5",
+                    tab === defaultTab ? "fill-current text-primary" : "text-muted-foreground",
+                  )}
+                />
+              </Button>
+            </Tooltip>
           </div>
 
           <TabsContent value="links" className="min-h-0 flex-1 outline-none">

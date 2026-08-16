@@ -69,6 +69,15 @@ pub struct Prefs {
     pub inspector_visible: Option<bool>,
     pub grid_size: Option<f64>,
     pub view_mode: Option<String>,
+    /// Which tab Add Footage opens on: "links", "local" or "drive".
+    pub add_footage_tab: Option<String>,
+    /// Where downloaded originals are kept. `None` means `Downloaded/` beside
+    /// the open library file, so a library that travels keeps its files with it.
+    pub download_dir: Option<String>,
+    /// Download the original as soon as a footage is opened, instead of waiting
+    /// for the button.
+    #[serde(default)]
+    pub auto_download: bool,
     /// Whether to ask GitHub for a newer release at launch. The only network
     /// request Stash makes on its own, so it is switchable off — with it off the
     /// app contacts nothing at all unless Drive is connected.
@@ -99,6 +108,9 @@ impl Default for Prefs {
             inspector_visible: None,
             grid_size: None,
             view_mode: None,
+            add_footage_tab: None,
+            download_dir: None,
+            auto_download: false,
             check_updates: true,
         }
     }

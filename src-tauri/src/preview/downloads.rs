@@ -1,0 +1,252 @@
+//! Original files pulled down to disk, next to the library.
+//!
+//! Streaming a Drive still into `<img>` means the whole file is buffered before
+//! a single pixel appears, and a slow or unshared file leaves the preview blank
+//! for as long as it takes. A downloaded copy is opened from disk instead:
+//! instant on the second look, and readable with the account disconnected.
+//!
+//! The file is written under the id (`12-photo.jpg`) so the scheme handler can
+//! find it without a database column — nothing here is library state, and
+//! deleting the folder only costs a re-download.
+
+use crate::db::repo::footage as footage_repo;
+use crate::error::{AppError, Result};
+use crate::state::AppState;
+use serde::Serialize;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use tauri::{AppHandle, Emitter};
+
+/// Emitted as `download:progress` while bytes arrive.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    pub id: i64,
+    pub received: u64,
+    /// `None` when the server did not say how big the file is.
+    pub total: Option<u64>,
+}
+
+/// Progress is emitted at most every 512 KB, so a fast local link does not
+/// flood the webview with one event per chunk.
+const EMIT_EVERY: u64 = 512 * 1024;
+
+/// Where downloads land: the preference, or `Downloaded/` beside the library
+/// file — so a library carried to another machine carries its files too.
+pub fn dir(state: &AppState) -> Result<PathBuf> {
+    if let Some(p) = state
+        .prefs
+        .get()
+        .download_dir
+        .filter(|p| !p.trim().is_empty())
+    {
+        return Ok(PathBuf::from(p));
+    }
+    let lib = state.library_path().ok_or(AppError::NoLibraryOpen)?;
+    Ok(lib
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("Downloaded"))
+}
+
+/// Strips anything that would let a Drive filename write outside the folder.
+fn safe_name(raw: &str) -> String {
+    let base = raw.rsplit(['/', '\\']).next().unwrap_or(raw);
+    let cleaned: String = base
+        .chars()
+        .map(|c| match c {
+            '\0'..='\x1f' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c => c,
+        })
+        .collect();
+    let trimmed = cleaned.trim_matches(['.', ' ']).to_string();
+    if trimmed.is_empty() {
+        "file".into()
+    } else {
+        trimmed
+    }
+}
+
+/// The downloaded copy of this footage, if there is one.
+pub fn find(state: &AppState, footage_id: i64) -> Option<PathBuf> {
+    let prefix = format!("{footage_id}-");
+    std::fs::read_dir(dir(state).ok()?)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| {
+            p.is_file()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    // `.part` is a download still in flight, not a preview.
+                    .is_some_and(|n| n.starts_with(&prefix) && !n.ends_with(".part"))
+        })
+}
+
+/// Downloads the original to disk, reporting progress as it goes.
+///
+/// Written to a `.part` file and renamed at the end, so an interrupted download
+/// never leaves a truncated image that `<img>` would happily render as garbage.
+pub async fn fetch(app: &AppHandle, state: &AppState, footage_id: i64) -> Result<PathBuf> {
+    if let Some(existing) = find(state, footage_id) {
+        return Ok(existing);
+    }
+
+    let src = state.with_library(|lib| footage_repo::get_source(&lib.conn, footage_id))?;
+
+    // A local file is already on disk; copying it into Downloaded would only
+    // burn the space twice.
+    if src.provider == "local" {
+        return src
+            .local_path
+            .map(PathBuf::from)
+            .filter(|p| p.exists())
+            .ok_or_else(|| AppError::NotFound("That file is not on this computer".into()));
+    }
+
+    let name = safe_name(
+        src.original_filename
+            .as_deref()
+            .or(src.local_path.as_deref())
+            .unwrap_or("file"),
+    );
+    let dir = dir(state)?;
+    std::fs::create_dir_all(&dir)?;
+    let dest = dir.join(format!("{footage_id}-{name}"));
+    let part = dir.join(format!("{footage_id}-{name}.part"));
+
+    let mut resp = match src.provider.as_str() {
+        "google_drive" => {
+            let id = src
+                .external_id
+                .clone()
+                .ok_or_else(|| AppError::NotFound("This link has no Drive file id".into()))?;
+            state.drive.ensure_restored(&state.prefs).await;
+
+            if state.drive.is_connected().await {
+                // No Range header: this is the one place the whole file is wanted.
+                state.drive.media_range(&id, None).await?
+            } else {
+                // Link mode. The embed already renders this file, so it is
+                // public and the anonymous route can fetch it too.
+                let url = crate::preview::providers::best_effort_drive::public_download_url(
+                    &id,
+                    src.external_key.as_deref(),
+                );
+                let resp = state.http.get(&url).send().await?;
+                if !resp.status().is_success() {
+                    return Err(AppError::PermissionRequired);
+                }
+                // A private file answers 200 with a sign-in page, so the content
+                // type is the only honest signal that these are real bytes.
+                // ponytail: a public file over ~100 MB answers with the virus-scan
+                // interstitial, also HTML, and is reported as "not shared
+                // publicly". Parse the confirm token out of that page if anyone
+                // hits it; connecting the account is the fix either way.
+                let html = resp
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .is_some_and(|ct| ct.starts_with("text/html"));
+                if html {
+                    return Err(AppError::Invalid(
+                        "This file is not shared publicly. Connect Google Drive in Settings to download it.".into(),
+                    ));
+                }
+                resp
+            }
+        }
+        "url" => {
+            let url = src
+                .original_url
+                .clone()
+                .ok_or_else(|| AppError::NotFound("This source has no address".into()))?;
+            let resp = state.http.get(&url).send().await?;
+            if !resp.status().is_success() {
+                return Err(AppError::Network(format!(
+                    "The server answered {}",
+                    resp.status().as_u16()
+                )));
+            }
+            resp
+        }
+        other => {
+            return Err(AppError::Invalid(format!(
+                "A {other} source cannot be downloaded"
+            )))
+        }
+    };
+
+    let total = resp.content_length();
+    let mut file = std::fs::File::create(&part)?;
+    let mut received = 0u64;
+    let mut emitted = 0u64;
+    let emit = |received: u64| {
+        let _ = app.emit(
+            "download:progress",
+            DownloadProgress {
+                id: footage_id,
+                received,
+                total,
+            },
+        );
+    };
+    emit(0);
+
+    while let Some(chunk) = resp.chunk().await? {
+        file.write_all(&chunk)?;
+        received += chunk.len() as u64;
+        if received - emitted >= EMIT_EVERY {
+            emitted = received;
+            emit(received);
+        }
+    }
+    file.flush()?;
+    drop(file);
+    std::fs::rename(&part, &dest)?;
+    emit(received);
+
+    Ok(dest)
+}
+
+/// Points downloads at a new folder, taking the existing files along.
+pub fn set_dir(state: &AppState, new_dir: &Path) -> Result<()> {
+    let old = dir(state)?;
+    std::fs::create_dir_all(new_dir)?;
+
+    if old.exists() && old != new_dir {
+        for entry in std::fs::read_dir(&old)?.flatten() {
+            let to = new_dir.join(entry.file_name());
+            // Rename is instant on the same volume; across volumes it fails and
+            // the copy is the only way over.
+            if std::fs::rename(entry.path(), &to).is_err() {
+                std::fs::copy(entry.path(), &to)?;
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+        let _ = std::fs::remove_dir(&old);
+    }
+
+    state
+        .prefs
+        .update(|p| p.download_dir = Some(new_dir.to_string_lossy().into_owned()))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filenames_cannot_escape_the_download_folder() {
+        assert_eq!(safe_name("../../etc/passwd"), "passwd");
+        assert_eq!(safe_name("C:\\Windows\\evil.jpg"), "evil.jpg");
+        assert_eq!(safe_name("photo.jpg"), "photo.jpg");
+        // A name that sanitizes away entirely still has to produce a filename.
+        assert_eq!(safe_name("..."), "file");
+        assert_eq!(safe_name(""), "file");
+        // The extension survives, because the scheme handler types the response
+        // from it.
+        assert!(safe_name("a:b?c.JPG").ends_with(".JPG"));
+    }
+}

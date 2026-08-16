@@ -467,6 +467,19 @@ export interface PlaybackTarget {
   url: string | null;
   externalUrl: string | null;
   reason: string | null;
+  /** True once the original is on disk; the preview is then the real file. */
+  downloaded: boolean;
+  /** The file on this machine, downloaded copy or catalogued local file. */
+  localPath: string | null;
+  /** Whether Download can do anything for this source. */
+  downloadable: boolean;
+}
+
+/** Emitted as `download:progress` while an original is being fetched. */
+export interface DownloadProgress {
+  id: number;
+  received: number;
+  total: number | null;
 }
 
 export interface DriveAccount {
@@ -480,6 +493,10 @@ export interface GoogleStatus {
   account: DriveAccount | null;
   keychainAvailable: boolean;
   clientIdSource: "environment" | "settings" | "none";
+  /** Whether the client secret is stored — an id without one cannot connect. */
+  clientSecretSaved: boolean;
+  /** Development builds keep secrets in a temp file, not the keychain. */
+  secretsTemporary: boolean;
 }
 
 export interface SyncReport {
@@ -503,6 +520,8 @@ export interface JobProgress {
 export type Theme = "light" | "dark" | "system";
 export type PortableThumbnailSize = "none" | "small" | "standard";
 
+export type AddFootageTab = "links" | "local" | "drive";
+
 export interface Prefs {
   theme: Theme;
   recent: RecentLibrary[];
@@ -517,6 +536,12 @@ export interface Prefs {
   inspectorVisible: boolean | null;
   gridSize: number | null;
   viewMode: string | null;
+  /** Which tab Add Footage opens on. Null means Links. */
+  addFootageTab: AddFootageTab | null;
+  /** Where downloaded originals go. Null means `Downloaded/` beside the library. */
+  downloadDir: string | null;
+  /** Download the original as soon as a footage is opened. */
+  autoDownload: boolean;
   /** When false, Stash never contacts the update server at all. */
   checkUpdates: boolean;
 }

@@ -52,6 +52,8 @@ pub struct PrefsPatch {
     pub inspector_visible: Option<bool>,
     pub grid_size: Option<f64>,
     pub view_mode: Option<String>,
+    pub add_footage_tab: Option<String>,
+    pub auto_download: Option<bool>,
     pub check_updates: Option<bool>,
 }
 
@@ -87,6 +89,12 @@ pub fn set_prefs(state: State<'_, AppState>, patch: PrefsPatch) -> Result<Prefs>
         }
         if let Some(v) = patch.view_mode {
             p.view_mode = Some(v);
+        }
+        if let Some(v) = patch.add_footage_tab {
+            p.add_footage_tab = Some(v);
+        }
+        if let Some(v) = patch.auto_download {
+            p.auto_download = v;
         }
     })
 }
