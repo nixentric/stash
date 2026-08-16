@@ -1,4 +1,4 @@
-# Stash
+# 🗃️ Stash
 
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Stash-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/nixentric)
 
@@ -11,7 +11,7 @@ library is a single file you own, and nothing is uploaded anywhere.
 
 ---
 
-## Help me pay for an Apple Developer membership
+## ☕ Help me pay for an Apple Developer membership
 
 Stash is built by one person, and the builds are unsigned — which is why macOS
 nags you. It warns on first launch, and because every unsigned build gets a
@@ -25,7 +25,7 @@ same offline app, no telemetry, no paid tier.
 
 ---
 
-## Why this exists
+## 🤔 Why this exists
 
 Creative work accumulates assets faster than any folder structure survives:
 B-roll on a drive, logo variants in Drive, a client's hex codes in a PDF, the
@@ -44,7 +44,7 @@ It is not a file manager, not a Drive client, and not a downloader. Originals
 are never moved, modified, or downloaded — Stash stores metadata, small
 previews, and your own notes.
 
-## Who it's for
+## 🎬 Who it's for
 
 Video editors, motion designers, graphic designers, content creators, and small
 creative teams — anyone who keeps footage, vectors, templates, sound, fonts, and
@@ -52,7 +52,7 @@ client brand rules in more places than they can remember.
 
 ---
 
-## Install
+## 📦 Install
 
 Download for your platform from the
 [latest release](https://github.com/nixentric/stash/releases/latest): `.dmg` for
@@ -64,7 +64,7 @@ The app is unsigned, so both macOS and Windows warn on first launch —
 
 ---
 
-## Documentation
+## 📚 Documentation
 
 | Document | What's in it |
 |---|---|
@@ -80,7 +80,7 @@ The app is unsigned, so both macOS and Windows warn on first launch —
 
 ---
 
-## Feature status
+## 🚧 Feature status
 
 Three states are used throughout the documentation, and they mean exactly this:
 
@@ -110,7 +110,7 @@ Three states are used throughout the documentation, and they mean exactly this:
 
 ---
 
-## Principles
+## 🧭 Principles
 
 **Offline-first.** Every core feature works with the network unplugged. With
 Drive disconnected and the update check off, Stash makes zero network requests.
@@ -132,7 +132,7 @@ it contacts nothing at all unless you connect Drive.
 
 ---
 
-## Tech stack
+## 🛠️ Tech stack
 
 Tauri v2 (Rust) · React + TypeScript · Tailwind · Zustand + TanStack Query ·
 SQLite via rusqlite · OS keychain for secrets · GitHub Actions for packaging.
@@ -141,6 +141,6 @@ Details in [Development](docs/development.md).
 
 ---
 
-## License
+## 📄 License
 
 [MIT](LICENSE). Use it, fork it, ship it.
