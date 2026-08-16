@@ -112,6 +112,32 @@ pub fn set_default_brand(conn: &Connection, brand_id: Option<i64>) -> Result<()>
     Ok(())
 }
 
+/// Whether a tag on a folder also counts for every file inside it.
+///
+/// Off by default, because a folder tag labels the folder. Turning it on is what
+/// makes "bestie" mean the 776 clips sitting in the five folders that carry it
+/// rather than the five folders themselves — and it has to move the grid filter
+/// with the count, or the sidebar advertises a number the grid cannot produce.
+pub fn folder_tags_cover_files(conn: &Connection) -> Result<bool> {
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT value FROM app_metadata WHERE key = 'folder_tags_cover_files'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(raw.as_deref() == Some("1"))
+}
+
+pub fn set_folder_tags_cover_files(conn: &Connection, on: bool) -> Result<()> {
+    conn.execute(
+        "INSERT INTO app_metadata (key, value) VALUES ('folder_tags_cover_files', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [if on { "1" } else { "0" }],
+    )?;
+    Ok(())
+}
+
 /// Stamps the folders these footage rows landed in with the library's default
 /// brand, if one is set.
 ///

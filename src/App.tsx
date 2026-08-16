@@ -31,7 +31,7 @@ import {
 } from "@/components/dialogs/BrandDialogs";
 import { BrandPage } from "@/components/brand/BrandPage";
 import { ipc } from "@/lib/ipc";
-import { HexOrbitLoader } from "@/components/ui/dot-matrix";
+import { DotmCircular2 } from "@/components/ui/dotm-circular-2";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
 import {
   invalidateLibrary,
@@ -148,7 +148,7 @@ export default function App() {
               
               const id = toast.loading(
                 <div className="flex items-center gap-3 py-1">
-                  <HexOrbitLoader className="shrink-0 scale-75" />
+                  <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                   <span className="text-[13px]">Downloading update...</span>
                 </div>
               );
@@ -167,7 +167,7 @@ export default function App() {
                         const pct = Math.round((downloaded / contentLength) * 100);
                         toast.loading(
                           <div className="flex items-center gap-3 py-1">
-                            <HexOrbitLoader className="shrink-0 scale-75" />
+                            <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                             <span className="text-[13px]">Downloading update... {pct}%</span>
                           </div>,
                           { id }
@@ -177,7 +177,7 @@ export default function App() {
                     case 'Finished':
                       toast.loading(
                         <div className="flex items-center gap-3 py-1">
-                          <HexOrbitLoader className="shrink-0 scale-75" />
+                          <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                           <span className="text-[13px]">Installing...</span>
                         </div>,
                         { id }
@@ -332,7 +332,7 @@ export default function App() {
     return (
       <TooltipProvider delayDuration={400}>
         <Welcome />
-        <Toaster position="bottom-right" theme="system" richColors closeButton />
+        <Toaster position="bottom-right" theme="system" richColors closeButton icons={{ loading: null }} />
       </TooltipProvider>
     );
   }
@@ -432,7 +432,7 @@ export default function App() {
 
       <Settings open={settingsOpen} onOpenChange={setSettingsOpen} />
 
-      <Toaster position="bottom-right" theme="system" richColors closeButton />
+      <Toaster position="bottom-right" theme="system" richColors closeButton icons={{ loading: null }} />
     </TooltipProvider>
   );
 }

@@ -241,7 +241,12 @@ pub struct Collection {
 pub struct Tag {
     pub id: i64,
     pub name: String,
+    /// Files the tag reaches. Whether a folder tag reaches the files inside it
+    /// depends on the library's `folder_tags_cover_files` switch.
     pub footage_count: i64,
+    /// Source folders carrying the tag — never affected by that switch, so a
+    /// folder-only tag is still visibly in use when the switch is off.
+    pub folder_count: i64,
 }
 
 #[derive(Serialize, Clone, Debug)]

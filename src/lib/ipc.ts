@@ -38,6 +38,8 @@ export const ipc = {
     invoke<void>("set_folder_field_value", { path, fieldId, value }),
   setFolderBrand: (path: string, brandId: number | null) =>
     invoke<void>("set_folder_brand", { path, brandId }),
+  folderTagsCoverFiles: () => invoke<boolean>("folder_tags_cover_files"),
+  setFolderTagsCoverFiles: (on: boolean) => invoke<void>("set_folder_tags_cover_files", { on }),
   defaultFolderBrand: () => invoke<number | null>("default_folder_brand"),
   setDefaultFolderBrand: (brandId: number | null) =>
     invoke<void>("set_default_folder_brand", { brandId }),

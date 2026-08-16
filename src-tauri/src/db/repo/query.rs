@@ -32,7 +32,7 @@ const SEARCH_PREDICATE: &str = r#"(
 
 const SEARCH_PLACEHOLDERS: usize = 8;
 
-pub fn build(q: &FootageQuery) -> Filter {
+pub fn build(q: &FootageQuery, folder_tags_cover_files: bool) -> Filter {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
@@ -87,19 +87,26 @@ pub fn build(q: &FootageQuery) -> Filter {
 
     // Multiple tags are ANDed: selecting `iphone` + `outdoor` means both.
     //
-    // A tag counts whether it sits on the footage itself or on its source folder
-    // — tagging a folder "cabang-bandung" is how you label a hundred clips at
-    // once, so the filter has to see both tables or that tag matches nothing.
+    // Whether a folder tag also matches the files inside it is the library's
+    // `folder_tags_cover_files` switch. With it on, tagging a folder
+    // "cabang-bandung" labels a hundred clips at once; with it off (the default)
+    // the tag stays on the folder. `all_tags` reads the same switch, so the count
+    // in the sidebar is always the count this filter produces.
     if !q.tags.is_empty() {
         let holes = vec!["?"; q.tags.len()].join(",");
+        let folder_match = if folder_tags_cover_files {
+            "OR EXISTS (SELECT 1 FROM source_folder_tags sft
+                         WHERE sft.tag_id = t.id
+                           AND sft.container_path = s.container_path)"
+        } else {
+            ""
+        };
         clauses.push(format!(
             "(SELECT COUNT(*) FROM tags t
                WHERE t.name IN ({holes})
                  AND (EXISTS (SELECT 1 FROM footage_tags ft
                                WHERE ft.footage_id = f.id AND ft.tag_id = t.id)
-                   OR EXISTS (SELECT 1 FROM source_folder_tags sft
-                               WHERE sft.tag_id = t.id
-                                 AND sft.container_path = s.container_path))) = ?"
+                   {folder_match})) = ?"
         ));
         params.extend(q.tags.iter().map(|t| Value::Text(t.clone())));
         params.push(Value::Integer(q.tags.len() as i64));

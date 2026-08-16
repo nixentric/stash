@@ -75,6 +75,8 @@ pub fn run() {
             commands::source_folder::set_folder_brand,
             commands::source_folder::default_folder_brand,
             commands::source_folder::set_default_folder_brand,
+            commands::source_folder::folder_tags_cover_files,
+            commands::source_folder::set_folder_tags_cover_files,
             // brands
             commands::brand::all_brands,
             commands::brand::brand_detail,

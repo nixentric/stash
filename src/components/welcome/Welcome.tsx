@@ -1,20 +1,22 @@
 import { useState, useEffect } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Clock, FilePlus2, FolderOpen, Layers, X, Download, RefreshCw } from "lucide-react";
+import { Clock, FilePlus2, FolderOpen, X, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd, Tooltip } from "@/components/ui/misc";
 import { ipc } from "@/lib/ipc";
 import { keys, reportError } from "@/hooks/queries";
 import { useRecentLibraries } from "@/hooks/queries";
 import { relativeDate } from "@/lib/format";
-import { cn, mod } from "@/lib/utils";
+import { mod } from "@/lib/utils";
 import { getVersion } from "@tauri-apps/api/app";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { toast } from "sonner";
-import { HexOrbitLoader } from "@/components/ui/dot-matrix";
+import { DotmCircular2 } from "@/components/ui/dotm-circular-2";
+import { PlayfulTitle } from "@/components/welcome/PlayfulTitle";
+import { FallingStashBackground } from "@/components/welcome/FallingStashBackground";
 
 export function Welcome() {
   const qc = useQueryClient();
@@ -68,7 +70,7 @@ export function Welcome() {
     setUpdating(true);
     const id = toast.loading(
       <div className="flex items-center gap-3 py-1">
-        <HexOrbitLoader className="shrink-0 scale-75" />
+        <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
         <span className="text-[13px]">Downloading update...</span>
       </div>
     );
@@ -84,7 +86,7 @@ export function Welcome() {
             const pct = Math.round((downloaded / contentLength) * 100);
             toast.loading(
               <div className="flex items-center gap-3 py-1">
-                <HexOrbitLoader className="shrink-0 scale-75" />
+                <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                 <span className="text-[13px]">Downloading update... {pct}%</span>
               </div>,
               { id }
@@ -93,7 +95,7 @@ export function Welcome() {
         } else if (e.event === 'Finished') {
           toast.loading(
             <div className="flex items-center gap-3 py-1">
-              <HexOrbitLoader className="shrink-0 scale-75" />
+              <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
               <span className="text-[13px]">Installing...</span>
             </div>,
             { id }
@@ -154,51 +156,30 @@ export function Welcome() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="drag-region flex h-10 shrink-0 items-center justify-end px-4 gap-2">
-        {update ? (
-          <Button
-            variant="default"
-            size="sm"
-            className="no-drag h-7 text-[11.5px] font-medium animate-fade-in"
-            onClick={handleUpdate}
-            disabled={updating}
-          >
-            <Download className="size-3.5" />
-            Update to v{update.version}
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="no-drag h-7 text-[11.5px] font-normal text-muted-foreground hover:text-foreground"
-            onClick={checkManual}
-            disabled={checking}
-          >
-            <RefreshCw className={cn("size-3.5", checking && "animate-spin")} />
-            {checking ? "Checking..." : version ? `v${version}` : "Check for Updates"}
-          </Button>
-        )}
-      </div>
+    <div className="relative flex h-full flex-col overflow-hidden bg-background">
+      <FallingStashBackground />
 
-      <div className="flex flex-1 items-center justify-center px-8 pb-16">
+      <div className="drag-region relative z-10 h-10 shrink-0" />
+
+      {/* The wrapper stays click-through so the physics layer underneath can be
+          grabbed in empty space; only real controls take pointer events back. */}
+      <div className="pointer-events-none relative z-10 flex flex-1 flex-col items-center justify-center px-8 pb-16">
+        <div className="relative mb-14">
+          <h1 className="font-['Special_Gothic_Expanded_One'] text-[clamp(3.5rem,13vw,8.5rem)] leading-none">
+            <PlayfulTitle text="STASH" />
+          </h1>
+          {/* Tucked under the SH, overlapping it a little — hence the negative offset. */}
+          <p
+            className="absolute -bottom-4 right-0 -rotate-6 rounded-full bg-primary px-3.5 py-1
+                       text-[11.5px] font-medium text-primary-foreground"
+          >
+            Visual footage catalog
+          </p>
+        </div>
+
         <div className="grid w-full max-w-3xl grid-cols-1 gap-12 md:grid-cols-[1fr_auto_1fr]">
           <div className="flex flex-col justify-center">
-            <div className="mb-7 flex items-center gap-2.5">
-              <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-                <Layers className="size-4 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">
-                  Stash
-                </h1>
-                <p className="text-[11.5px] text-subtle-foreground">
-                  Visual footage catalog
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
+            <div className="pointer-events-auto flex flex-col gap-1.5">
               <ActionRow
                 icon={<FilePlus2 className="size-4" />}
                 label="New Library"
@@ -230,7 +211,7 @@ export function Welcome() {
             </h2>
 
             {recent.data && recent.data.length > 0 ? (
-              <ul className="flex flex-col gap-px">
+              <ul className="pointer-events-auto flex flex-col gap-px">
                 {recent.data.map((r) => (
                   <li key={r.path} className="group relative">
                     <button
@@ -270,6 +251,36 @@ export function Welcome() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="pointer-events-auto relative z-10 flex shrink-0 items-center justify-end px-4 pb-3">
+        {update ? (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 text-[11.5px] font-medium animate-fade-in"
+            onClick={handleUpdate}
+            disabled={updating}
+          >
+            <Download className="size-3.5" />
+            Update to v{update.version}
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-[11.5px] font-normal text-muted-foreground hover:text-foreground"
+            onClick={checkManual}
+            disabled={checking}
+          >
+            {checking ? (
+              <DotmCircular2 size={16} dotSize={2} ariaLabel="Checking for updates" />
+            ) : (
+              <RefreshCw className="size-3.5" />
+            )}
+            {checking ? "Checking..." : version ? `v${version}` : "Check for Updates"}
+          </Button>
+        )}
       </div>
     </div>
   );

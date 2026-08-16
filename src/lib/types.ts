@@ -103,7 +103,10 @@ export interface Collection {
 export interface Tag {
   id: number;
   name: string;
+  /** Files the tag reaches — folder tags only reach them when the switch is on. */
   footageCount: number;
+  /** Source folders carrying the tag, whatever the switch says. */
+  folderCount: number;
 }
 
 export interface Project {

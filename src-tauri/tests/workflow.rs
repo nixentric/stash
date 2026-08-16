@@ -486,6 +486,52 @@ fn the_default_brand_claims_new_folders_and_leaves_settled_ones_alone() {
     assert_eq!(brand_of("/Shoots/Later"), None, "no default, no brand");
 }
 
+/// A tag on a folder means the folder, until you say otherwise — and whichever
+/// way the switch sits, the number the tag list shows is the number the grid
+/// produces when you click it.
+#[test]
+fn folder_tags_count_folders_until_the_switch_says_files() {
+    let dir = TempDir::new();
+    let lib = connection::create(&dir.join("Tagged")).unwrap();
+
+    let in_folder = |link: &str, name: &str, path: &str| NewFootage {
+        container_path: Some(path.to_string()),
+        ..from_link(link, name)
+    };
+
+    // Three clips in one folder; the folder carries "bestie", nothing else does.
+    for (link, name) in [(LINK_A, "One"), (LINK_B, "Two"), (LINK_C, "Three")] {
+        footage::insert(&lib.conn, &in_folder(link, name, "/Shoots/Bestie")).unwrap();
+    }
+    source_folder::set_tags(&lib.conn, "/Shoots/Bestie", &["bestie".into()]).unwrap();
+
+    let bestie = |conn: &_| {
+        taxonomy::all_tags(conn)
+            .unwrap()
+            .into_iter()
+            .find(|t| t.name == "bestie")
+            .expect("the tag exists")
+    };
+    let clicking_bestie = |conn: &_| {
+        footage::list(conn, &FootageQuery { tags: vec!["bestie".into()], ..q() })
+            .unwrap()
+            .total
+    };
+
+    // Off by default: one folder, no files — and the grid agrees.
+    let off = bestie(&lib.conn);
+    assert_eq!(off.folder_count, 1, "the tag labels one folder");
+    assert_eq!(off.footage_count, 0, "and no file carries it directly");
+    assert_eq!(clicking_bestie(&lib.conn), 0, "the count is what the grid shows");
+
+    // On: the tag reaches everything in the folder, count and filter together.
+    source_folder::set_folder_tags_cover_files(&lib.conn, true).unwrap();
+    let on = bestie(&lib.conn);
+    assert_eq!(on.footage_count, 3, "now it reaches the folder's contents");
+    assert_eq!(on.folder_count, 1, "the folder count never moves");
+    assert_eq!(clicking_bestie(&lib.conn), 3, "the count is still what the grid shows");
+}
+
 /// A mixed library — Drive links, a web URL, a local file — behaves uniformly.
 #[test]
 fn providers_coexist_in_one_library() {

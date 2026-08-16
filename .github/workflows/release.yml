@@ -58,6 +58,13 @@ jobs:
           # is written, so the in-app updater has nothing to fetch.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Self-signed code-signing cert ("Stash Code Signing", see
+          # tauri.conf.json). Not for Gatekeeper — it is what gives the app a
+          # *stable* code identity across releases, so the keychain ACL keeps
+          # matching and "Always Allow" survives an update instead of asking
+          # for the login password on every new build.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Stash ${{ github.ref_name }}

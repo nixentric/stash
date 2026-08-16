@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/misc";
 import { Select } from "@/components/dialogs/BrandDialogs";
 import { ipc } from "@/lib/ipc";
 import {
@@ -20,6 +21,7 @@ import {
   useBrands,
   useDefaultFolderBrand,
   useFolderFields,
+  useFolderTagsCoverFiles,
 } from "@/hooks/queries";
 
 /** Same wording the folder brand pickers use, so the option reads identically. */
@@ -40,6 +42,7 @@ export function ManageColumnsDialog({
   const fields = useFolderFields(open);
   const brands = useBrands(open);
   const defaultBrand = useDefaultFolderBrand(open);
+  const coverFiles = useFolderTagsCoverFiles(open);
   const [column, setColumn] = useState("");
   const [colType, setColType] = useState<"single" | "multiple">("single");
   const [busy, setBusy] = useState(false);
@@ -100,6 +103,30 @@ export function ManageColumnsDialog({
                   qc.invalidateQueries({ queryKey: keys.defaultFolderBrand });
                 } catch (e) {
                   reportError(e, "Could not save the default brand");
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex items-start justify-between gap-3 border-t border-border pt-3">
+            <div className="min-w-0">
+              <span className="text-[13px] font-medium">Folder tags cover the files inside</span>
+              <p className="mt-1 text-[12px] text-subtle-foreground">
+                Off, a tag on a folder labels the folder — the tag list counts it as one folder, and
+                clicking it in the sidebar shows only files tagged directly. On, the tag reaches every
+                file in that folder: the count becomes the whole folder's contents, and the sidebar
+                shows all of them.
+              </p>
+            </div>
+            <Switch
+              checked={coverFiles.data ?? false}
+              onCheckedChange={async (on) => {
+                try {
+                  await ipc.setFolderTagsCoverFiles(on);
+                  qc.invalidateQueries({ queryKey: keys.folderTagsCoverFiles });
+                  invalidateLibrary(qc);
+                } catch (e) {
+                  reportError(e, "Could not change the setting");
                 }
               }}
             />

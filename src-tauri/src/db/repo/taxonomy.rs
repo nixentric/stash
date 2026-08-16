@@ -129,27 +129,33 @@ pub fn tags_for(conn: &Connection, footage_id: i64) -> Result<Vec<String>> {
 }
 
 pub fn all_tags(conn: &Connection) -> Result<Vec<Tag>> {
-    // The count must use the same definition as the tag filter in `query.rs`
-    // (footage tag OR source-folder tag), otherwise the sidebar advertises a
-    // number the grid cannot reproduce.
+    // The file count must use the same definition as the tag filter in `query.rs`
+    // — which is why both read the same switch — otherwise the sidebar advertises
+    // a number the grid cannot reproduce.
+    //
+    // The folder count is reported separately and always: it is what tells a tag
+    // that labels five folders apart from a tag nothing carries at all.
     // ponytail: correlated scan, O(tags × footages). Fine at library scale; if a
     // huge library drags, precompute into a counts table.
+    let covers_files = super::source_folder::folder_tags_cover_files(conn)?;
     let mut stmt = conn.prepare(
         "SELECT t.id, t.name,
                 (SELECT COUNT(*) FROM footages f LEFT JOIN sources s ON s.footage_id = f.id
                   WHERE EXISTS (SELECT 1 FROM footage_tags ft
                                  WHERE ft.footage_id = f.id AND ft.tag_id = t.id)
-                     OR EXISTS (SELECT 1 FROM source_folder_tags sft
-                                 WHERE sft.tag_id = t.id
-                                   AND sft.container_path = s.container_path))
-         FROM tags t ORDER BY 3 DESC, t.name COLLATE NOCASE",
+                     OR (?1 AND EXISTS (SELECT 1 FROM source_folder_tags sft
+                                         WHERE sft.tag_id = t.id
+                                           AND sft.container_path = s.container_path))),
+                (SELECT COUNT(*) FROM source_folder_tags sft WHERE sft.tag_id = t.id)
+         FROM tags t ORDER BY 3 DESC, 4 DESC, t.name COLLATE NOCASE",
     )?;
     let rows = stmt
-        .query_map([], |r| {
+        .query_map([covers_files], |r| {
             Ok(Tag {
                 id: r.get(0)?,
                 name: r.get(1)?,
                 footage_count: r.get(2)?,
+                folder_count: r.get(3)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -290,6 +296,8 @@ mod tests {
     fn a_folder_tag_finds_every_clip_in_that_folder() {
         let c = db();
         source_folder::set_tags(&c, "Drive/Cabang Bandung", &["Cabang Bandung".into()]).unwrap();
+        // Reaching the clips is what the switch turns on; off, the tag is the folder's.
+        source_folder::set_folder_tags_cover_files(&c, true).unwrap();
 
         let q = FootageQuery {
             tags: vec!["cabang bandung".into()],
@@ -306,6 +314,7 @@ mod tests {
     fn folder_and_footage_tags_are_the_same_namespace_and_do_not_double_count() {
         let c = db();
         source_folder::set_tags(&c, "Drive/Cabang Bandung", &["cabang".into()]).unwrap();
+        source_folder::set_folder_tags_cover_files(&c, true).unwrap();
         // Clip 1 also carries it directly; clip 3 is outside the folder.
         add_tags(&c, &[1, 3], &["cabang".into()]).unwrap();
 
@@ -325,6 +334,7 @@ mod tests {
         assert_eq!(names, vec!["cabang".to_string()], "folder tag kept, orphaned footage tag gone");
 
         // And it still reaches its clips — the cascade did not empty source_folder_tags.
+        source_folder::set_folder_tags_cover_files(&c, true).unwrap();
         let q = FootageQuery { tags: vec!["cabang".into()], limit: 100, ..Default::default() };
         assert_eq!(footage::list(&c, &q).unwrap().total, 2);
 

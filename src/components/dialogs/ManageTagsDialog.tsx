@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ipc } from "@/lib/ipc";
 import { count } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { invalidateLibrary, reportError, useTags } from "@/hooks/queries";
 
 /**
@@ -27,8 +28,12 @@ export function ManageTagsDialog({ open, onClose }: { open: boolean; onClose: ()
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const [by, setBy] = useState<"items" | "folders">("items");
+
   const rows = tags.data ?? [];
-  const unused = rows.filter((t) => t.footageCount === 0);
+  // A folder-only tag has no files behind it while the folder-tags switch is off.
+  // Counting that as unused would offer to delete the folder labels themselves.
+  const unused = rows.filter((t) => t.footageCount === 0 && t.folderCount === 0);
 
   const run = async (fn: () => Promise<unknown>, message: string) => {
     setBusy(true);
@@ -54,6 +59,30 @@ export function ManageTagsDialog({ open, onClose }: { open: boolean; onClose: ()
             Deleting a tag removes it from every clip and source folder that carries it. The
             files themselves are never touched.
           </p>
+
+          <div className="flex items-center gap-2 pb-1">
+            <span className="text-[12px] text-muted-foreground">Count by</span>
+            {(
+              [
+                ["items", "Files"],
+                ["folders", "Folders"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setBy(id)}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors",
+                  by === id
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
           {rows.length === 0 && (
             <p className="py-6 text-center text-[13px] text-muted-foreground">No tags yet.</p>
@@ -88,13 +117,21 @@ export function ManageTagsDialog({ open, onClose }: { open: boolean; onClose: ()
               <div key={tag.id} className="flex items-center gap-2">
                 <Hash className="size-3.5 shrink-0 text-subtle-foreground" />
                 <span className="min-w-0 flex-1 truncate text-[13px]">{tag.name}</span>
-                <span
-                  className={`shrink-0 text-[12px] ${
-                    tag.footageCount === 0 ? "text-subtle-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  {tag.footageCount === 0 ? "unused" : count(tag.footageCount)}
-                </span>
+                {(() => {
+                  const n = by === "items" ? tag.footageCount : tag.folderCount;
+                  const idle = tag.footageCount === 0 && tag.folderCount === 0;
+                  return (
+                    <span
+                      className={cn(
+                        "shrink-0 text-[12px]",
+                        n === 0 ? "text-subtle-foreground" : "text-muted-foreground",
+                      )}
+                      title={`${count(tag.footageCount)} files · ${count(tag.folderCount)} folders`}
+                    >
+                      {idle ? "unused" : count(n)}
+                    </span>
+                  );
+                })()}
                 <Button
                   size="sm"
                   variant="ghost"

@@ -49,6 +49,16 @@ pub fn set_default_folder_brand(state: State<'_, AppState>, brand_id: Option<i64
 }
 
 #[tauri::command]
+pub fn folder_tags_cover_files(state: State<'_, AppState>) -> Result<bool> {
+    state.with_library(|lib| repo::folder_tags_cover_files(&lib.conn))
+}
+
+#[tauri::command]
+pub fn set_folder_tags_cover_files(state: State<'_, AppState>, on: bool) -> Result<()> {
+    state.with_library(|lib| repo::set_folder_tags_cover_files(&lib.conn, on))
+}
+
+#[tauri::command]
 pub fn set_folder_field_value(
     state: State<'_, AppState>,
     path: String,

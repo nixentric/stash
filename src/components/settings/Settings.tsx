@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { HexOrbitLoader } from "@/components/ui/dot-matrix";
+import { DotmCircular2 } from "@/components/ui/dotm-circular-2";
 import {
   Check,
   ChevronRight,
@@ -192,7 +192,7 @@ function GeneralPane() {
               <Button size="sm" onClick={async () => {
                 const id = toast.loading(
                    <div className="flex items-center gap-3 py-1">
-                     <HexOrbitLoader className="shrink-0 scale-75" />
+                     <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                      <span className="text-[13px]">Downloading update...</span>
                    </div>
                  );
@@ -206,7 +206,7 @@ function GeneralPane() {
                        if (contentLength > 0) {
                          toast.loading(
                            <div className="flex items-center gap-3 py-1">
-                             <HexOrbitLoader className="shrink-0 scale-75" />
+                             <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                              <span className="text-[13px]">Downloading update... {Math.round((downloaded / contentLength) * 100)}%</span>
                            </div>,
                            { id }
@@ -216,7 +216,7 @@ function GeneralPane() {
                      else if (e.event === 'Finished') {
                        toast.loading(
                          <div className="flex items-center gap-3 py-1">
-                           <HexOrbitLoader className="shrink-0 scale-75" />
+                           <DotmCircular2 size={28} colorPreset="solid-mint" className="shrink-0" ariaLabel="Downloading update" />
                            <span className="text-[13px]">Installing...</span>
                          </div>,
                          { id }

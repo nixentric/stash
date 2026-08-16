@@ -3,6 +3,28 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.8 — 2026-08-16
+
+**Folder tags decide for themselves whether they reach the files**
+
+- **New switch: "Folder tags cover the files inside".** Off by default. With it off, a tag on a source folder labels the folder and nothing else — the tag list counts it as one folder, and clicking it in the sidebar shows only files tagged directly. Turn it on and the same tag reaches every file in that folder, so a tag on five folders becomes the several hundred clips sitting in them. It lives in **Source Folder Settings**, next to the default brand, and is stored inside the `.footagedb` so each library keeps its own answer.
+- **The count and the grid can no longer disagree.** The sidebar count and the grid filter read the same switch, so the number a tag advertises is always the number the grid can actually produce.
+- **Manage Tags counts by files or by folders.** A new **Count by** toggle switches the tag list between file counts and folder counts, and hovering a count shows both. A tag that only labels folders is no longer reported as "unused" — and so is no longer offered up for deletion along with the real orphans.
+
+**A welcome screen worth looking at**
+
+- **New title treatment.** The welcome screen leads with STASH set in Special Gothic Expanded One, self-hosted so the app still makes no network request of its own, with the letters reacting as you move across them.
+- **Falling background.** Physics-driven pieces drop and settle behind the screen, and you can grab them in the empty space around the buttons. Everything that is actually a control keeps its clicks.
+- **Version button moved.** The update / version button now sits at the bottom right instead of the title bar, leaving the top edge clear for dragging the window.
+
+**New loaders**
+
+- **Dot-matrix loaders replace the Hex Orbit.** Update toasts get a circular dot loader, and thumbnails being generated get a square spiral one. The old Hex Orbit and its stand-in toast spinner are gone.
+
+**macOS updates stop asking for your password**
+
+- **The app now has a stable code identity.** Builds are signed with a consistent self-signed identity instead of an ad-hoc one that changed with every build. This is not Gatekeeper notarisation — first launch still warns — but it does mean the keychain keeps recognising Stash across updates, so "Always Allow" survives an update instead of prompting for your login password again.
+
 ## v0.5.7 — 2026-08-16
 
 **A default brand for new folders**

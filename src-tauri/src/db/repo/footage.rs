@@ -47,7 +47,7 @@ fn list_item(r: &Row<'_>) -> rusqlite::Result<FootageListItem> {
 /// never disagree with what is scrolling. Paging happens in SQL — the WebView
 /// never receives more rows than it draws (ARCHITECTURE.md §7).
 pub fn list(conn: &Connection, q: &FootageQuery) -> Result<FootagePage> {
-    let f = query::build(q);
+    let f = query::build(q, super::source_folder::folder_tags_cover_files(conn)?);
     let limit = q.limit.clamp(1, 500);
     let offset = q.offset.max(0);
 
@@ -82,7 +82,7 @@ pub fn list(conn: &Connection, q: &FootageQuery) -> Result<FootagePage> {
 /// Ids only, in the same order as `list` — powers Select All and Quick Look
 /// navigation without pulling every row's metadata.
 pub fn list_ids(conn: &Connection, q: &FootageQuery) -> Result<Vec<i64>> {
-    let f = query::build(q);
+    let f = query::build(q, super::source_folder::folder_tags_cover_files(conn)?);
     let sql = format!(
         "SELECT f.id FROM footages f LEFT JOIN sources s ON s.footage_id = f.id {} {}",
         f.where_sql,

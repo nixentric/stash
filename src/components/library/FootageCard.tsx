@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Heart, ImageOff, Link2, Play, Star, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DotMatrixLoader } from "@/components/ui/dot-matrix";
+import { DotmSquare3 } from "@/components/ui/dotm-square-3";
 import { duration as fmtDuration, accessibilityLabel } from "@/lib/format";
 import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
 import type { FootageListItem } from "@/lib/types";
@@ -170,7 +170,7 @@ function Placeholder({ loading, mediaType }: { loading: boolean; mediaType: stri
   return (
     <div className="flex size-full items-center justify-center">
       {loading ? (
-        <DotMatrixLoader />
+        <DotmSquare3 colorPreset="grad-ocean" ariaLabel="Generating preview" />
       ) : (
         <div className="flex flex-col items-center gap-1 text-subtle-foreground/60">
           <ImageOff className="size-5" />
