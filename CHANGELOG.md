@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.11 — 2026-08-16
+
+**Quick Look stops going blank**
+
+- **A photo loading from Google Drive says so.** A still has to arrive whole before the webview can decode a single pixel of it, so a 5 MB photo meant an empty screen for as long as the download took — with nothing on it to say whether anything was happening. There is now a loader, a progress bar, and a running count of how long you have been waiting, and the photo replaces them the moment it is ready.
+- **A preview that fails admits it.** When the image cannot be fetched and there is no thumbnail left to fall back on, Quick Look says "Preview unavailable" instead of leaving behind exactly the same empty screen as a slow load.
+
 ## v0.5.10 — 2026-08-16
 
 **Search finds the rest of the library**
