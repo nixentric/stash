@@ -47,6 +47,7 @@ import {
 } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
 import { GROUPS, UniversalSearch } from "@/components/library/UniversalSearch";
+import { MissingPreviewsDialog } from "@/components/dialogs/MissingPreviewsDialog";
 import { emptyQuery, type MediaType, type SortKey } from "@/lib/types";
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -76,6 +77,7 @@ export function Toolbar({
   const stats = useStats(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [missingOpen, setMissingOpen] = useState(false);
   const [scope, setScope] = useState<string | null>(null);
   const scopeGroup = GROUPS.find(([k]) => k === scope);
   const scopeLabel = scopeGroup?.[1] ?? "everything";
@@ -83,6 +85,7 @@ export function Toolbar({
 
   const {
     view,
+    setView,
     search,
     setSearch,
     sort,
@@ -157,6 +160,31 @@ export function Toolbar({
       toast.success(switchTo ? "Saved as a new library" : "Copy saved");
     } catch (e) {
       reportError(e, "Could not save");
+    }
+  }
+
+  /**
+   * Fetch what is missing, then account for what is still missing.
+   *
+   * A bare "refreshed 8 of 20" leaves the other twelve unexplained, so the
+   * leftovers are listed by name and reason instead of by count (§23).
+   */
+  async function refreshMissingPreviews() {
+    try {
+      const ids = await ipc.listFootageIds({ ...emptyQuery(), missingThumbnail: true });
+      toast.info(`Fetching ${ids.length} preview(s)…`);
+      const n = await ipc.fetchThumbnails(ids, false);
+      qc.invalidateQueries({ queryKey: ["thumb"] });
+      invalidateLibrary(qc);
+      if (n < ids.length) {
+        toast.info(`Refreshed ${n} of ${ids.length} — ${ids.length - n} still have no preview.`);
+        setMissingOpen(true);
+      } else {
+        toast.success(`Refreshed ${n} preview(s)`);
+        setMissingOpen(false);
+      }
+    } catch (e) {
+      reportError(e);
     }
   }
 
@@ -332,6 +360,15 @@ export function Toolbar({
                 invalidateLibrary(qc);
                 toast.success(
                   `Synced ${r.checked} · ${r.renamed} renamed · ${r.missing} missing`,
+                  // A count with no way to reach the files is a dead end.
+                  r.missing > 0
+                    ? {
+                        action: {
+                          label: "Show them",
+                          onClick: () => setView({ kind: "missing" }),
+                        },
+                      }
+                    : undefined,
                 );
               } catch (e) {
                 reportError(e, "Sync failed");
@@ -437,32 +474,7 @@ export function Toolbar({
         <div className="ml-auto flex items-center gap-0.5">
           {!!stats.data?.withoutThumbnail && caps.data?.driveConnected && (
             <Tooltip content="Fetch previews that are missing">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    const ids = await ipc.listFootageIds({
-                      ...emptyQuery(),
-                      missingThumbnail: true,
-                    });
-                    toast.info(`Fetching ${ids.length} preview(s)…`);
-                    const n = await ipc.fetchThumbnails(ids, false);
-                    qc.invalidateQueries({ queryKey: ["thumb"] });
-                    invalidateLibrary(qc);
-                    if (n < ids.length) {
-                      toast.info(
-                        `Refreshed ${n} of ${ids.length} — the rest have no preview available, ` +
-                          `usually a missing source or an unsupported file.`,
-                      );
-                    } else {
-                      toast.success(`Refreshed ${n} preview(s)`);
-                    }
-                  } catch (e) {
-                    reportError(e);
-                  }
-                }}
-              >
+              <Button variant="ghost" size="sm" onClick={refreshMissingPreviews}>
                 <RefreshCw />
                 {stats.data.withoutThumbnail} missing
               </Button>
@@ -511,6 +523,12 @@ export function Toolbar({
         </div>
       </div>
       )}
+
+      <MissingPreviewsDialog
+        open={missingOpen}
+        onClose={() => setMissingOpen(false)}
+        onRetry={refreshMissingPreviews}
+      />
     </header>
   );
 }
