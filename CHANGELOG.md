@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.13 — 2026-08-16
+
+**A library that will not open says why**
+
+- **"Database error: unable to open database file" is gone.** SQLite says that same sentence whether a file is missing, its folder is unwritable, or macOS is simply blocking the app from reaching it — and the last one is routine here, because Stash builds are unsigned and macOS treats every update as a new app whose folder permissions have to be granted again. Stash now says the file is there and undamaged, that this is a permission problem, and where to grant it: System Settings → Privacy & Security → Files and Folders.
+- **An incompatible library names the version you need.** It now reads "not compatible with Stash 0.5.13" in those words, with the format numbers as supporting detail, and points at both ways out: update to the latest release, or open it with the build that last saved it.
+- **A library open in another program is told apart** from both of the above, instead of arriving as the same generic database error.
+
 ## v0.5.12 — 2026-08-16
 
 **Drive photos open immediately, or you keep the file**
