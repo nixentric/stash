@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.17 — 2026-08-16
+
+**The files that still have no preview, named**
+
+- **"Refreshed 8 of 20" now tells you about the other twelve.** A dialog lists them by name, grouped by the reason the preview could not be fetched: gone from the source, no access with the connected account, needs a connected account at all, could not be reached, or no preview exists to be made. Each group says what to do about it — nothing is removed from your library either way.
+- **The exact reason is one click away, per file.** Expanding a row asks the backend why that one failed, and only then, so a list of a hundred is not a hundred round trips nobody reads.
+- **"Try again" is in the dialog**, so a network blip does not mean hunting for the button again.
+
+**A missing count you can act on**
+
+- **Syncing a folder that reports missing files now offers "Show them".** It jumps straight to the missing view instead of leaving you with a number.
+
 ## v0.5.16 — 2026-08-16
 
 **Drop files straight onto the window**
