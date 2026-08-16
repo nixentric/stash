@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the generated Info.plist at bundle time.
+
+  Without these keys macOS does not ask the user about Documents, Desktop or
+  Downloads — it simply refuses, and the app sees EPERM with no prompt ever
+  having appeared. Libraries live in Documents more often than anywhere else,
+  so the app looked broken: "unable to open database file" for a file that was
+  perfectly fine, and "Operation not permitted" when writing a downloaded
+  original next to it.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Stash needs access to open libraries kept in your Documents folder and to save downloaded originals beside them.</string>
+
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Stash needs access to open libraries kept in your Downloads folder and to save downloaded originals beside them.</string>
+
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Stash needs access to open libraries kept on your Desktop and to save downloaded originals beside them.</string>
+
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Stash needs access to open libraries kept on external drives and to save downloaded originals beside them.</string>
+
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>Stash needs access to open libraries kept on network volumes and to save downloaded originals beside them.</string>
+</dict>
+</plist>

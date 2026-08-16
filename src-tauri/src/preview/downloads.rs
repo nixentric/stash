@@ -67,6 +67,28 @@ fn safe_name(raw: &str) -> String {
     }
 }
 
+/// Names the one failure the user can do something about.
+///
+/// macOS refuses writes into Documents, Desktop and Downloads until the app has
+/// been granted access, and the refusal arrives as a bare `EPERM` — "Operation
+/// not permitted (os error 1)" is not a sentence anyone can act on. Choosing a
+/// folder in the file dialog grants access to it as a side effect, which is why
+/// that is the first thing offered.
+fn disk_error(dir: &Path, e: std::io::Error) -> AppError {
+    if !matches!(
+        e.kind(),
+        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
+    ) {
+        return AppError::Io(e.to_string());
+    }
+    AppError::Invalid(format!(
+        "Stash is not allowed to write to {}. Pick a downloads folder in Settings → Library — \
+         choosing it in the dialog is what grants access — or allow Stash under System Settings → \
+         Privacy & Security → Files and Folders.",
+        dir.display()
+    ))
+}
+
 /// The downloaded copy of this footage, if there is one.
 pub fn find(state: &AppState, footage_id: i64) -> Option<PathBuf> {
     let prefix = format!("{footage_id}-");
@@ -111,7 +133,7 @@ pub async fn fetch(app: &AppHandle, state: &AppState, footage_id: i64) -> Result
             .unwrap_or("file"),
     );
     let dir = dir(state)?;
-    std::fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(&dir).map_err(|e| disk_error(&dir, e))?;
     let dest = dir.join(format!("{footage_id}-{name}"));
     let part = dir.join(format!("{footage_id}-{name}.part"));
 
@@ -178,7 +200,7 @@ pub async fn fetch(app: &AppHandle, state: &AppState, footage_id: i64) -> Result
     };
 
     let total = resp.content_length();
-    let mut file = std::fs::File::create(&part)?;
+    let mut file = std::fs::File::create(&part).map_err(|e| disk_error(&dir, e))?;
     let mut received = 0u64;
     let mut emitted = 0u64;
     let emit = |received: u64| {
@@ -203,7 +225,7 @@ pub async fn fetch(app: &AppHandle, state: &AppState, footage_id: i64) -> Result
     }
     file.flush()?;
     drop(file);
-    std::fs::rename(&part, &dest)?;
+    std::fs::rename(&part, &dest).map_err(|e| disk_error(&dir, e))?;
     emit(received);
 
     Ok(dest)
@@ -212,7 +234,7 @@ pub async fn fetch(app: &AppHandle, state: &AppState, footage_id: i64) -> Result
 /// Points downloads at a new folder, taking the existing files along.
 pub fn set_dir(state: &AppState, new_dir: &Path) -> Result<()> {
     let old = dir(state)?;
-    std::fs::create_dir_all(new_dir)?;
+    std::fs::create_dir_all(new_dir).map_err(|e| disk_error(new_dir, e))?;
 
     if old.exists() && old != new_dir {
         for entry in std::fs::read_dir(&old)?.flatten() {
@@ -236,6 +258,21 @@ pub fn set_dir(state: &AppState, new_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_blocked_folder_is_reported_as_something_to_fix() {
+        let e = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = disk_error(Path::new("/Users/x/Documents/Assets"), e).to_string();
+        assert!(msg.contains("/Users/x/Documents/Assets"), "names the folder: {msg}");
+        assert!(msg.contains("Settings"), "offers the fix: {msg}");
+        assert!(!msg.contains("os error"), "no raw errno: {msg}");
+
+        // Anything else keeps its own words rather than being blamed on macOS.
+        let other = std::io::Error::from(std::io::ErrorKind::OutOfMemory);
+        assert!(!disk_error(Path::new("/tmp"), other)
+            .to_string()
+            .contains("Privacy"));
+    }
 
     #[test]
     fn filenames_cannot_escape_the_download_folder() {
