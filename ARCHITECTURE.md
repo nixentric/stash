@@ -376,6 +376,15 @@ Drive folder path (§23). Implementation is a single indexed SQL statement using
 `LIKE` with case-insensitive collation across those columns, with each
 whitespace-separated term ANDed.
 
+Universal search (`db/repo/search.rs`) reuses that filter for its asset half
+rather than growing a second dialect of the same SQL — anything that becomes
+searchable for the grid becomes searchable in the panel for free. The other
+halves are one statement per kind (source folders, brands, colors, typefaces,
+logos, elements, additional infos, logo rules), capped at five hits each, so
+the ranking rules for the whole result set sit in one file. A hit carries the
+brand it belongs to, and optionally a hex to paint or a URL to open — that is
+what lets the panel act on a click without a second round trip.
+
 > `ponytail:` `LIKE '%term%'` is a full scan — measured at roughly 8 ms over
 > 10,000 rows, which is well inside "instant" for a debounced 150 ms input.
 > Upgrade path if a library ever reaches ~100k rows: an FTS5 external-content

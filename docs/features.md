@@ -95,6 +95,16 @@ Filters combine with the active view and with each other:
 - Tags — multiple tags, ANDed; a tag matches whether it sits on the asset or on
   its source folder
 
+**Folder tags.** A tag on a source folder labels the folder, not its contents —
+until **Source Folders → settings → "Folder tags cover the files inside"** is
+switched on, after which the tag reaches every file in that folder and the
+sidebar count moves with it. The count and the filter always read the same
+switch, so the sidebar never advertises a number the grid cannot produce.
+
+A tag carried only by folders shows its folder count in the sidebar (`5
+folders`) rather than a bare `0`, and opening it lists those folders above the
+grid — clicking one opens the folder.
+
 **Clickable filters — in development.** In the Source Folders table, tags and
 custom column values are chips: click to filter the table, click again to
 release, and combine several at once. Tags stack with AND; values within one
@@ -124,39 +134,63 @@ one-second question.
 
 ## Universal search
 
-**Status: Available.** One field reaches assets, brands, colors, typography,
-and logos at once. Typing filters the grid as before; a panel underneath lists
-what a grid query can never show, grouped by kind. Colors and font names carry
-a copy button inline, and everything else jumps to the brand it belongs to.
+**Status: Available.** One field reaches source folders, assets, brands,
+colors, typography, logos, graphic elements, additional info, and logo rules at
+once. Typing filters the grid as before; a panel underneath lists what a grid
+query can never show, grouped by kind.
 
-Colors match on name, role, notes — and on hex, so pasting `#E92832` answers
-"which brand owns this?" without opening anything.
+Groups are ordered by how much work the panel saves. Source folders come first
+— a folder is the coarsest thing a query can mean. Assets come last: they are
+the bulk of any library and the grid behind the panel is already full of them,
+so looking for a colour never means scrolling past five clips first.
 
 ```text
 Search: red
 
-```text
-Search: red
+SOURCE FOLDERS
+Red Campaign — /Assets/Red Campaign
 
 COLORS
-Brand Red — #E92832
+Brand Red — Acme — primary — #E92832
+
+LOGOS
+Logo Red — Acme — primary
 
 ASSETS
 Red Gradient.png
-Logo Red.svg
-
-GUIDELINES
-Red Background Usage
 ```
 
-```text
-Search: instagram
+**Every hit does something when clicked:**
 
-Instagram Feed Template
-Instagram Story Template
-Social Media Safe Area
-Instagram Logo Placement
-```
+| Kind | Click |
+|---|---|
+| Source folder | Opens the folder |
+| Asset | Opens Quick Look, with the file left selected in the grid |
+| Additional info holding a URL | Opens the link |
+| Everything else | Jumps to the brand it belongs to |
+
+Colors and font names also carry a copy button inline, so a hex can be taken
+without leaving the panel. Asset rows carry a thumbnail.
+
+**Scoped search.** The magnifier at the left of the field is a picker: choose
+**Source Folders**, **Colors**, **Typography** — any single kind — and both the
+panel and the placeholder narrow to it. Useful when the term is common enough
+to match everywhere at once.
+
+**What each kind matches:**
+
+| Kind | Matched on |
+|---|---|
+| Source folders | Path, and the folder's own tags |
+| Colors | Name, role, notes, and hex — pasting `#E92832` answers "which brand owns this?" |
+| Typography | Family, weight, role, notes |
+| Logos / elements | Name, variant or category, notes |
+| Additional info | Title and body — a link entry is findable by its URL |
+| Brands | Name, tagline, description, notes |
+| Logo rules | Clear space, minimum size, background usage |
+
+Five hits per kind. The panel is a shortcut, not a results page — past a
+handful per group nobody reads, they refine the query instead.
 
 Tags and custom values stay clickable throughout, as interactive filters that
 combine with the query.
