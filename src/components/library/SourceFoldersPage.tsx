@@ -436,10 +436,12 @@ export function SourceFoldersPage() {
     setFacets((cur) => (cur.some((x) => sameFacet(x, f)) ? cur.filter((x) => !sameFacet(x, f)) : [...cur, f]));
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      {/* Same bar the library has, minus the grid/list switch — there is only
-          ever one way to read a table. */}
-      <div className="mb-3 flex h-9 items-center gap-1">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* The library's second toolbar row, minus the grid/list switch — there is
+          only ever one way to read a table. The header above has one row on this
+          view, so the same height and padding land it in the same place, and
+          being outside the scroller keeps it there. */}
+      <div className="flex h-9 shrink-0 items-center gap-1 bg-titlebar px-2 hairline-b">
         <span className="tnum mr-1 shrink-0 text-[11.5px] text-subtle-foreground">
           {facets.length > 0
             ? `${count(rows.length)} of ${count(folders.data?.length ?? 0)} folders`
@@ -525,6 +527,7 @@ export function SourceFoldersPage() {
         </Button>
       </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
       {facets.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           {facets.map((f) => (
@@ -1407,6 +1410,7 @@ export function SourceFoldersPage() {
         multipleTagFields={multipleTagFields}
         onChangeMultipleTagFields={setMultipleTagFields}
       />
+      </div>
     </div>
   );
 }
