@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
 import { DotmCircular2 } from "@/components/ui/dotm-circular-2";
 import {
@@ -142,6 +143,12 @@ function GeneralPane() {
   const prefs = usePrefs();
   const [status, setStatus] = useState<Update | 'latest' | null>(null);
   const [checking, setChecking] = useState(false);
+  // Asked once: the running binary's version cannot change while it runs.
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(console.error);
+  }, []);
 
   const checkUpdates = prefs.data?.checkUpdates ?? true;
 
@@ -179,6 +186,10 @@ function GeneralPane() {
         hint="Stash checks for newer releases and can download and install them directly in the app. Switch this off and Stash never contacts the update server at all."
       >
         <div className="flex flex-col gap-2">
+          <p className="text-[12.5px] text-muted-foreground">
+            You are running <span className="font-medium text-foreground">Stash {version ?? "…"}</span>
+          </p>
+
           <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
             <input
               type="checkbox"
