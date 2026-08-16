@@ -45,6 +45,7 @@ import {
   useProjects,
 } from "@/hooks/queries";
 import { useHotkeys } from "@/hooks/use-hotkeys";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { buildQuery, useUi } from "@/store/ui";
 import { emptyBrand } from "@/lib/types";
 import type {
@@ -285,6 +286,10 @@ export default function App() {
 
   useHotkeys(hotkeyOptions);
 
+  // Dropping files on the window adds them (§8). Off while the Welcome screen
+  // is up: there is no library to add them to yet.
+  const dropOver = useFileDrop(hasLibrary);
+
   const setThumbnailFromDataUrl = useCallback(
     async (id: number, dataUrl: string) => {
       if (!dataUrl) {
@@ -391,6 +396,17 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {dropOver && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/70">
+          <div className="rounded-lg border-2 border-dashed border-primary/70 bg-surface px-8 py-6 text-center">
+            <p className="text-[15px] font-medium">Drop to add to your library</p>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Files stay where they are — Stash only records where to find them.
+            </p>
+          </div>
+        </div>
+      )}
 
       <QuickLook orderedIds={orderedIds} />
 

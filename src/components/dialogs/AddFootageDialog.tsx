@@ -25,13 +25,15 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import {
   Checkbox,
+  Kbd,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
   Tooltip,
 } from "@/components/ui/misc";
-import { cn } from "@/lib/utils";
+import { cn, mod, MEDIA_EXTENSIONS } from "@/lib/utils";
+import { useSubmitHotkey } from "@/hooks/use-hotkeys";
 import { bytes, duration as fmtDuration } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
 import { invalidateLibrary, keys, reportError, useCapabilities, usePrefs } from "@/hooks/queries";
@@ -321,6 +323,8 @@ function LinksTab({
     }
   }
 
+  useSubmitHotkey(!busy && items.length > 0, importAll);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <DialogBody className="flex min-h-0 flex-1 flex-col gap-2 pt-3">
@@ -399,6 +403,7 @@ function LinksTab({
         <Button size="lg" disabled={busy || items.length === 0} onClick={importAll}>
           {busy && <Loader2 className="animate-spin" />}
           Import {items.length > 0 && items.length}
+          <Kbd className="ml-1">{mod} ↵</Kbd>
         </Button>
       </DialogFooter>
     </div>
@@ -477,15 +482,7 @@ function LocalTab({ onDone, collectionId }: { onDone: () => void; collectionId?:
     const picked = await openFileDialog({
       title: "Add files",
       multiple: true,
-      filters: [
-        {
-          name: "Media",
-          extensions: [
-            "jpg", "jpeg", "png", "webp", "gif", "heic", "tif", "tiff", "bmp", "avif",
-            "mp4", "mov", "mkv", "webm", "m4v", "avi", "mpg", "mpeg", "mts", "mxf",
-          ],
-        },
-      ],
+      filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
     });
     if (!picked) return;
     setPaths(Array.isArray(picked) ? picked : [picked]);
@@ -516,6 +513,8 @@ function LocalTab({ onDone, collectionId }: { onDone: () => void; collectionId?:
     }
   }
 
+  useSubmitHotkey(!busy && paths.length > 0, importAll);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <DialogBody className="flex min-h-0 flex-1 flex-col gap-2 pt-3">
@@ -541,6 +540,7 @@ function LocalTab({ onDone, collectionId }: { onDone: () => void; collectionId?:
         <Button size="lg" disabled={busy || paths.length === 0} onClick={importAll}>
           {busy && <Loader2 className="animate-spin" />}
           Import {paths.length > 0 && paths.length}
+          <Kbd className="ml-1">{mod} ↵</Kbd>
         </Button>
       </DialogFooter>
     </div>
@@ -612,6 +612,10 @@ function DriveTab({
       alive = false;
     };
   }, [connected, currentFolder]);
+
+  // Before the early return below, so the hook order holds. `importChosen` is a
+  // function declaration, so it is already hoisted here.
+  useSubmitHotkey(!busy && !!items && chosen.size > 0, importChosen);
 
   if (!connected) {
     return (
@@ -873,6 +877,7 @@ function DriveTab({
             <Button size="lg" disabled={busy || chosen.size === 0} onClick={importChosen}>
               {busy && <Loader2 className="animate-spin" />}
               Import {chosen.size}
+              <Kbd className="ml-1">{mod} ↵</Kbd>
             </Button>
           </>
         )}

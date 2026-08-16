@@ -10,6 +10,26 @@ interface Options {
   onDelete: () => void;
 }
 
+/**
+ * ⌘/Ctrl+Enter fires a dialog's primary action, even from inside its textarea.
+ *
+ * Window-level on purpose: the dialog and its inactive tabs unmount, so only the
+ * visible one is ever listening.
+ */
+export function useSubmitHotkey(enabled: boolean, run: () => void) {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        run();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, run]);
+}
+
 /** True when focus is somewhere that should own the keystroke. */
 function inEditable(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;

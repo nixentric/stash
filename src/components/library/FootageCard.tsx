@@ -12,7 +12,6 @@ interface Props {
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onDropImage: (dataUrl: string) => void;
 }
 
 /**
@@ -28,7 +27,6 @@ export const FootageCard = memo(function FootageCard({
   onClick,
   onDoubleClick,
   onContextMenu,
-  onDropImage,
 }: Props) {
   const { ref, visible } = useVisible<HTMLDivElement>();
   const thumb = useThumbnail(item.id, visible);
@@ -45,18 +43,6 @@ export const FootageCard = memo(function FootageCard({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("Files")) e.preventDefault();
-      }}
-      onDrop={(e) => {
-        const file = e.dataTransfer.files?.[0];
-        if (!file || !file.type.startsWith("image/")) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const reader = new FileReader();
-        reader.onload = () => onDropImage(String(reader.result));
-        reader.readAsDataURL(file);
-      }}
       className={cn(
         "footage-card-item",
         "group relative flex cursor-default flex-col overflow-hidden rounded-md border",

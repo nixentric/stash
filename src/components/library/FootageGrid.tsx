@@ -312,7 +312,6 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
                       onClick={(e) => onCardClick(item.id, e)}
                       onDoubleClick={() => setQuickLookId(item.id)}
                       onContextMenu={() => onCardContextMenu(item.id)}
-                      onDropImage={(dataUrl) => onSetThumbnail(item.id, dataUrl)}
                     />
                   ))}
                 </div>
