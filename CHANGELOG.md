@@ -11,6 +11,10 @@ GitHub are generated from this file.
 - **The count and the grid can no longer disagree.** The sidebar count and the grid filter read the same switch, so the number a tag advertises is always the number the grid can actually produce.
 - **Manage Tags counts by files or by folders.** A new **Count by** toggle switches the tag list between file counts and folder counts, and hovering a count shows both. A tag that only labels folders is no longer reported as "unused" — and so is no longer offered up for deletion along with the real orphans.
 
+**Additional Info reorders by dragging**
+
+- **Drag the cards into the order you want.** Additional Info entries on a brand page now carry the same grip handle the logo cards do, and dragging one moves it in the list. The order is saved to the library, so it survives reopening — Additional Info used to be stuck in the order the entries happened to be created.
+
 **A welcome screen worth looking at**
 
 - **New title treatment.** The welcome screen leads with STASH set in Special Gothic Expanded One, self-hosted so the app still makes no network request of its own, with the letters reacting as you move across them.
@@ -20,10 +24,6 @@ GitHub are generated from this file.
 **New loaders**
 
 - **Dot-matrix loaders replace the Hex Orbit.** Update toasts get a circular dot loader, and thumbnails being generated get a square spiral one. The old Hex Orbit and its stand-in toast spinner are gone.
-
-**macOS updates stop asking for your password**
-
-- **The app now has a stable code identity.** Builds are signed with a consistent self-signed identity instead of an ad-hoc one that changed with every build. This is not Gatekeeper notarisation — first launch still warns — but it does mean the keychain keeps recognising Stash across updates, so "Always Allow" survives an update instead of prompting for your login password again.
 
 ## v0.5.7 — 2026-08-16
 

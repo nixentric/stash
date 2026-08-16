@@ -98,6 +98,7 @@ pub fn run() {
             commands::font::load_font_file,
             commands::brand::save_brand_additional_info,
             commands::brand::delete_brand_additional_info,
+            commands::brand::reorder_brand_additional_infos,
             commands::brand::universal_search,
             // tags / collections / projects / usage
             commands::taxonomy::all_tags,

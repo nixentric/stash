@@ -111,3 +111,17 @@ pub fn save_brand_additional_info(state: State<'_, AppState>, info: BrandAdditio
 pub fn delete_brand_additional_info(state: State<'_, AppState>, id: i64) -> Result<()> {
     state.with_library(|lib| repo::delete_additional_info(&lib.conn, id))
 }
+
+#[derive(serde::Deserialize)]
+pub struct InfoOrderUpdate {
+    pub id: i64,
+    pub position: i64,
+}
+
+#[tauri::command]
+pub fn reorder_brand_additional_infos(
+    state: State<'_, AppState>,
+    updates: Vec<InfoOrderUpdate>,
+) -> Result<()> {
+    state.with_library(|lib| repo::reorder_additional_infos(&lib.conn, &updates))
+}

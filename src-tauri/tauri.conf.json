@@ -53,7 +53,7 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "macOS": {
-      "signingIdentity": "Stash Code Signing"
+      "signingIdentity": "-"
     },
     "icon": [
       "icons/32x32.png",

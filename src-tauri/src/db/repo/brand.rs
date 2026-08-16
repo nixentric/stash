@@ -494,6 +494,25 @@ pub fn save_additional_info(conn: &Connection, info: &BrandAdditionalInfo) -> Re
     Ok(id)
 }
 
+/// Writes the order the user dragged the cards into. One flat list per brand, so
+/// unlike logos there is no group to move between — only the position changes.
+pub fn reorder_additional_infos(
+    conn: &Connection,
+    updates: &[crate::commands::brand::InfoOrderUpdate],
+) -> Result<()> {
+    if updates.is_empty() {
+        return Ok(());
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut stmt = tx.prepare("UPDATE brand_additional_infos SET position = ?2 WHERE id = ?1")?;
+    for u in updates {
+        stmt.execute(params![u.id, u.position])?;
+    }
+    drop(stmt);
+    tx.commit()?;
+    Ok(())
+}
+
 pub fn delete_additional_info(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM brand_additional_infos WHERE id = ?1", [id])?;
     Ok(())

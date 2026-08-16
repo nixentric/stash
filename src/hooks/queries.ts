@@ -144,7 +144,8 @@ type BrandAction =
   | { type: "saveElement"; element: T.BrandElement }
   | { type: "deleteElement"; id: number }
   | { type: "saveAdditionalInfo"; info: T.BrandAdditionalInfo }
-  | { type: "deleteAdditionalInfo"; id: number };
+  | { type: "deleteAdditionalInfo"; id: number }
+  | { type: "reorderAdditionalInfos"; updates: { id: number; position: number }[] };
 
 export function useBrandAction() {
   const qc = useQueryClient();
@@ -192,6 +193,8 @@ export function useBrandAction() {
           return ipc.saveBrandAdditionalInfo(a.info);
         case "deleteAdditionalInfo":
           return ipc.deleteBrandAdditionalInfo(a.id);
+        case "reorderAdditionalInfos":
+          return ipc.reorderBrandAdditionalInfos(a.updates);
       }
     },
     onSuccess: (_data, a) => {

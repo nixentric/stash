@@ -128,8 +128,10 @@ export const ipc = {
     invoke<{ family: string; dataUrl: string }>("load_font_file", { path }),
   saveBrandLogo: (logo: T.BrandLogo) => invoke<number>("save_brand_logo", { logo }),
   deleteBrandLogo: (id: number) => invoke<void>("delete_brand_logo", { id }),
-  reorderBrandLogos: (updates: { id: number; variant: string; position: number }[]) => 
+  reorderBrandLogos: (updates: { id: number; variant: string; position: number }[]) =>
     invoke<void>("reorder_brand_logos", { updates }),
+  reorderBrandAdditionalInfos: (updates: { id: number; position: number }[]) =>
+    invoke<void>("reorder_brand_additional_infos", { updates }),
   saveBrandLogoRules: (rules: T.BrandLogoRules) =>
     invoke<void>("save_brand_logo_rules", { rules }),
   saveBrandExample: (example: T.BrandExample) => invoke<number>("save_brand_example", { example }),

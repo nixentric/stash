@@ -30,6 +30,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   rectSortingStrategy,
+  verticalListSortingStrategy,
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -1053,16 +1054,11 @@ export function BrandPage({
             Add brand voice, tone, specific links or documents here.
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {d.additionalInfos?.map((info) => (
-              <AdditionalInfoCard
-                key={info.id}
-                info={info}
-                onEdit={() => onEditAdditionalInfo(info)}
-                onDelete={() => action.mutate({ type: "deleteAdditionalInfo", id: info.id })}
-              />
-            ))}
-          </div>
+          <SortableAdditionalInfos
+            infos={d.additionalInfos ?? []}
+            onEdit={onEditAdditionalInfo}
+            action={action}
+          />
         )}
       </section>
     </div>
@@ -1125,6 +1121,71 @@ function ElementCard({
   );
 }
 
+/**
+ * One flat list, so unlike the logo grid there is no group to drop into — only
+ * the order changes. Local copy while a drag is live: the mutation refetches the
+ * brand, and letting that land mid-drag would snap the card back under the
+ * cursor.
+ */
+function SortableAdditionalInfos({
+  infos,
+  onEdit,
+  action,
+}: {
+  infos: BrandAdditionalInfo[];
+  onEdit: (info: BrandAdditionalInfo) => void;
+  action: ReturnType<typeof useBrandAction>;
+}) {
+  const [items, setItems] = useState(infos);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!dragging) setItems(infos);
+  }, [infos, dragging]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={() => setDragging(true)}
+      onDragEnd={({ active, over }) => {
+        setDragging(false);
+        if (!over || active.id === over.id) return;
+
+        const from = items.findIndex((i) => i.id === active.id);
+        const to = items.findIndex((i) => i.id === over.id);
+        if (from === -1 || to === -1) return;
+
+        const next = arrayMove(items, from, to);
+        setItems(next);
+        action.mutate({
+          type: "reorderAdditionalInfos",
+          updates: next.map((i, position) => ({ id: i.id, position })),
+        });
+      }}
+      onDragCancel={() => setDragging(false)}
+    >
+      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-3">
+          {items.map((info) => (
+            <AdditionalInfoCard
+              key={info.id}
+              info={info}
+              onEdit={() => onEdit(info)}
+              onDelete={() => action.mutate({ type: "deleteAdditionalInfo", id: info.id })}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 function AdditionalInfoCard({
   info,
   onEdit,
@@ -1134,10 +1195,35 @@ function AdditionalInfoCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: info.id,
+  });
+
   return (
-    <div className="group rounded-lg border border-border p-4 bg-muted/10">
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+      }}
+      className="group rounded-lg border border-border p-4 bg-muted/10"
+    >
       <div className="flex items-center justify-between gap-3 mb-2">
-        <h3 className="text-[13px] font-semibold">{info.title}</h3>
+        {/* Same grip as the logo cards: the whole card cannot be the handle or
+            selecting the text inside it would start a drag. */}
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            title="Drag to reorder"
+            className="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+          <h3 className="truncate text-[13px] font-semibold">{info.title}</h3>
+        </div>
         <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
           <Button size="sm" variant="ghost" title="Edit info" onClick={onEdit}>
             <Pencil />
