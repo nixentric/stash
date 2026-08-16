@@ -23,7 +23,7 @@ import { count } from "@/lib/format";
 import { useUi } from "@/store/ui";
 import { useBrands, useCollections, useFolders, useProjects, useStats, useTags, invalidateLibrary, reportError } from "@/hooks/queries";
 import { Tooltip } from "@/components/ui/misc";
-import type { Brand, Collection, Tag } from "@/lib/types";
+import type { Brand, Collection, Project, Tag } from "@/lib/types";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -54,6 +54,7 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand
 
   const [renamingCollection, setRenamingCollection] = useState<Collection | null>(null);
   const [renamingTag, setRenamingTag] = useState<Tag | null>(null);
+  const [renamingProject, setRenamingProject] = useState<Project | null>(null);
 
   const deleteBrand = async (b: Brand) => {
     if (confirm(`Delete brand “${b.name}”?`)) {
@@ -75,6 +76,24 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand
         toast.success(`Deleted collection “${c.name}”`);
       } catch (err) {
         reportError(err, "Could not delete collection");
+      }
+    }
+  };
+
+  const deleteProject = async (p: Project) => {
+    // The usage rows survive with their project cleared (ON DELETE SET NULL),
+    // so nothing stops being "used" — it just stops saying where.
+    const where = p.footageCount
+      ? ` ${count(p.footageCount)} file${p.footageCount > 1 ? "s" : ""} stay marked as used, without a project.`
+      : "";
+    if (confirm(`Delete project “${p.name}”?${where}`)) {
+      try {
+        await ipc.deleteProject(p.id);
+        if (view.kind === "project" && view.id === p.id) setView({ kind: "all" });
+        invalidateLibrary(qc);
+        toast.success(`Deleted project “${p.name}”`);
+      } catch (err) {
+        reportError(err, "Could not delete project");
       }
     }
   };
@@ -220,14 +239,25 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand
       {!!projects.data?.length && (
         <Section title="Projects">
           {projects.data.map((p) => (
-            <Row
-              key={p.id}
-              active={view.kind === "project" && view.id === p.id}
-              onClick={() => setView({ kind: "project", id: p.id, name: p.name })}
-              icon={<Folder />}
-              label={p.name}
-              badge={p.footageCount}
-            />
+            <ContextMenu key={p.id}>
+              <ContextMenuTrigger>
+                <Row
+                  active={view.kind === "project" && view.id === p.id}
+                  onClick={() => setView({ kind: "project", id: p.id, name: p.name })}
+                  icon={<Folder />}
+                  label={p.name}
+                  badge={p.footageCount}
+                />
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => setRenamingProject(p)}>
+                  Rename Project...
+                </ContextMenuItem>
+                <ContextMenuItem destructive onSelect={() => deleteProject(p)}>
+                  Delete Project
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
         </Section>
       )}
@@ -309,6 +339,28 @@ export function Sidebar({ onNewCollection, onNewBrand, onManageTags, onEditBrand
               toast.success(`Renamed to “${name}”`);
             } catch (err) {
               reportError(err, "Could not rename collection");
+            }
+          }}
+        />
+      )}
+
+      {renamingProject && (
+        <PromptDialog
+          open={!!renamingProject}
+          onOpenChange={(open) => !open && setRenamingProject(null)}
+          title="Rename Project"
+          placeholder="Project name"
+          initialValue={renamingProject.name}
+          onSubmit={async (name) => {
+            try {
+              await ipc.renameProject(renamingProject.id, name);
+              // The view carries the old name in its title bar.
+              if (view.kind === "project" && view.id === renamingProject.id)
+                setView({ kind: "project", id: renamingProject.id, name });
+              invalidateLibrary(qc);
+              toast.success(`Renamed to “${name}”`);
+            } catch (err) {
+              reportError(err, "Could not rename project");
             }
           }}
         />
