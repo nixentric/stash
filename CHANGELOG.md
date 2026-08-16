@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.20 — 2026-08-16
+
+**You can see what you have already downloaded**
+
+- **A badge on every card whose original is on this computer**, and an icon on the row in list view. No more opening a file to find out whether you already have it.
+- **It costs one look at the folder, not one per file.** Finding a download means scanning the downloads folder, so asking that per card would be a filesystem scan per card on a library of thousands. Stash reads the folder once and answers the whole grid from it, then re-reads only when a download finishes. A download still in progress does not count as one you have.
+
+**Smaller things**
+
+- **Settings → Updates says which version you are running**, before it tells you whether there is a newer one. It comes from the app itself, so it is the real version, not a number someone remembered to update.
+- **The Source Folders filter bar sits where the library's does.** It was inside the page, indented and a line lower than the eye expects; now it is the same toolbar row, and it stays put while the table scrolls.
+
 ## v0.5.19 — 2026-08-16
 
 **Clear out what will never have a preview**
