@@ -88,7 +88,7 @@ pub fn open(path: &Path) -> Result<Library> {
         )));
     }
 
-    let mut conn = Connection::open(path)?;
+    let mut conn = Connection::open(path).map_err(|e| cannot_open(path, e))?;
     apply_pragmas(&conn)?;
     verify_is_library(&conn, path)?;
 
@@ -97,6 +97,7 @@ pub fn open(path: &Path) -> Result<Library> {
         return Err(AppError::LibraryTooNew {
             found,
             supported: APP_SCHEMA_VERSION,
+            app: env!("CARGO_PKG_VERSION"),
         });
     }
     if found < APP_SCHEMA_VERSION {
@@ -108,7 +109,7 @@ pub fn open(path: &Path) -> Result<Library> {
             AppError::Migration(format!("could not write safety backup {}: {e}", backup.display()))
         })?;
 
-        conn = Connection::open(path)?;
+        conn = Connection::open(path).map_err(|e| cannot_open(path, e))?;
         apply_pragmas(&conn)?;
         if let Err(e) = migrate(&mut conn, found) {
             drop(conn);
@@ -123,6 +124,48 @@ pub fn open(path: &Path) -> Result<Library> {
         conn,
         path: path.to_path_buf(),
     })
+}
+
+/// Turns SQLite's "unable to open database file" into something actionable.
+///
+/// That one message covers a missing file, a folder SQLite cannot write its
+/// journal into, and — the common one — a folder the operating system has not
+/// let this build reach. `open` has already established that the file exists,
+/// so reporting the raw SQLite string sends the user looking for a corrupt
+/// library that is in fact perfectly fine.
+fn cannot_open(path: &Path, e: rusqlite::Error) -> AppError {
+    use rusqlite::ErrorCode::{CannotOpen, DatabaseBusy, PermissionDenied, ReadOnly};
+
+    if !matches!(
+        e.sqlite_error_code(),
+        Some(CannotOpen | PermissionDenied | ReadOnly)
+    ) {
+        // A locked file is its own story and says so.
+        if e.sqlite_error_code() == Some(DatabaseBusy) {
+            return AppError::Database(format!(
+                "{} is in use by another program. Close it there and try again.",
+                path.display()
+            ));
+        }
+        return AppError::Database(e.to_string());
+    }
+
+    let where_it_is = path.parent().unwrap_or(path).display().to_string();
+    let mut msg = format!(
+        "Stash could not open {}. The file is there, but this build is not allowed to read it — \
+         this is a permission problem, not a damaged or outdated library.",
+        path.display()
+    );
+    if cfg!(target_os = "macos") {
+        msg.push_str(&format!(
+            " Open System Settings → Privacy & Security → Files and Folders and give Stash access \
+             to {where_it_is}. Stash builds are unsigned, so macOS treats every update as a new \
+             app and asks again."
+        ));
+    } else {
+        msg.push_str(" Check that you can write to the folder it lives in.");
+    }
+    AppError::Invalid(msg)
 }
 
 /// Rejects arbitrary SQLite files. Accepts either marker, because a library
@@ -269,7 +312,18 @@ mod tests {
             .unwrap();
         drop(lib);
 
-        assert!(matches!(open(&path), Err(AppError::LibraryTooNew { .. })));
+        let Err(err) = open(&path) else {
+            panic!("a library from a newer build must be refused");
+        };
+        assert!(matches!(err, AppError::LibraryTooNew { .. }));
+
+        // The message is the whole feature: it has to name the app version the
+        // user is running and tell them what to do about it.
+        let msg = err.to_string();
+        assert!(msg.contains(env!("CARGO_PKG_VERSION")), "names this build: {msg}");
+        assert!(msg.contains("not compatible"), "says so plainly: {msg}");
+        assert!(msg.contains("Update"), "says which way out: {msg}");
+
         std::fs::remove_dir_all(dir).ok();
     }
 

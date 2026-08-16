@@ -13,8 +13,14 @@ pub enum AppError {
     #[error("{0} is not a Stash library")]
     NotALibrary(String),
 
-    #[error("This library was created by a newer version of Stash (schema v{found}, this build supports v{supported}). Please update Stash.")]
-    LibraryTooNew { found: u32, supported: u32 },
+    #[error("This library is not compatible with Stash {app}. The file uses library format v{found}; this version reads up to v{supported}. Update to the latest release, or open it with the version of Stash that last saved it.")]
+    LibraryTooNew {
+        found: u32,
+        supported: u32,
+        /// The running app version, not the schema number — it is what the user
+        /// has to act on, and what they can report.
+        app: &'static str,
+    },
 
     #[error("Database error: {0}")]
     Database(String),
