@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.16 — 2026-08-16
+
+**Drop files straight onto the window**
+
+- **Drag media in from Finder or Explorer and let go anywhere.** No dialog, no file picker. The files stay exactly where they are — Stash records where to find them, it never copies or moves anything. Whatever is not a supported media file is skipped and counted, and duplicates are recognised the way they always were, so the toast tells you what actually landed. Dropping into a collection adds to that collection.
+- **A single image dropped onto a card still sets that card's thumbnail.** That has not changed; it just no longer needs the card to be the only thing that accepts a drop.
+- **Folders are not scanned yet.** Drop the files themselves — the message says so rather than failing silently.
+
+**⌘↵ imports**
+
+- **⌘/Ctrl + Enter runs the import from any tab of Add Footage** — links, local files, or Drive — including while the cursor is still in the paste box. The shortcut is on the button, so it is not something you have to know.
+
 ## v0.5.15 — 2026-08-16
 
 **Source folders you can name, and a way back to Drive**
