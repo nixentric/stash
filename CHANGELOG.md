@@ -3,6 +3,25 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.15 — 2026-08-16
+
+**Source folders you can name, and a way back to Drive**
+
+- **Give a folder your own name.** Right-click any row in Source Folders → Rename Folder, and the table shows your name with the original folder path underneath it — never instead of it. A label that hides where the files actually came from is worse than no label, and the path is still what every footage record, tag and column value is keyed by, so renaming moves nothing and breaks nothing. "Use Original Name" puts it back.
+- **A Drive folder links back to the original.** Folders imported from Google Drive now carry a button to open the real folder in Drive, in the row and in the right-click menu. No connection or API call is needed for it: the files recorded which folder they came from when they were imported.
+- **Right-click a source folder.** The same menu the sidebar has always had — rename, use the original name, open in Drive, delete — instead of hunting for the one button at the end of a wide row. The delete confirmation now names the folder the way you named it.
+- **Sorting by Folder follows the name you see.** A renamed folder sorts where you would look for it, not where its path happens to fall.
+
+**A link you already imported says so**
+
+- **Pasting a Drive link that is already in your library tells you before you import.** Both shapes are recognised: a file link is matched against what was imported, a folder link against the folder its files came from — all of it answered from your own library, with no request to Google. It says what it found, and how many files came from that folder.
+- **And it takes you there.** "Go to item" opens the file itself, in the folder it lives in. "Open folder" jumps to that source folder. Importing again was always harmless — footage is identified by its Drive id, so nothing duplicates — but it happened silently, and "Added 0" reads like a failure rather than an answer.
+
+**Getting around**
+
+- **Back and Forward.** Clicking a tag, then a folder, then a brand left no way back to where you started. The view now keeps a browser-style history: buttons in the toolbar, ⌘/Ctrl + `[` and `]`, or Alt + ←/→. Re-clicking the entry you are already on does not stack up a step that goes nowhere.
+- **A tag badge shows both of its numbers.** Folders carrying the tag and files reached by it, each with its own icon, instead of one count that quietly changed meaning depending on whether "folder tags cover the files inside" was on.
+
 ## v0.5.14 — 2026-08-16
 
 **macOS asks for permission instead of quietly refusing**
