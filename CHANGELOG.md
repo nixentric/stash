@@ -3,6 +3,25 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.18 — 2026-08-16
+
+**Source folders get a filter bar**
+
+- **The same bar the library has, above the folder table** — how many folders you are looking at, Filters, the sort, and the settings button, all in one row. The page title and its paragraph are gone: the bar already says what they said.
+- **The Filters menu builds itself from your folders.** Brand, tags, and one group for every custom column you have made. A column appears there the moment one folder carries a value for it, and drops out with the last one — nothing to configure, nothing to keep in sync. Multi-value columns are split on commas exactly the way the filter matches them, so the menu can never offer a value that matches nothing.
+- **Sorting from the bar is the same toggle as the column headers**, including picking the same option again to flip the direction. Custom columns are in the list too.
+- **Clicking a chip in a row still filters.** That is unchanged; the bar is a second way in, for when the value you want is not on screen.
+
+**Removing and downloading, where you already are**
+
+- **Delete or Backspace removes what is open in the preview**, and there is a Remove button next to Download. The preview moves to the next file instead of leaving you on an empty screen. As everywhere else in Stash, this removes the record — the file on Drive or on disk is not touched.
+- **Right-click offers Download Original when there is something to download.** It stays hidden for local files and for anything already downloaded, because the backend already knows the difference.
+- **Mark as Used and Mark as Unused are one entry now.** It flips the way Favorite always has: anything still unused offers Used, a selection that is entirely used offers the way back. The `U` shortcut is on it.
+
+**Projects can be renamed and deleted**
+
+- **Right-click a project in the sidebar**, the same as collections, tags and brands. Deleting says what it costs first: the files stay marked as used, they just stop saying which project used them. Renaming updates the view you are in, and deleting the project you are viewing puts you back in the library.
+
 ## v0.5.17 — 2026-08-16
 
 **The files that still have no preview, named**
