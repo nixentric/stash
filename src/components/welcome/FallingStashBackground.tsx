@@ -187,7 +187,15 @@ function Piece({ item }: { item: Item }) {
   }
 }
 
-export function FallingStashBackground() {
+/**
+ * `paused` freezes the physics where it stands.
+ *
+ * Opening a library mounts the whole app — sidebar, toolbar, hundreds of cards —
+ * and a physics engine stepping on every frame while that happens is the app and
+ * the animation taking turns being late. The pile stays on screen, still, and
+ * fades out with the rest of the screen.
+ */
+export function FallingStashBackground({ paused = false }: { paused?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<Item[]>([]);
   // Static fallback keeps the screen's personality without any motion.
@@ -201,6 +209,11 @@ export function FallingStashBackground() {
   const order = useRef<number[]>([]);
   const engineRef = useRef<Matter.Engine | null>(null);
   const nextId = useRef(0);
+  // Held in a ref, not the effect's dependencies: pausing must not tear the
+  // world down and drop the pile that is already on screen.
+  const loop = useRef<{ start: () => void; stop: () => void } | null>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   // ── engine, walls, mouse, loop ────────────────────────────────────────────
   useEffect(() => {
@@ -301,11 +314,15 @@ export function FallingStashBackground() {
       spawnTimer = undefined;
     };
 
+    // The same pair the pause prop uses, so there is one way to stop this loop.
+    loop.current = { start, stop };
+
     // Welcome is unmounted whenever it is not on screen, so tab visibility is
     // the only case worth pausing for — no IntersectionObserver needed.
-    const onVisibility = () => (document.visibilityState === "visible" ? start() : stop());
+    const onVisibility = () =>
+      document.visibilityState === "visible" && !pausedRef.current ? start() : stop();
     document.addEventListener("visibilitychange", onVisibility);
-    start();
+    if (!pausedRef.current) start();
 
     return () => {
       stop();
@@ -321,8 +338,14 @@ export function FallingStashBackground() {
       elements.current.clear();
       sizes.current.clear();
       order.current = [];
+      loop.current = null;
     };
   }, [reduced]);
+
+  useEffect(() => {
+    if (paused) loop.current?.stop();
+    else if (document.visibilityState === "visible") loop.current?.start();
+  }, [paused]);
 
   // ── give every freshly rendered item a body sized to its own box ──────────
   useEffect(() => {

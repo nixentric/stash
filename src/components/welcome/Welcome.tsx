@@ -8,7 +8,7 @@ import { ipc } from "@/lib/ipc";
 import { keys, reportError } from "@/hooks/queries";
 import { useRecentLibraries } from "@/hooks/queries";
 import { relativeDate } from "@/lib/format";
-import { mod } from "@/lib/utils";
+import { cn, mod } from "@/lib/utils";
 import { getVersion } from "@tauri-apps/api/app";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -19,8 +19,12 @@ import { PlayfulTitle } from "@/components/welcome/PlayfulTitle";
 import { FallingStashBackground } from "@/components/welcome/FallingStashBackground";
 import { pendingPlatform, pendingUpdateNote } from "@/lib/updates";
 
+/** Long enough to read as leaving, short enough not to be a wait. */
+const FADE_MS = 260;
+
 export function Welcome() {
   const qc = useQueryClient();
+  const [leaving, setLeaving] = useState(false);
   const recent = useRecentLibraries();
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState<string>("");
@@ -120,7 +124,17 @@ export function Welcome() {
     }
   }
 
+  /**
+   * Leaves before the app arrives.
+   *
+   * Refetching the library mounts the whole app in one go, and doing that on top
+   * of a running physics engine and a screen that was still fully drawn is what
+   * made the way in feel like a jolt. So: freeze the animation, fade this screen
+   * out, and only then let the data through.
+   */
   async function afterOpen() {
+    setLeaving(true);
+    await new Promise((r) => setTimeout(r, FADE_MS));
     await qc.invalidateQueries();
   }
 
@@ -165,8 +179,12 @@ export function Welcome() {
   }
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-background">
-      <FallingStashBackground />
+    <div className="relative h-full overflow-hidden bg-background">
+    <div
+      className={cn("flex h-full flex-col transition-opacity ease-out", leaving && "opacity-0")}
+      style={{ transitionDuration: `${FADE_MS}ms` }}
+    >
+      <FallingStashBackground paused={leaving} />
 
       <div className="drag-region relative z-10 h-10 shrink-0" />
 
@@ -291,6 +309,23 @@ export function Welcome() {
           </Button>
         )}
       </div>
+    </div>
+
+    {/* Takes over as the screen goes: opening a library reads a whole catalog,
+        and an empty window while that happens is the wait with nothing said
+        about it. Comes in after the fade rather than during it. */}
+    {leaving && (
+      <div
+        className="absolute inset-0 z-20 flex items-center justify-center animate-in fade-in"
+        style={{
+          animationDuration: `${FADE_MS}ms`,
+          animationDelay: `${FADE_MS}ms`,
+          animationFillMode: "backwards",
+        }}
+      >
+        <DotmCircular2 size={36} colorPreset="solid-mint" ariaLabel="Opening library" />
+      </div>
+    )}
     </div>
   );
 }
