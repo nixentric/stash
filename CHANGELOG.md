@@ -3,6 +3,26 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.21 — 2026-08-17
+
+**Undo, and it means it**
+
+- **Every edit offers a way back**, in the confirmation that appears when you make it — tags, brands, custom columns, collections. **⌘Z does the same thing** without aiming at a button that is about to disappear, and it works over the preview too, which is where ⌫ removes footage.
+- **Removing from the library can be undone.** Stash photographs the record before it deletes it — the file's details, its thumbnail, its tags, its usage history, the collections it was in — and puts all of it back under the same id. Nothing is orphaned and nothing is duplicated if you undo twice.
+- **It only holds the last removal**, in memory, and forgets it when you switch libraries. Undo here means "take that back", not a history you can walk.
+- **Mark as Unused still has no undo, and does not pretend to.** The usage records it deletes are gone, and a button that promised otherwise would be a lie.
+
+**Tag, brand and fill columns for many folders at once**
+
+- **Tick the folders you want in Source Folders** — shift-click takes a whole run of them — and one bar above the table sets the brand, adds tags, or writes any custom column for all of them.
+- **Adding never wipes what is there.** Tags and multi-value columns gain what you type; single-value columns are replaced, exactly as they behave when you edit one cell.
+- **It writes only to the folders on screen.** A folder hidden by a filter is never touched by a selection you made before the filter went on.
+
+**Right-click inside the preview**
+
+- **The library's own menu, over the file you are looking at**: Mark as Used, Favorite, Add Tag, Add to Collection, Copy Link, Set Thumbnail, Remove. No more closing the preview to reach the thing you just decided.
+- **The preview lets go of the keyboard while the menu is open**, so the arrows walk the menu and Esc closes the menu — not the preview.
+
 ## v0.5.20 — 2026-08-16
 
 **You can see what you have already downloaded**
