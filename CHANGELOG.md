@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.28 — 2026-08-17
+
+**Opening a library, properly this time**
+
+- **The Welcome screen leaves before the app arrives.** Its physics animation freezes where it stands, the screen fades, and only then does the library load — previously a running engine and a fully drawn screen were competing with the app mounting itself, which is what the jolt was.
+- **The pile stays put while it fades**, rather than vanishing a frame early.
+- **A quiet indicator holds the gap** while the catalog is read, instead of an empty window.
+
 ## v0.5.27 — 2026-08-17
 
 **"There is an update, but not for your Mac yet"**
