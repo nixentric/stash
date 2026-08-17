@@ -28,13 +28,14 @@ import {
   ContextMenuTrigger,
   MenuShortcut,
 } from "@/components/ui/menu";
+import { count } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
-import { DownloadBar, fetchOriginal } from "@/lib/download";
+import { downloadOriginals as download } from "@/lib/download";
 import { keys, reportError, useCollections, useFootageAction, useProjects } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
 import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { TagPromptDialog } from "@/components/dialogs/TagPromptDialog";
-import { baseName, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { FootageListItem } from "@/lib/types";
 
 /**
@@ -118,22 +119,9 @@ export function FootageContextMenu({
     }
   }
 
-  async function downloadOriginal() {
-    if (single == null) return;
-    const id = single;
-    // A spinner cannot say how far along a 2 GB file is, so the toast carries the
-    // same bar the preview draws on its stage.
-    const t = toast.loading(<DownloadBar id={id} label="the original" />, {
-      duration: Infinity,
-    });
-    try {
-      const path = await fetchOriginal(qc, id);
-      toast.success(`Downloaded ${baseName(path)}`, { id: t, duration: 4000 });
-    } catch (e) {
-      toast.dismiss(t);
-      reportError(e, "The download failed");
-    }
-  }
+  // The queue owns the toast, the progress bar and the summary — for one file and
+  // for forty, so the two cases cannot drift apart.
+  const downloadOriginals = () => download(qc, ids);
 
   async function chooseThumbnail() {
     if (single == null) return;
@@ -246,7 +234,7 @@ export function FootageContextMenu({
                     Open Original
                   </ContextMenuItem>
                   {target.data?.downloadable && (
-                    <ContextMenuItem onSelect={downloadOriginal}>
+                    <ContextMenuItem onSelect={downloadOriginals}>
                       <HardDriveDownload />
                       Download Original
                     </ContextMenuItem>
@@ -266,6 +254,20 @@ export function FootageContextMenu({
                   <ContextMenuItem onSelect={chooseThumbnail}>
                     <Image />
                     Set Thumbnail…
+                  </ContextMenuItem>
+                </>
+              )}
+
+              {/* Downloading is the one thing here that reads well in bulk: the
+                  queue takes the whole selection and works through it in order.
+                  Which files actually need fetching is the backend's call — one
+                  already on this computer costs it a directory read. */}
+              {single == null && (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onSelect={downloadOriginals}>
+                    <HardDriveDownload />
+                    Download {count(ids.length)} Originals
                   </ContextMenuItem>
                 </>
               )}
