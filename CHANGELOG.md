@@ -3,6 +3,16 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.25 — 2026-08-17
+
+**No more question marks where a picture should be**
+
+- **A cover still being fetched shows the waiting animation, not a broken-image mark.** Since previews started coming straight from the library file, a card whose picture was not there yet drew the webview's own "?" — and behind a queue of a few hundred, it drew it for a long time.
+
+**The folder table remembers how it is sorted**
+
+- **The column and direction you chose survive leaving the page**, like the filters do. Ordering by a column you later delete falls back to newest first, rather than sorting every row as blank.
+
 ## v0.5.24 — 2026-08-17
 
 **Folder filters stay where you left them**
