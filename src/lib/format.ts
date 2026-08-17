@@ -24,6 +24,16 @@ export function bytes(n: number | null | undefined): string | null {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
+/**
+ * How far along, as a whole number — or `null` when there is nothing to be a
+ * percentage of. A server that sends no Content-Length is the normal case for
+ * that, and an invented number would be worse than an honest "still going".
+ */
+export function percent(received: number, total: number | null | undefined): number | null {
+  if (!total || total <= 0) return null;
+  return Math.min(100, Math.max(0, Math.round((received / total) * 100)));
+}
+
 export function resolution(w: number | null, h: number | null): string | null {
   return w && h ? `${w} × ${h}` : null;
 }

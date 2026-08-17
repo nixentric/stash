@@ -29,11 +29,12 @@ import {
   MenuShortcut,
 } from "@/components/ui/menu";
 import { ipc } from "@/lib/ipc";
+import { DownloadBar, fetchOriginal } from "@/lib/download";
 import { keys, reportError, useCollections, useFootageAction, useProjects } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
 import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { TagPromptDialog } from "@/components/dialogs/TagPromptDialog";
-import { cn } from "@/lib/utils";
+import { baseName, cn } from "@/lib/utils";
 import type { FootageListItem } from "@/lib/types";
 
 /**
@@ -120,14 +121,14 @@ export function FootageContextMenu({
   async function downloadOriginal() {
     if (single == null) return;
     const id = single;
-    const t = toast.loading("Downloading the original…");
+    // A spinner cannot say how far along a 2 GB file is, so the toast carries the
+    // same bar the preview draws on its stage.
+    const t = toast.loading(<DownloadBar id={id} label="the original" />, {
+      duration: Infinity,
+    });
     try {
-      const path = await ipc.downloadOriginal(id);
-      // The scheme handler prefers the downloaded file, so re-asking for the
-      // playback target is what switches previews over to it.
-      qc.invalidateQueries({ queryKey: keys.playback(id) });
-      qc.invalidateQueries({ queryKey: keys.downloaded });
-      toast.success(`Downloaded ${path.split(/[/\\]/).pop()}`, { id: t });
+      const path = await fetchOriginal(qc, id);
+      toast.success(`Downloaded ${baseName(path)}`, { id: t, duration: 4000 });
     } catch (e) {
       toast.dismiss(t);
       reportError(e, "The download failed");

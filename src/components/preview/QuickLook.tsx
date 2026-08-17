@@ -18,6 +18,7 @@ import { DotmSquare15 } from "@/components/ui/dotm-square-15";
 import { DotmSquare3 } from "@/components/ui/dotm-square-3";
 import { Kbd, Tooltip } from "@/components/ui/misc";
 import { asIpcError, ipc } from "@/lib/ipc";
+import { fetchOriginal } from "@/lib/download";
 import { keys, reportError, useFootageAction, useFootageDetail, usePrefs } from "@/hooks/queries";
 import { useThumbnail } from "@/hooks/use-thumbnail";
 import { FootageContextMenu } from "@/components/library/FootageContextMenu";
@@ -25,9 +26,11 @@ import {
   bytes,
   duration as fmtDuration,
   mediaLabel,
+  percent,
   providerLabel,
   resolution,
 } from "@/lib/format";
+import { baseName } from "@/lib/utils";
 import type { DownloadProgress } from "@/lib/types";
 import { useUi } from "@/store/ui";
 
@@ -328,12 +331,8 @@ function useDownload(id: number | null) {
     setBusy(true);
     setProgress({ id, received: 0, total: null });
     try {
-      const path = await ipc.downloadOriginal(id);
-      // The scheme handler prefers the downloaded file, so re-asking for the
-      // playback target is all it takes to switch the preview over to it.
-      await qc.invalidateQueries({ queryKey: keys.playback(id) });
-      qc.invalidateQueries({ queryKey: keys.downloaded });
-      toast.success(`Downloaded ${path.split(/[/\\]/).pop()}`);
+      const path = await fetchOriginal(qc, id);
+      toast.success(`Downloaded ${baseName(path)}`);
     } catch (e) {
       // Toast as well as inline: the embed fills the stage, so an inline-only
       // message would leave a failed download looking like nothing happened.
@@ -519,7 +518,7 @@ function Loading() {
 function Downloading({ progress }: { progress: DownloadProgress | null }) {
   const received = progress?.received ?? 0;
   const total = progress?.total ?? null;
-  const pct = total ? Math.min(100, (received / total) * 100) : null;
+  const pct = percent(received, total);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -533,7 +532,7 @@ function Downloading({ progress }: { progress: DownloadProgress | null }) {
       <p className="tnum text-[11.5px] text-subtle-foreground">
         {pct == null
           ? `Downloading · ${bytes(received)}`
-          : `Downloading · ${pct.toFixed(0)}% · ${bytes(received)} of ${bytes(total)}`}
+          : `Downloading · ${pct}% · ${bytes(received)} of ${bytes(total)}`}
       </p>
     </div>
   );
