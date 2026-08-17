@@ -20,6 +20,7 @@ import { Kbd, Tooltip } from "@/components/ui/misc";
 import { asIpcError, ipc } from "@/lib/ipc";
 import { keys, reportError, useFootageAction, useFootageDetail, usePrefs } from "@/hooks/queries";
 import { useThumbnail } from "@/hooks/use-thumbnail";
+import { FootageContextMenu } from "@/components/library/FootageContextMenu";
 import {
   bytes,
   duration as fmtDuration,
@@ -36,7 +37,13 @@ import { useUi } from "@/store/ui";
  * Navigation walks the ids currently on screen, so it follows the user's sort
  * and filter rather than the database's natural order.
  */
-export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
+export function QuickLook({
+  orderedIds,
+  onSetThumbnail,
+}: {
+  orderedIds: number[];
+  onSetThumbnail: (id: number, dataUrl: string) => void;
+}) {
   const { quickLookId, setQuickLookId, select } = useUi();
   const detail = useFootageDetail(quickLookId);
   const thumb = useThumbnail(quickLookId ?? -1, quickLookId != null, true);
@@ -51,6 +58,7 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
   const download = useDownload(quickLookId);
   const action = useFootageAction();
   const index = quickLookId != null ? orderedIds.indexOf(quickLookId) : -1;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   /**
    * Remove what is on screen, then land on the next one.
@@ -61,15 +69,8 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
   const remove = useCallback(() => {
     if (quickLookId == null) return;
     const next = orderedIds[index + 1] ?? orderedIds[index - 1] ?? null;
-    action.mutate(
-      { type: "remove", ids: [quickLookId] },
-      {
-        // Same wording as the grid: this is a catalog, and nothing in it can
-        // delete a file from Drive or from disk.
-        onSuccess: () =>
-          toast.success("Removed from the library. The original file was not touched."),
-      },
-    );
+    // The confirmation, its wording and its Undo all come from the action itself.
+    action.mutate({ type: "remove", ids: [quickLookId] });
     setQuickLookId(next);
     if (next != null) select([next], next);
   }, [quickLookId, index, orderedIds, action, setQuickLookId, select]);
@@ -86,7 +87,9 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
   }, [autoDownload, t?.downloadable, download.busy, download.error, download.start]);
 
   useEffect(() => {
-    if (quickLookId == null) return;
+    // While the context menu is up it owns the keyboard: arrows walk its items
+    // and Esc closes it, neither of which should move or shut the preview.
+    if (quickLookId == null || menuOpen) return;
 
     const step = (delta: number) => {
       const next = orderedIds[index + delta];
@@ -115,7 +118,7 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [quickLookId, index, orderedIds, setQuickLookId, select, remove]);
+  }, [quickLookId, index, orderedIds, setQuickLookId, select, remove, menuOpen]);
 
   if (quickLookId == null) return null;
   const d = detail.data;
@@ -141,7 +144,18 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
         </Button>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-14 pb-4">
+      {/* The grid's menu, over the preview: right-clicking here is the same
+          "Mark as Used", "Favorite", "Add Tag" as in the library, and it acts on
+          the clip on screen because navigating already keeps the selection on it. */}
+      <FootageContextMenu
+        items={d ? [d] : []}
+        onSetThumbnail={onSetThumbnail}
+        onOpenChange={setMenuOpen}
+      >
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-14 pb-4"
+        onContextMenu={() => select([quickLookId], quickLookId)}
+      >
         <NavButton
           side="left"
           disabled={index <= 0}
@@ -182,6 +196,7 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
           }}
         />
       </div>
+      </FootageContextMenu>
 
       {/* Info bar */}
       <div className="shrink-0 border-t border-border bg-surface/80 px-4 py-2.5">
@@ -259,6 +274,10 @@ export function QuickLook({ orderedIds }: { orderedIds: number[] }) {
             <span className="flex items-center gap-1">
               <Kbd>⌫</Kbd>
               Remove
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>⌘Z</Kbd>
+              Undo
             </span>
             <span className="flex items-center gap-1">
               <Kbd>Esc</Kbd>

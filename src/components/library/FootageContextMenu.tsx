@@ -47,10 +47,18 @@ export function FootageContextMenu({
   children,
   items,
   onSetThumbnail,
+  onOpenChange,
 }: {
   children: React.ReactNode;
-  items: FootageListItem[];
+  /**
+   * Whatever is on screen to read favourite and usage off — the grid hands over
+   * its rows, the preview the one record it is showing. Only those two fields
+   * are read, so the menu does not care which shape it gets.
+   */
+  items: Pick<FootageListItem, "id" | "favorite" | "usageCount">[];
   onSetThumbnail: (id: number, dataUrl: string) => void;
+  /** So a surface with its own key handling can stand down while the menu is up. */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const { selection, setQuickLookId } = useUi();
   const qc = useQueryClient();
@@ -63,7 +71,6 @@ export function FootageContextMenu({
 
   const ids = selection;
   const single = ids.length === 1 ? ids[0] : null;
-  const many = ids.length > 1;
 
   // Only the backend knows whether Download can do anything — it is false for
   // local files and for anything already on disk. Asked when the menu opens,
@@ -143,11 +150,14 @@ export function FootageContextMenu({
     }
   }
 
-  const label = many ? `${ids.length} items` : "footage";
-
   return (
     <>
-      <ContextMenu onOpenChange={setOpen}>
+      <ContextMenu
+        onOpenChange={(o) => {
+          setOpen(o);
+          onOpenChange?.(o);
+        }}
+      >
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent>
           {ids.length === 0 ? (
@@ -249,19 +259,9 @@ export function FootageContextMenu({
               <ContextMenuSeparator />
               <ContextMenuItem
                 destructive
-                onSelect={() => {
-                  action.mutate(
-                    { type: "remove", ids },
-                    {
-                      onSuccess: () =>
-                        // Wording matters: this is a catalog, and nothing in it
-                        // can delete a file from Drive or from disk.
-                        toast.success(
-                          `Removed ${label} from the library. Original files were not touched.`,
-                        ),
-                    },
-                  );
-                }}
+                // Wording matters and lives with the action: this is a catalog,
+                // and nothing in it can delete a file from Drive or from disk.
+                onSelect={() => action.mutate({ type: "remove", ids })}
               >
                 <Trash2 />
                 Remove from Library

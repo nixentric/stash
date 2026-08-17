@@ -408,7 +408,7 @@ export default function App() {
         </div>
       )}
 
-      <QuickLook orderedIds={orderedIds} />
+      <QuickLook orderedIds={orderedIds} onSetThumbnail={setThumbnailFromDataUrl} />
 
       <AddFootageDialog
         open={addOpen}
