@@ -3,6 +3,29 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.22 — 2026-08-17
+
+**Pick folders by dragging over them**
+
+- **Drag a box across the table** and every folder it touches is picked, the same gesture the library grid already had. Hold ⌘ or shift while you start to add to what is already picked.
+- **The tick column only appears when you want it.** A drag turns it on by itself, and the Select button in the toolbar turns it off again — a column of empty boxes on every row is noise on the days you are only reading the table.
+- **The bulk bar floats at the bottom of the window**, so ticking a folder far down the table no longer means scrolling back to the top to act on it.
+
+**The bulk bar finishes what you type**
+
+- **Tags and column values you already use are offered as you type**, one word at a time between the commas. Picking one is ↑↓ and Enter, and Enter again applies — so a typo is never written to every picked folder by one keystroke too many.
+- **The same list the Filters menu offers**, so a bulk edit cannot invent a near-miss of a value that already exists.
+
+**A cover, where your cursor is**
+
+- **Rest on a row and its first cover floats up beside the pointer**, following it, and opening above or below depending on where there is room. It never covers the row you are pointing at and never eats the click.
+
+**It stops hoarding memory**
+
+- **Thumbnails are let go once nothing is showing them.** A list you had scrolled once kept every image it had ever displayed — the queries behind them never switched off, so nothing was ever collected and memory only went up.
+- **Adding one tag no longer refetches a preview strip per folder on screen.** Folder edits now refresh the folders, not the whole library.
+- **Dragging a selection is quiet now.** The band moves without re-rendering the table, and the selection is only rewritten when it actually changes.
+
 ## v0.5.21 — 2026-08-17
 
 **Undo, and it means it**
