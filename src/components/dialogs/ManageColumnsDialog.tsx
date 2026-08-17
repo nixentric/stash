@@ -32,11 +32,15 @@ export function ManageColumnsDialog({
   onClose,
   multipleTagFields,
   onChangeMultipleTagFields,
+  hoverPreview,
+  onChangeHoverPreview,
 }: {
   open: boolean;
   onClose: () => void;
   multipleTagFields: number[];
   onChangeMultipleTagFields: (ids: number[]) => void;
+  hoverPreview: boolean;
+  onChangeHoverPreview: (on: boolean) => void;
 }) {
   const qc = useQueryClient();
   const fields = useFolderFields(open);
@@ -130,6 +134,18 @@ export function ManageColumnsDialog({
                 }
               }}
             />
+          </div>
+
+          <div className="flex items-start justify-between gap-3 border-t border-border pt-3">
+            <div className="min-w-0">
+              <span className="text-[13px] font-medium">Preview on hover</span>
+              <p className="mt-1 text-[12px] text-subtle-foreground">
+                Resting on a row floats its first cover beside the pointer. Off, the small strip in
+                the Preview column is all you get — which is what you want if a picture appearing
+                under the cursor is in your way.
+              </p>
+            </div>
+            <Switch checked={hoverPreview} onCheckedChange={onChangeHoverPreview} />
           </div>
 
           <div className="border-t border-border pt-3">

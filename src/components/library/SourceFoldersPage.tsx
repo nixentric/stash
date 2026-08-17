@@ -397,6 +397,11 @@ export function SourceFoldersPage() {
   const [colHighlightIdx, setColHighlightIdx] = useState(0);
 
   const [manageColumnsOpen, setManageColumnsOpen] = useState(false);
+  // Same shelf as the multi-value columns above: a table preference, kept where
+  // the table can read it without a round trip to the backend.
+  const [hoverPreview, setHoverPreview] = useState(
+    () => localStorage.getItem("stash:folder_hover_preview") !== "off",
+  );
 
   // Bulk editing: which folders are ticked, and what the bar writes to. The tick
   // column is off until asked for — a column of empty boxes on every row is noise
@@ -435,6 +440,7 @@ export function SourceFoldersPage() {
   };
   // Delayed, so running the cursor down the table does not flash a card per row.
   const startHover = (path: string) => (e: React.MouseEvent) => {
+    if (!hoverPreview) return;
     const { clientX: x, clientY: y } = e;
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     hoverTimer.current = window.setTimeout(() => setHover({ path, x, y }), 350);
@@ -1809,7 +1815,7 @@ export function SourceFoldersPage() {
 
       {/* Not while a cell is open: an editor is a place you park the cursor, and
           a card popping over it is in the way. */}
-      {hover && !marquee.dragging && !editingTagsPath && !editingColumnPath && !editingBrandPath && (
+      {hoverPreview && hover && !marquee.dragging && !editingTagsPath && !editingColumnPath && !editingBrandPath && (
         <HoverPreview path={hover.path} x={hover.x} y={hover.y} />
       )}
 
@@ -1862,6 +1868,11 @@ export function SourceFoldersPage() {
         onClose={() => setManageColumnsOpen(false)}
         multipleTagFields={multipleTagFields}
         onChangeMultipleTagFields={setMultipleTagFields}
+        hoverPreview={hoverPreview}
+        onChangeHoverPreview={(on) => {
+          setHoverPreview(on);
+          localStorage.setItem("stash:folder_hover_preview", on ? "on" : "off");
+        }}
       />
       </div>
     </div>
