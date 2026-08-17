@@ -65,6 +65,7 @@ pub fn run() {
             commands::footage::get_footage,
             commands::footage::patch_footage,
             commands::footage::remove_footage,
+            commands::footage::restore_removed,
             commands::footage::list_folders,
             commands::source_folder::folder_fields,
             commands::source_folder::create_folder_field,

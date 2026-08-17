@@ -161,7 +161,7 @@ export function Inspector() {
           <Section title="Tags">
             <TagInput
               value={d.tags}
-              onChange={(tags) => action.mutate({ type: "setTags", id: d.id, tags })}
+              onChange={(tags) => action.mutate({ type: "setTags", id: d.id, tags, prev: d.tags })}
             />
           </Section>
 

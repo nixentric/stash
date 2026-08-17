@@ -28,6 +28,8 @@ export const ipc = {
   patchFootage: (ids: number[], patch: T.FootagePatch) =>
     invoke<void>("patch_footage", { ids, patch }),
   removeFootage: (ids: number[]) => invoke<number>("remove_footage", { ids }),
+  /** Puts the last removal back. 0 when there is nothing left to undo. */
+  restoreRemoved: () => invoke<number>("restore_removed"),
   listFolders: () => invoke<T.FolderNode[]>("list_folders"),
   folderFields: () => invoke<T.FolderField[]>("folder_fields"),
   createFolderField: (name: string) => invoke<number>("create_folder_field", { name }),

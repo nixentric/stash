@@ -34,7 +34,27 @@ pub fn patch_footage(
 /// of any delete path to a source: nothing here touches Google Drive or disk.
 #[tauri::command]
 pub fn remove_footage(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize> {
-    state.with_library_mut(|lib| repo::remove(&mut lib.conn, &ids))
+    let removed = state.with_library_mut(|lib| repo::remove(&mut lib.conn, &ids))?;
+    let n = removed.count;
+    state.stash_removed(removed);
+    Ok(n)
+}
+
+/// Puts the last removal back — the same records, under the same ids, with
+/// their tags, usage history and collections still attached.
+#[tauri::command]
+pub fn restore_removed(state: State<'_, AppState>) -> Result<usize> {
+    let Some(removed) = state.take_removed() else {
+        return Ok(0);
+    };
+    match state.with_library_mut(|lib| repo::restore(&mut lib.conn, &removed)) {
+        Ok(n) => Ok(n),
+        // A failed restore keeps its snapshot: the user can try again.
+        Err(e) => {
+            state.stash_removed(removed);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]

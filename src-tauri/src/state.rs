@@ -1,3 +1,4 @@
+use crate::db::repo::footage::Removed;
 use crate::db::Library;
 use crate::error::{AppError, Result};
 use crate::gdrive::client::{DriveState, SharedDrive};
@@ -28,6 +29,12 @@ pub struct AppState {
     /// In memory only, and deliberately so: a restart, an explicit refresh, or
     /// connecting an account are all reasons the answer might genuinely change.
     preview_failures: Mutex<HashSet<i64>>,
+    /// The last removal, kept so the toast's Undo has something to write back.
+    ///
+    /// ponytail: one slot, in memory. Undo is offered by a notification that is
+    /// gone in seconds; a stack of these would be a second, invisible copy of
+    /// the library. Widen it only if undo ever grows a history.
+    removed: Mutex<Option<Removed>>,
 }
 
 impl AppState {
@@ -44,7 +51,19 @@ impl AppState {
                 .unwrap_or_default(),
             jobs: JobRegistry::default(),
             preview_failures: Mutex::new(HashSet::new()),
+            removed: Mutex::new(None),
         }
+    }
+
+    /// Remembers a removal as the one Undo would put back.
+    pub fn stash_removed(&self, removed: Removed) {
+        if let Ok(mut slot) = self.removed.lock() {
+            *slot = Some(removed);
+        }
+    }
+
+    pub fn take_removed(&self) -> Option<Removed> {
+        self.removed.lock().ok().and_then(|mut slot| slot.take())
     }
 
     pub fn preview_failed_before(&self, footage_id: i64) -> bool {
@@ -103,9 +122,11 @@ impl AppState {
             .map_err(|_| AppError::Other("Could not switch libraries".into()))?;
         *guard = lib;
         // Footage ids are per-library, so a stale set would suppress previews
-        // for unrelated records in the library being opened.
+        // for unrelated records in the library being opened — and a stale
+        // removal would write those ids into a library they never belonged to.
         drop(guard);
         self.reset_preview_failures();
+        self.take_removed();
         Ok(())
     }
 

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { runLastUndo } from "@/hooks/queries";
 import { useUi } from "@/store/ui";
 
 interface Options {
@@ -80,6 +81,15 @@ export function useHotkeys(o: Options) {
       }
 
       if (inEditable(e.target)) return;
+
+      // Undo works over the preview too — that is where footage gets removed
+      // with ⌫, and the way back should not depend on closing it first.
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        runLastUndo();
+        return;
+      }
+
       // Quick Look owns arrows, Space and Escape while it is open.
       if (quickLookId != null) return;
 

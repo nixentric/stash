@@ -50,6 +50,41 @@ export function reportError(e: unknown, fallback = "Something went wrong") {
   toast.error(err.message || fallback);
 }
 
+/**
+ * Confirmation that offers to put things back.
+ *
+ * Undo is always the opposite write, never a snapshot of the whole record: the
+ * caller already knows what the value was, so re-writing it is one line and
+ * cannot resurrect a stale copy of anything it did not touch.
+ */
+export function toastUndo(qc: QueryClient, message: string, undo: () => Promise<unknown>) {
+  const run = () => {
+    lastUndo = null;
+    undo()
+      .catch((e) => reportError(e, "Could not undo that"))
+      .finally(() => invalidateLibrary(qc));
+  };
+  lastUndo = run;
+  toast.success(message, { action: { label: "Undo", onClick: run } });
+}
+
+/**
+ * What the last toast offered to undo, so ⌘Z reaches it without aiming at a
+ * button that is about to disappear.
+ *
+ * ponytail: one slot, module-level — undo here means "take back what I just
+ * did", not a history. Give it a stack only once every action is invertible;
+ * today the hard deletes are not.
+ */
+let lastUndo: (() => void) | null = null;
+
+/** Fires the pending undo. False when there is nothing to take back. */
+export function runLastUndo(): boolean {
+  if (!lastUndo) return false;
+  lastUndo();
+  return true;
+}
+
 // ── library ─────────────────────────────────────────────────────────────────
 
 export const useCurrentLibrary = () =>
@@ -246,44 +281,105 @@ type Action =
   | { type: "deleteUsage"; usageId: number; footageId: number }
   | { type: "addTags"; ids: number[]; tags: string[] }
   | { type: "removeTags"; ids: number[]; tags: string[] }
-  | { type: "setTags"; id: number; tags: string[] }
+  /** `prev` is what the tags were, so the toast can offer to put them back. */
+  | { type: "setTags"; id: number; tags: string[]; prev?: string[] }
   | { type: "addToCollection"; collectionId: number; ids: number[] }
   | { type: "removeFromCollection"; collectionId: number; ids: number[] }
-  | { type: "remove"; ids: number[] };
+  | { type: "remove"; ids: number[] }
+  | { type: "restoreRemoved" };
+
+async function applyAction(a: Action) {
+  switch (a.type) {
+    case "patch":
+      return ipc.patchFootage(a.ids, a.patch);
+    case "markUsed":
+      return ipc.markUsed(a.ids, a.projectId, a.usedAt, a.notes);
+    case "markUnused":
+      return ipc.markUnused(a.ids);
+    case "deleteUsage":
+      return ipc.deleteUsage(a.usageId);
+    case "addTags":
+      return ipc.addTags(a.ids, a.tags);
+    case "removeTags":
+      return ipc.removeTags(a.ids, a.tags);
+    case "setTags":
+      return ipc.setTags(a.id, a.tags);
+    case "addToCollection":
+      return ipc.addToCollection(a.collectionId, a.ids);
+    case "removeFromCollection":
+      return ipc.removeFromCollection(a.collectionId, a.ids);
+    case "remove":
+      return ipc.removeFootage(a.ids);
+    case "restoreRemoved":
+      return ipc.restoreRemoved();
+  }
+}
+
+/**
+ * What an action is called on screen, and the action that reverses it.
+ *
+ * `null` means there is nothing to undo cheaply — the usage history behind
+ * "Mark as Unused" is gone from the database, and a toast that promised
+ * otherwise would be a lie. Favorite and rating are left out on purpose:
+ * clicking the same control again already is the undo.
+ */
+export function undoOf(a: Action): { message: string; back: Action } | null {
+  const n = "ids" in a ? a.ids.length : 1;
+  const items = n === 1 ? "1 item" : `${n} items`;
+  switch (a.type) {
+    case "addTags":
+      return { message: `Tagged ${items}`, back: { type: "removeTags", ids: a.ids, tags: a.tags } };
+    case "removeTags":
+      return {
+        message: `Removed ${a.tags.length === 1 ? `tag "${a.tags[0]}"` : "tags"} from ${items}`,
+        back: { type: "addTags", ids: a.ids, tags: a.tags },
+      };
+    case "setTags":
+      return a.prev
+        ? { message: "Tags updated", back: { type: "setTags", id: a.id, tags: a.prev } }
+        : null;
+    case "addToCollection":
+      return {
+        message: `Added ${items} to the collection`,
+        back: { type: "removeFromCollection", collectionId: a.collectionId, ids: a.ids },
+      };
+    case "removeFromCollection":
+      return {
+        message: `Removed ${items} from the collection`,
+        back: { type: "addToCollection", collectionId: a.collectionId, ids: a.ids },
+      };
+    case "remove":
+      // The backend keeps the deleted rows until the next removal, so this puts
+      // the records back under their own ids, tags and usage included.
+      return {
+        message: `Removed ${items} from the library. The original ${
+          n === 1 ? "file was" : "files were"
+        } not touched.`,
+        back: { type: "restoreRemoved" },
+      };
+    default:
+      return null;
+  }
+}
 
 export function useFootageAction() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (a: Action) => {
-      switch (a.type) {
-        case "patch":
-          return ipc.patchFootage(a.ids, a.patch);
-        case "markUsed":
-          return ipc.markUsed(a.ids, a.projectId, a.usedAt, a.notes);
-        case "markUnused":
-          return ipc.markUnused(a.ids);
-        case "deleteUsage":
-          return ipc.deleteUsage(a.usageId);
-        case "addTags":
-          return ipc.addTags(a.ids, a.tags);
-        case "removeTags":
-          return ipc.removeTags(a.ids, a.tags);
-        case "setTags":
-          return ipc.setTags(a.id, a.tags);
-        case "addToCollection":
-          return ipc.addToCollection(a.collectionId, a.ids);
-        case "removeFromCollection":
-          return ipc.removeFromCollection(a.collectionId, a.ids);
-        case "remove":
-          return ipc.removeFootage(a.ids);
-      }
-    },
+    mutationFn: applyAction,
     onSuccess: (_r, a) => {
       invalidateLibrary(qc);
       const touched =
         "ids" in a ? a.ids : "id" in a ? [a.id] : "footageId" in a ? [a.footageId] : [];
       for (const id of touched) qc.invalidateQueries({ queryKey: keys.detail(id) });
+
+      const undo = undoOf(a);
+      if (undo) {
+        toastUndo(qc, undo.message, async () => {
+          await applyAction(undo.back);
+          for (const id of touched) qc.invalidateQueries({ queryKey: keys.detail(id) });
+        });
+      }
     },
     onError: (e) => reportError(e),
   });

@@ -377,7 +377,7 @@ fn removing_footage_is_catalog_only_and_cascades_cleanly() {
     usage::mark_used(&mut conn, &[id], Some(p), None, "").unwrap();
 
     let removed = footage::remove(&mut conn, &[id]).unwrap();
-    assert_eq!(removed, 1);
+    assert_eq!(removed.count, 1);
 
     let orphan_sources: i64 = conn
         .query_row("SELECT COUNT(*) FROM sources", [], |r| r.get(0))
@@ -391,6 +391,21 @@ fn removing_footage_is_catalog_only_and_cascades_cleanly() {
 
     assert_eq!((orphan_sources, orphan_usage), (0, 0), "no orphaned rows");
     assert_eq!(projects, 1, "the project itself outlives the footage");
+
+    // Undo: the same record, under the same id, with what was hanging off it.
+    assert_eq!(footage::restore(&mut conn, &removed).unwrap(), 1);
+    let back = footage::get(&conn, id).unwrap();
+    assert_eq!(back.display_name, "Clip");
+    assert_eq!(back.tags, vec!["keep-me".to_string()]);
+    assert_eq!(back.usage_count, 1, "the usage history came back too");
+    assert!(back.source.original_url.is_some(), "and where the file lives");
+
+    // Replaying the same snapshot must not double-insert anything.
+    assert_eq!(footage::restore(&mut conn, &removed).unwrap(), 0);
+    let usages: i64 = conn
+        .query_row("SELECT COUNT(*) FROM footage_usage", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(usages, 1);
 }
 
 /// A logo imported from the brand page stays out of the grid even before it is

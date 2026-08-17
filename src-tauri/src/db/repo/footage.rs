@@ -322,11 +322,86 @@ pub fn patch(conn: &Connection, ids: &[i64], p: &FootagePatch) -> Result<()> {
     Ok(())
 }
 
-/// Removes catalog records only.
+/// Tables a footage record owns outright, which the delete cascades through.
+/// `footages` leads because everything else references it on the way back in.
+const OWNED: &[(&str, &str)] = &[
+    ("footages", "id"),
+    ("sources", "footage_id"),
+    ("thumbnails", "footage_id"),
+    ("footage_usage", "footage_id"),
+    ("footage_tags", "footage_id"),
+    ("collection_footages", "footage_id"),
+];
+
+/// Rows that merely point at a footage. The delete blanks the link and keeps
+/// the row, so putting it back is an UPDATE rather than an INSERT.
+const LINKED: &[(&str, &str)] = &[
+    ("brands", "cover_footage_id"),
+    ("brand_logos", "footage_id"),
+    ("brand_examples", "footage_id"),
+    ("brand_elements", "footage_id"),
+];
+
+/// What a removal took out, in the form it goes back in.
+///
+/// Rows are raw column values rather than typed structs on purpose: this is the
+/// one place that has to keep working when any of those tables grows a column,
+/// and generic values do that without a matching edit here.
+#[derive(Default)]
+pub struct Removed {
+    /// (table, column names, rows).
+    rows: Vec<(&'static str, Vec<String>, Vec<Vec<rusqlite::types::Value>>)>,
+    /// (table, column, rowid, footage id) for every link the delete blanked.
+    links: Vec<(&'static str, &'static str, i64, i64)>,
+    /// Footage records actually deleted.
+    pub count: usize,
+}
+
+impl Removed {
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+}
+
+fn placeholders(n: usize) -> String {
+    std::iter::repeat("?").take(n).collect::<Vec<_>>().join(", ")
+}
+
+/// Reads everything the delete is about to take, before it takes it.
+fn snapshot(conn: &Connection, ids: &[i64]) -> Result<Removed> {
+    let list = placeholders(ids.len());
+    let mut out = Removed::default();
+
+    for (table, key) in OWNED {
+        let mut stmt = conn.prepare(&format!("SELECT * FROM {table} WHERE {key} IN ({list})"))?;
+        let cols: Vec<String> = stmt.column_names().iter().map(|c| c.to_string()).collect();
+        let width = cols.len();
+        let rows = stmt
+            .query_map(params_from_iter(ids), |r| {
+                (0..width).map(|i| r.get(i)).collect::<rusqlite::Result<Vec<_>>>()
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        out.rows.push((table, cols, rows));
+    }
+
+    for (table, col) in LINKED {
+        let mut stmt =
+            conn.prepare(&format!("SELECT rowid, {col} FROM {table} WHERE {col} IN ({list})"))?;
+        for found in stmt.query_map(params_from_iter(ids), |r| Ok((r.get(0)?, r.get(1)?)))? {
+            let (rowid, footage_id) = found?;
+            out.links.push((table, col, rowid, footage_id));
+        }
+    }
+
+    Ok(out)
+}
+
+/// Removes catalog records only, handing back what it took so it can be undone.
 ///
 /// This never touches Google Drive or the local filesystem — the app has no
 /// write scope and no delete path to any source (§17).
-pub fn remove(conn: &mut Connection, ids: &[i64]) -> Result<usize> {
+pub fn remove(conn: &mut Connection, ids: &[i64]) -> Result<Removed> {
+    let mut removed = snapshot(conn, ids)?;
     let tx = conn.transaction()?;
     let mut n = 0;
     {
@@ -334,6 +409,41 @@ pub fn remove(conn: &mut Connection, ids: &[i64]) -> Result<usize> {
         for id in ids {
             n += stmt.execute([id])?;
         }
+    }
+    tx.commit()?;
+    removed.count = n;
+    Ok(removed)
+}
+
+/// Writes a removal back, ids included, so tags, usage and collections relink.
+///
+/// `INSERT OR IGNORE` because the same snapshot must never double-insert if it
+/// is replayed: undoing twice puts the library in the state it was already in.
+pub fn restore(conn: &mut Connection, removed: &Removed) -> Result<usize> {
+    let tx = conn.transaction()?;
+    let mut n = 0;
+    for (table, cols, rows) in &removed.rows {
+        if rows.is_empty() {
+            continue;
+        }
+        let sql = format!(
+            "INSERT OR IGNORE INTO {table} ({}) VALUES ({})",
+            cols.join(", "),
+            placeholders(cols.len())
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        for row in rows {
+            let written = stmt.execute(params_from_iter(row.iter()))?;
+            if *table == "footages" {
+                n += written;
+            }
+        }
+    }
+    for (table, col, rowid, footage_id) in &removed.links {
+        tx.execute(
+            &format!("UPDATE {table} SET {col} = ?1 WHERE rowid = ?2"),
+            params![footage_id, rowid],
+        )?;
     }
     tx.commit()?;
     Ok(n)
