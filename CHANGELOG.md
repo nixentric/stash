@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.31 — 2026-08-17
+
+**Downloads say how far along they are, wherever you start them**
+
+- **Right-click → Download Original now shows a progress bar**, not just a spinner. A 2 GB file used to look exactly the same at 1% as it did at 99%; the toast now carries the percentage, how much has arrived, and how big the file is.
+- **It is the same bar the preview draws**, reading the same byte counts the backend reports — one download, one way of showing it, whichever way you asked for it.
+- **A file whose size the server never states says "still going"** rather than inventing a percentage, and the bar pulses instead of pretending to fill.
+
 ## v0.5.30 — 2026-08-17
 
 **Every filter can now say "not this"**
