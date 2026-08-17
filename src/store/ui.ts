@@ -43,6 +43,21 @@ function sortFor(view: SidebarView, current: SortKey): SortKey {
         : current;
 }
 
+/**
+ * One value's trip through include → exclude → off, over the two lists that hold
+ * it. A value is never in both lists, which is what keeps "include" and "exclude"
+ * from contradicting each other.
+ */
+function cycle<T>(include: T[], exclude: T[], v: T): [T[], T[]] {
+  if (include.includes(v)) return [include.filter((x) => x !== v), [...exclude, v]];
+  if (exclude.includes(v)) return [include, exclude.filter((x) => x !== v)];
+  return [[...include, v], exclude];
+}
+
+/** Which side of a filter a value sits on, for the menus and chips to draw. */
+export const triOf = <T,>(include: T[], exclude: T[], v: T): 1 | 0 | -1 =>
+  include.includes(v) ? 1 : exclude.includes(v) ? -1 : 0;
+
 interface UiState {
   view: SidebarView;
   /** Browser-style history around `view`, the one place navigation happens. */
@@ -53,12 +68,18 @@ interface UiState {
   viewMode: ViewMode;
   gridSize: number;
 
-  // Filter facets that combine with the active view (§24).
+  // Filter facets that combine with the active view (§24). Every facet reads in
+  // both directions: a list of what to keep beside a list of what to drop, and a
+  // rating band instead of a floor.
   usage: UsageFilter;
   mediaTypes: MediaType[];
+  excludeMediaTypes: MediaType[];
   minRating: number | null;
-  favoriteOnly: boolean;
+  maxRating: number | null;
+  /** null: don't care · true: favorites only · false: favorites hidden. */
+  favorite: boolean | null;
   filterTags: string[];
+  excludeTags: string[];
 
   selection: number[];
   lastAnchor: number | null;
@@ -74,10 +95,11 @@ interface UiState {
   setViewMode: (m: ViewMode) => void;
   setGridSize: (n: number) => void;
   setUsage: (u: UsageFilter) => void;
-  toggleMediaType: (m: MediaType) => void;
+  cycleMediaType: (m: MediaType) => void;
   setMinRating: (n: number | null) => void;
-  setFavoriteOnly: (b: boolean) => void;
-  toggleFilterTag: (t: string) => void;
+  setMaxRating: (n: number | null) => void;
+  cycleFavorite: () => void;
+  cycleFilterTag: (t: string) => void;
   clearFilters: () => void;
   hasActiveFilters: () => boolean;
 
@@ -100,9 +122,12 @@ export const useUi = create<UiState>((set, get) => ({
 
   usage: "all",
   mediaTypes: [],
+  excludeMediaTypes: [],
   minRating: null,
-  favoriteOnly: false,
+  maxRating: null,
+  favorite: null,
   filterTags: [],
+  excludeTags: [],
 
   selection: [],
   lastAnchor: null,
@@ -156,30 +181,53 @@ export const useUi = create<UiState>((set, get) => ({
   setGridSize: (gridSize) => set({ gridSize }),
 
   setUsage: (usage) => set({ usage }),
-  toggleMediaType: (m) =>
+  cycleMediaType: (m) =>
+    set((s) => {
+      const [mediaTypes, excludeMediaTypes] = cycle(s.mediaTypes, s.excludeMediaTypes, m);
+      return { mediaTypes, excludeMediaTypes };
+    }),
+  // A band that crosses itself matches nothing and looks like a broken library,
+  // so the other end gives way instead.
+  setMinRating: (minRating) =>
     set((s) => ({
-      mediaTypes: s.mediaTypes.includes(m)
-        ? s.mediaTypes.filter((x) => x !== m)
-        : [...s.mediaTypes, m],
+      minRating,
+      maxRating: minRating && s.maxRating && s.maxRating < minRating ? minRating : s.maxRating,
     })),
-  setMinRating: (minRating) => set({ minRating }),
-  setFavoriteOnly: (favoriteOnly) => set({ favoriteOnly }),
-  toggleFilterTag: (t) =>
+  setMaxRating: (maxRating) =>
     set((s) => ({
-      filterTags: s.filterTags.includes(t)
-        ? s.filterTags.filter((x) => x !== t)
-        : [...s.filterTags, t],
+      maxRating,
+      minRating: maxRating && s.minRating && s.minRating > maxRating ? maxRating : s.minRating,
     })),
+  // Off → only → hidden → off. Two menu rows would say the same thing twice.
+  cycleFavorite: () =>
+    set((s) => ({ favorite: s.favorite == null ? true : s.favorite ? false : null })),
+  cycleFilterTag: (t) =>
+    set((s) => {
+      const [filterTags, excludeTags] = cycle(s.filterTags, s.excludeTags, t);
+      return { filterTags, excludeTags };
+    }),
   clearFilters: () =>
-    set({ usage: "all", mediaTypes: [], minRating: null, favoriteOnly: false, filterTags: [] }),
+    set({
+      usage: "all",
+      mediaTypes: [],
+      excludeMediaTypes: [],
+      minRating: null,
+      maxRating: null,
+      favorite: null,
+      filterTags: [],
+      excludeTags: [],
+    }),
   hasActiveFilters: () => {
     const s = get();
     return (
       s.usage !== "all" ||
       s.mediaTypes.length > 0 ||
+      s.excludeMediaTypes.length > 0 ||
       s.minRating != null ||
-      s.favoriteOnly ||
-      s.filterTags.length > 0
+      s.maxRating != null ||
+      s.favorite != null ||
+      s.filterTags.length > 0 ||
+      s.excludeTags.length > 0
     );
   },
 
@@ -205,9 +253,12 @@ export function buildQuery(s: UiState, offset = 0, limit = 200): FootageQuery {
     search: s.search.trim() || null,
     usage: s.usage,
     mediaTypes: s.mediaTypes,
+    excludeMediaTypes: s.excludeMediaTypes,
     minRating: s.minRating,
-    favoriteOnly: s.favoriteOnly,
+    maxRating: s.maxRating,
+    favorite: s.favorite,
     tags: [...s.filterTags],
+    excludeTags: [...s.excludeTags],
     sort: s.sort,
     offset,
     limit,
@@ -227,14 +278,19 @@ export function buildQuery(s: UiState, offset = 0, limit = 200): FootageQuery {
       q.usage = "used";
       break;
     case "favorites":
-      q.favoriteOnly = true;
+      q.favorite = true;
       break;
     case "missing":
       q.accessibility = ["source_missing", "permission_required"];
       break;
-    case "tag":
-      if (!q.tags.includes(s.view.name)) q.tags.push(s.view.name);
+    case "tag": {
+      // Standing inside a tag beats having excluded it earlier, otherwise the
+      // view opens empty with no way to see why.
+      const { name } = s.view;
+      q.excludeTags = q.excludeTags.filter((t) => t !== name);
+      if (!q.tags.includes(name)) q.tags.push(name);
       break;
+    }
     case "collection":
       q.collectionId = s.view.id;
       break;

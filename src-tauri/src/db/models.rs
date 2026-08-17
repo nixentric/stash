@@ -523,9 +523,15 @@ pub struct FootageQuery {
     pub search: Option<String>,
     pub usage: UsageFilter,
     pub media_types: Vec<MediaType>,
+    /// Types kept out. A type is never in both lists — the UI cycles one value.
+    pub exclude_media_types: Vec<MediaType>,
     pub min_rating: Option<i64>,
-    pub favorite_only: bool,
+    pub max_rating: Option<i64>,
+    /// `None`: irrelevant · `Some(true)`: favorites only · `Some(false)`: hidden.
+    pub favorite: Option<bool>,
     pub tags: Vec<String>,
+    /// Tags that disqualify a file, however many other tags match.
+    pub exclude_tags: Vec<String>,
     pub collection_id: Option<i64>,
     pub project_id: Option<i64>,
     pub container_path: Option<String>,

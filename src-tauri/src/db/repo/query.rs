@@ -66,23 +66,30 @@ pub fn build(q: &FootageQuery, folder_tags_cover_files: bool) -> Filter {
         UsageFilter::All => {}
     }
 
-    if !q.media_types.is_empty() {
-        let holes = vec!["?"; q.media_types.len()].join(",");
-        clauses.push(format!("f.media_type IN ({holes})"));
-        params.extend(
-            q.media_types
-                .iter()
-                .map(|m| Value::Text(m.as_str().to_string())),
-        );
+    // Every facet reads in both directions: what to keep, and what to drop.
+    for (types, op) in [
+        (&q.media_types, "IN"),
+        (&q.exclude_media_types, "NOT IN"),
+    ] {
+        if types.is_empty() {
+            continue;
+        }
+        let holes = vec!["?"; types.len()].join(",");
+        clauses.push(format!("f.media_type {op} ({holes})"));
+        params.extend(types.iter().map(|m| Value::Text(m.as_str().to_string())));
     }
 
-    if let Some(r) = q.min_rating.filter(|r| *r > 0) {
-        clauses.push("f.rating >= ?".into());
-        params.push(Value::Integer(r));
+    for (bound, op) in [(q.min_rating, ">="), (q.max_rating, "<=")] {
+        if let Some(r) = bound.filter(|r| *r > 0) {
+            clauses.push(format!("f.rating {op} ?"));
+            params.push(Value::Integer(r));
+        }
     }
 
-    if q.favorite_only {
-        clauses.push("f.favorite = 1".into());
+    match q.favorite {
+        Some(true) => clauses.push("f.favorite = 1".into()),
+        Some(false) => clauses.push("f.favorite = 0".into()),
+        None => {}
     }
 
     // Multiple tags are ANDed: selecting `iphone` + `outdoor` means both.
@@ -92,8 +99,10 @@ pub fn build(q: &FootageQuery, folder_tags_cover_files: bool) -> Filter {
     // "cabang-bandung" labels a hundred clips at once; with it off (the default)
     // the tag stays on the folder. `all_tags` reads the same switch, so the count
     // in the sidebar is always the count this filter produces.
-    if !q.tags.is_empty() {
-        let holes = vec!["?"; q.tags.len()].join(",");
+    //
+    // Excluded tags are counted through the same reach and required to come to
+    // zero: one excluded tag disqualifies a file however many others it matches.
+    if !q.tags.is_empty() || !q.exclude_tags.is_empty() {
         let folder_match = if folder_tags_cover_files {
             "OR EXISTS (SELECT 1 FROM source_folder_tags sft
                          WHERE sft.tag_id = t.id
@@ -101,15 +110,25 @@ pub fn build(q: &FootageQuery, folder_tags_cover_files: bool) -> Filter {
         } else {
             ""
         };
-        clauses.push(format!(
-            "(SELECT COUNT(*) FROM tags t
-               WHERE t.name IN ({holes})
-                 AND (EXISTS (SELECT 1 FROM footage_tags ft
-                               WHERE ft.footage_id = f.id AND ft.tag_id = t.id)
-                   {folder_match})) = ?"
-        ));
-        params.extend(q.tags.iter().map(|t| Value::Text(t.clone())));
-        params.push(Value::Integer(q.tags.len() as i64));
+        let reach = |names: &[String]| {
+            let holes = vec!["?"; names.len()].join(",");
+            format!(
+                "(SELECT COUNT(*) FROM tags t
+                   WHERE t.name IN ({holes})
+                     AND (EXISTS (SELECT 1 FROM footage_tags ft
+                                   WHERE ft.footage_id = f.id AND ft.tag_id = t.id)
+                       {folder_match}))"
+            )
+        };
+        if !q.tags.is_empty() {
+            clauses.push(format!("{} = ?", reach(&q.tags)));
+            params.extend(q.tags.iter().map(|t| Value::Text(t.clone())));
+            params.push(Value::Integer(q.tags.len() as i64));
+        }
+        if !q.exclude_tags.is_empty() {
+            clauses.push(format!("{} = 0", reach(&q.exclude_tags)));
+            params.extend(q.exclude_tags.iter().map(|t| Value::Text(t.clone())));
+        }
     }
 
     if let Some(cid) = q.collection_id {

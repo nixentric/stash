@@ -27,13 +27,14 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuTriItem,
   DropdownMenuTrigger,
+  type TriState,
 } from "@/components/ui/menu";
 import { PromptDialog } from "@/components/dialogs/PromptDialog";
 import {
@@ -192,10 +193,16 @@ function HoverPreview({ path, x, y }: { path: string; x: number; y: number }) {
 /**
  * A tag, a brand, or a custom-field value that narrows the table to matching
  * folders. `fieldId` says which: `null` is a tag, `"brand"` is the brand, a
- * number is that custom column.
+ * number is that custom column. `neg` turns the same facet into an exclusion.
  */
-export type Facet = { fieldId: number | null | "brand"; label: string; value: string };
+export type Facet = {
+  fieldId: number | null | "brand";
+  label: string;
+  value: string;
+  neg?: boolean;
+};
 
+/** Identity ignores the direction, so one value cannot be kept and dropped at once. */
 export const sameFacet = (a: Facet, b: Facet) => a.fieldId === b.fieldId && a.value === b.value;
 
 const matches = (folder: FolderNode, f: Facet) =>
@@ -210,17 +217,23 @@ const matches = (folder: FolderNode, f: Facet) =>
  * reading. Values of one custom column combine with OR instead: a folder holds a
  * single value per column, so AND there would always return nothing. A brand is
  * single-valued too, so it follows the column rule.
+ *
+ * Exclusions have no such split: matching any one of them is enough to be gone,
+ * whatever else the folder carries.
  */
 export function applyFacets(folders: FolderNode[], facets: Facet[]): FolderNode[] {
-  const tags = facets.filter((f) => f.fieldId === null);
+  const keep = facets.filter((f) => !f.neg);
+  const drop = facets.filter((f) => f.neg);
+  const tags = keep.filter((f) => f.fieldId === null);
   const byField = new Map<number | "brand", Facet[]>();
-  for (const f of facets) {
+  for (const f of keep) {
     if (f.fieldId !== null) byField.set(f.fieldId, [...(byField.get(f.fieldId) ?? []), f]);
   }
   return folders.filter(
     (folder) =>
       tags.every((f) => matches(folder, f)) &&
-      [...byField.values()].every((group) => group.some((f) => matches(folder, f))),
+      [...byField.values()].every((group) => group.some((f) => matches(folder, f))) &&
+      !drop.some((f) => matches(folder, f)),
   );
 }
 
@@ -243,29 +256,40 @@ function hue(value: string): number {
   return h;
 }
 
-/** Chip that toggles `facet` as the table filter. */
+/**
+ * Chip that cycles `facet` through the table filter: click to keep only these
+ * folders, click again to drop them, click a third time to stop filtering.
+ */
 function FacetChip({
   facet,
-  active,
-  onToggle,
+  state,
+  onCycle,
 }: {
   facet: Facet;
-  active: boolean;
-  onToggle: (f: Facet) => void;
+  state: TriState;
+  onCycle: (f: Facet) => void;
 }) {
+  const title =
+    state === 1
+      ? `Now filtering by ${facet.label}: ${facet.value} — click to exclude it instead`
+      : state === -1
+        ? `Excluding ${facet.label}: ${facet.value} — click to clear`
+        : `Filter by ${facet.label}: ${facet.value}`;
   return (
     <button
       type="button"
-      title={active ? `Clear filter: ${facet.label}` : `Filter by ${facet.label}: ${facet.value}`}
+      title={title}
       onClick={(e) => {
         e.stopPropagation();
-        onToggle(facet);
+        onCycle(facet);
       }}
       className={`flex max-w-[12rem] cursor-pointer items-center gap-1.5 rounded-full px-2 py-0.5
                   text-[11px] transition-colors ${
-                    active
+                    state === 1
                       ? "bg-primary text-primary-foreground"
-                      : "bg-accent text-muted-foreground hover:text-foreground"
+                      : state === -1
+                        ? "bg-destructive/15 text-destructive line-through"
+                        : "bg-accent text-muted-foreground hover:text-foreground"
                   }`}
     >
       <span
@@ -660,9 +684,18 @@ export function SourceFoldersPage() {
         ? { key, dir: cur.dir === 1 ? -1 : 1 }
         : { key, dir: key === "added" || key === "updated" ? -1 : 1 },
     );
-  const isActive = (f: Facet) => facets.some((x) => sameFacet(x, f));
-  const toggleFacet = (f: Facet) =>
-    setFacets((cur) => (cur.some((x) => sameFacet(x, f)) ? cur.filter((x) => !sameFacet(x, f)) : [...cur, f]));
+  const facetState = (f: Facet): TriState => {
+    const found = facets.find((x) => sameFacet(x, f));
+    return !found ? 0 : found.neg ? -1 : 1;
+  };
+  /** Keep → drop → off, so both directions live on the one control. */
+  const cycleFacet = (f: Facet) =>
+    setFacets((cur) => {
+      const found = cur.find((x) => sameFacet(x, f));
+      if (!found) return [...cur, { ...f, neg: false }];
+      if (!found.neg) return cur.map((x) => (sameFacet(x, f) ? { ...x, neg: true } : x));
+      return cur.filter((x) => !sameFacet(x, f));
+    });
 
   /**
    * Bulk editing works off the *visible* rows, so a folder hidden by a filter is
@@ -861,14 +894,13 @@ export function SourceFoldersPage() {
                   {g.values.map((value) => {
                     const facet: Facet = { fieldId: g.fieldId, label: g.label, value };
                     return (
-                      <DropdownMenuCheckboxItem
+                      <DropdownMenuTriItem
                         key={value}
-                        checked={isActive(facet)}
-                        onCheckedChange={() => toggleFacet(facet)}
-                        onSelect={(e) => e.preventDefault()}
+                        state={facetState(facet)}
+                        onCycle={() => cycleFacet(facet)}
                       >
                         {value}
-                      </DropdownMenuCheckboxItem>
+                      </DropdownMenuTriItem>
                     );
                   })}
                 </DropdownMenuGroup>
@@ -951,16 +983,23 @@ export function SourceFoldersPage() {
             <button
               key={`${f.fieldId}:${f.value}`}
               type="button"
-              title={`Remove filter: ${f.label}: ${f.value}`}
-              onClick={() => toggleFacet(f)}
-              className="flex cursor-pointer items-center gap-1.5 rounded bg-primary px-1.5 py-px
-                         text-[11px] text-primary-foreground"
+              title={`Remove ${f.neg ? "exclusion" : "filter"}: ${f.label}: ${f.value}`}
+              // The row is the summary, so a click here clears the facet outright
+              // rather than walking it round the cycle again.
+              onClick={() => setFacets((cur) => cur.filter((x) => !sameFacet(x, f)))}
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-px text-[11px]",
+                f.neg
+                  ? "bg-destructive/15 text-destructive line-through"
+                  : "bg-primary text-primary-foreground",
+              )}
             >
               <span
                 aria-hidden
                 className="size-2 shrink-0 rounded-full"
                 style={{ backgroundColor: `hsl(${hue(f.value)} 70% 55%)` }}
               />
+              {f.neg && <span aria-hidden>−</span>}
               {f.value}
               <X className="size-3" />
             </button>
@@ -1255,8 +1294,8 @@ export function SourceFoldersPage() {
                           <>
                             <FacetChip
                               facet={{ fieldId: "brand", label: "Brand", value: folder.brandName }}
-                              active={isActive({ fieldId: "brand", label: "Brand", value: folder.brandName })}
-                              onToggle={toggleFacet}
+                              state={facetState({ fieldId: "brand", label: "Brand", value: folder.brandName })}
+                              onCycle={cycleFacet}
                             />
                             <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
                               <button
@@ -1444,8 +1483,8 @@ export function SourceFoldersPage() {
                                   <FacetChip
                                     key={t}
                                     facet={f}
-                                    active={isActive(f)}
-                                    onToggle={toggleFacet}
+                                    state={facetState(f)}
+                                    onCycle={cycleFacet}
                                   />
                                 );
                               })}
@@ -1717,8 +1756,8 @@ export function SourceFoldersPage() {
                                         <FacetChip
                                           key={tag}
                                           facet={f}
-                                          active={isActive(f)}
-                                          onToggle={toggleFacet}
+                                          state={facetState(f)}
+                                          onCycle={cycleFacet}
                                         />
                                       );
                                     })}
@@ -1756,8 +1795,8 @@ export function SourceFoldersPage() {
                                 <>
                                   <FacetChip
                                     facet={{ fieldId: c.id, label: c.name, value: rawValue }}
-                                    active={isActive({ fieldId: c.id, label: c.name, value: rawValue })}
-                                    onToggle={toggleFacet}
+                                    state={facetState({ fieldId: c.id, label: c.name, value: rawValue })}
+                                    onCycle={cycleFacet}
                                   />
                                   <div className="opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 transition-opacity">
                                     <button

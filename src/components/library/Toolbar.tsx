@@ -24,13 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuTriItem,
   DropdownMenuTrigger,
   MenuShortcut,
 } from "@/components/ui/menu";
@@ -44,8 +44,9 @@ import {
   useCapabilities,
   useCurrentLibrary,
   useStats,
+  useTags,
 } from "@/hooks/queries";
-import { useUi } from "@/store/ui";
+import { triOf, useUi } from "@/store/ui";
 import { GROUPS, UniversalSearch } from "@/components/library/UniversalSearch";
 import { MissingPreviewsDialog } from "@/components/dialogs/MissingPreviewsDialog";
 import { emptyQuery, type MediaType, type SortKey } from "@/lib/types";
@@ -76,6 +77,7 @@ export function Toolbar({
   const library = useCurrentLibrary();
   const caps = useCapabilities();
   const stats = useStats(true);
+  const tags = useTags(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [missingOpen, setMissingOpen] = useState(false);
@@ -98,11 +100,17 @@ export function Toolbar({
     usage,
     setUsage,
     mediaTypes,
-    toggleMediaType,
+    excludeMediaTypes,
+    cycleMediaType,
     minRating,
     setMinRating,
-    favoriteOnly,
-    setFavoriteOnly,
+    maxRating,
+    setMaxRating,
+    favorite,
+    cycleFavorite,
+    filterTags,
+    excludeTags,
+    cycleFilterTag,
     clearFilters,
     hasActiveFilters,
     selection,
@@ -140,8 +148,12 @@ export function Toolbar({
   const filterCount =
     (usage !== "all" ? 1 : 0) +
     mediaTypes.length +
+    excludeMediaTypes.length +
     (minRating ? 1 : 0) +
-    (favoriteOnly ? 1 : 0);
+    (maxRating ? 1 : 0) +
+    (favorite != null ? 1 : 0) +
+    filterTags.length +
+    excludeTags.length;
 
   async function closeLibrary() {
     await ipc.closeLibrary();
@@ -401,7 +413,10 @@ export function Toolbar({
               {filterCount > 0 && <Badge className="ml-0.5">{filterCount}</Badge>}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[13rem]">
+          <DropdownMenuContent align="start" className="max-h-[70vh] min-w-[14rem] overflow-y-auto">
+            {/* Every row below cycles keep → drop → off. Usage says the same
+                thing with a radio, because "used" and "unused" already are the
+                two directions. */}
             <DropdownMenuLabel>Usage</DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={usage}
@@ -415,30 +430,49 @@ export function Toolbar({
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Type</DropdownMenuLabel>
             {(["image", "video"] as MediaType[]).map((m) => (
-              <DropdownMenuCheckboxItem
+              <DropdownMenuTriItem
                 key={m}
-                checked={mediaTypes.includes(m)}
-                onCheckedChange={() => toggleMediaType(m)}
-                onSelect={(e) => e.preventDefault()}
+                state={triOf(mediaTypes, excludeMediaTypes, m)}
+                onCycle={() => cycleMediaType(m)}
               >
                 {m === "image" ? "Images" : "Videos"}
-              </DropdownMenuCheckboxItem>
+              </DropdownMenuTriItem>
             ))}
 
             <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={favoriteOnly}
-              onCheckedChange={(v) => setFavoriteOnly(v === true)}
-              onSelect={(e) => e.preventDefault()}
+            <DropdownMenuTriItem
+              state={favorite == null ? 0 : favorite ? 1 : -1}
+              onCycle={cycleFavorite}
             >
-              Favorites only
-            </DropdownMenuCheckboxItem>
+              Favorites
+            </DropdownMenuTriItem>
 
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Minimum rating</DropdownMenuLabel>
-            <div className="px-2 py-1">
+            <DropdownMenuLabel>Rating</DropdownMenuLabel>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <span className="w-8 text-[11px] text-subtle-foreground">Min</span>
               <Rating value={minRating ?? 0} onChange={(v) => setMinRating(v || null)} />
             </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <span className="w-8 text-[11px] text-subtle-foreground">Max</span>
+              <Rating value={maxRating ?? 0} onChange={(v) => setMaxRating(v || null)} />
+            </div>
+
+            {!!tags.data?.length && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Tags</DropdownMenuLabel>
+                {tags.data.slice(0, 40).map((t) => (
+                  <DropdownMenuTriItem
+                    key={t.id}
+                    state={triOf(filterTags, excludeTags, t.name)}
+                    onCycle={() => cycleFilterTag(t.name)}
+                  >
+                    {t.name}
+                  </DropdownMenuTriItem>
+                ))}
+              </>
+            )}
 
             {filterCount > 0 && (
               <>

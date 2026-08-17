@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as DM from "@radix-ui/react-dropdown-menu";
 import * as CM from "@radix-ui/react-context-menu";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const panel =
@@ -65,6 +65,42 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
   </DM.CheckboxItem>
 ));
 DropdownMenuCheckboxItem.displayName = "DropdownMenuCheckboxItem";
+
+/** Include (1), exclude (−1), or don't care (0) — every filter reads this way. */
+export type TriState = 1 | 0 | -1;
+
+/**
+ * A filter row that cycles include → exclude → off, one click each. Kept as an
+ * `Item` rather than a `CheckboxItem` because a checkbox has no third state, and
+ * two separate controls per value is twice the menu for the same answer.
+ */
+export const DropdownMenuTriItem = ({
+  state,
+  onCycle,
+  className,
+  children,
+}: {
+  state: TriState;
+  onCycle: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) => (
+  <DM.Item
+    className={cn(item, "pl-7", state === -1 && "line-through decoration-destructive", className)}
+    onSelect={(e) => {
+      // Picking a filter is not leaving the menu — the next click is usually
+      // another filter.
+      e.preventDefault();
+      onCycle();
+    }}
+  >
+    <span className="absolute left-2 flex size-3.5 items-center justify-center">
+      {state === 1 && <Check className="size-3.5" />}
+      {state === -1 && <X className="size-3.5 !text-destructive" />}
+    </span>
+    {children}
+  </DM.Item>
+);
 
 export const DropdownMenuRadioGroup = DM.RadioGroup;
 

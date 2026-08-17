@@ -53,13 +53,39 @@ describe("buildQuery", () => {
     expect(q.tags).toEqual(["iphone"]);
   });
 
-  it("lets the Favorites view set favoriteOnly without clobbering other facets", () => {
+  it("lets the Favorites view set favorite without clobbering other facets", () => {
     const q = buildQuery(
       stateWith({ view: { kind: "favorites" }, mediaTypes: ["video"], minRating: 4 }),
     );
-    expect(q.favoriteOnly).toBe(true);
+    expect(q.favorite).toBe(true);
     expect(q.mediaTypes).toEqual(["video"]);
     expect(q.minRating).toBe(4);
+  });
+
+  it("carries both sides of every facet through", () => {
+    const q = buildQuery(
+      stateWith({
+        mediaTypes: ["video"],
+        excludeMediaTypes: ["image"],
+        minRating: 2,
+        maxRating: 4,
+        favorite: false,
+        filterTags: ["outdoor"],
+        excludeTags: ["draft"],
+      }),
+    );
+    expect(q.excludeMediaTypes).toEqual(["image"]);
+    expect(q.maxRating).toBe(4);
+    expect(q.favorite).toBe(false);
+    expect(q.excludeTags).toEqual(["draft"]);
+  });
+
+  it("drops an exclusion the current tag view contradicts", () => {
+    const q = buildQuery(
+      stateWith({ view: { kind: "tag", name: "iphone" }, excludeTags: ["iphone", "draft"] }),
+    );
+    expect(q.tags).toEqual(["iphone"]);
+    expect(q.excludeTags).toEqual(["draft"]);
   });
 
   it("scopes the needs-attention view to unreachable sources only", () => {
@@ -76,6 +102,34 @@ describe("buildQuery", () => {
     const q = buildQuery(stateWith(), 400, 50);
     expect(q.offset).toBe(400);
     expect(q.limit).toBe(50);
+  });
+});
+
+describe("filter cycling", () => {
+  it("walks a value from include to exclude to off", () => {
+    useUi.setState({ mediaTypes: [], excludeMediaTypes: [] });
+    const ui = () => useUi.getState();
+    ui().cycleMediaType("video");
+    expect(ui().mediaTypes).toEqual(["video"]);
+    ui().cycleMediaType("video");
+    expect([ui().mediaTypes, ui().excludeMediaTypes]).toEqual([[], ["video"]]);
+    ui().cycleMediaType("video");
+    expect([ui().mediaTypes, ui().excludeMediaTypes]).toEqual([[], []]);
+  });
+
+  it("keeps the rating band from crossing itself", () => {
+    useUi.setState({ minRating: null, maxRating: null });
+    useUi.getState().setMaxRating(2);
+    useUi.getState().setMinRating(4);
+    expect(useUi.getState().maxRating).toBe(4);
+    useUi.getState().setMaxRating(1);
+    expect(useUi.getState().minRating).toBe(1);
+  });
+
+  it("clears both sides at once", () => {
+    useUi.setState({ excludeTags: ["draft"], favorite: false, maxRating: 3 });
+    useUi.getState().clearFilters();
+    expect(useUi.getState().hasActiveFilters()).toBe(false);
   });
 });
 

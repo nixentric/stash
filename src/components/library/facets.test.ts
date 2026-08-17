@@ -54,6 +54,21 @@ describe("applyFacets", () => {
     expect(paths([tag("kol"), branch("Bandung")])).toEqual([]);
   });
 
+  it("drops folders matching an excluded facet", () => {
+    expect(paths([{ ...tag("test"), neg: true }])).toEqual(["C"]);
+    expect(paths([{ ...brand("ETIVE"), neg: true }])).toEqual(["B", "C"]);
+  });
+
+  it("narrows with an include and an exclude at once", () => {
+    expect(paths([tag("test"), { ...tag("kol"), neg: true }])).toEqual(["B"]);
+  });
+
+  it("applies an exclusion after an OR group, not as one more branch of it", () => {
+    expect(
+      paths([branch("Serang"), branch("Bandung"), { ...brand("Acme"), neg: true }]),
+    ).toEqual(["A"]);
+  });
+
   it("filters by brand, and combines brands with OR like any single-valued column", () => {
     expect(paths([brand("ETIVE")])).toEqual(["A"]);
     expect(paths([brand("ETIVE"), brand("Acme")])).toEqual(["A", "B"]);

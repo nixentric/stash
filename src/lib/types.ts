@@ -336,9 +336,15 @@ export interface FootageQuery {
   search?: string | null;
   usage: UsageFilter;
   mediaTypes: MediaType[];
+  /** Types kept out. A type never sits in both lists — the UI cycles one value. */
+  excludeMediaTypes: MediaType[];
   minRating?: number | null;
-  favoriteOnly: boolean;
+  maxRating?: number | null;
+  /** null: rating irrelevant · true: favorites only · false: favorites hidden. */
+  favorite?: boolean | null;
   tags: string[];
+  /** Tags that disqualify a file, however many other tags match. */
+  excludeTags: string[];
   collectionId?: number | null;
   projectId?: number | null;
   containerPath?: string | null;
@@ -571,9 +577,12 @@ export const emptyQuery = (): FootageQuery => ({
   search: null,
   usage: "all",
   mediaTypes: [],
+  excludeMediaTypes: [],
   minRating: null,
-  favoriteOnly: false,
+  maxRating: null,
+  favorite: null,
   tags: [],
+  excludeTags: [],
   collectionId: null,
   projectId: null,
   containerPath: null,

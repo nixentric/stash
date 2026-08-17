@@ -95,9 +95,12 @@ export default function App() {
       ui.sort,
       ui.usage,
       ui.mediaTypes,
+      ui.excludeMediaTypes,
       ui.minRating,
-      ui.favoriteOnly,
+      ui.maxRating,
+      ui.favorite,
       ui.filterTags,
+      ui.excludeTags,
     ],
   );
 

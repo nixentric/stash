@@ -310,6 +310,42 @@ mod tests {
         assert_eq!(tag.footage_count, 2, "sidebar badge must match what the filter returns");
     }
 
+    /// Exclusion has to reach exactly as far as inclusion does, or "not cabang"
+    /// leaves behind the clips that only carry the tag through their folder.
+    #[test]
+    fn excluding_a_tag_reaches_the_same_clips_including_would() {
+        let c = db();
+        source_folder::set_tags(&c, "Drive/Cabang Bandung", &["cabang".into()]).unwrap();
+        source_folder::set_folder_tags_cover_files(&c, true).unwrap();
+        add_tags(&c, &[3], &["loose".into()]).unwrap();
+
+        let out = FootageQuery {
+            exclude_tags: vec!["cabang".into()],
+            limit: 100,
+            ..Default::default()
+        };
+        assert_eq!(footage::list(&c, &out).unwrap().total, 1, "only the loose clip is left");
+
+        // Both sides at once, with the parameters landing in the right order.
+        let both = FootageQuery {
+            tags: vec!["cabang".into()],
+            exclude_tags: vec!["loose".into()],
+            limit: 100,
+            ..Default::default()
+        };
+        assert_eq!(footage::list(&c, &both).unwrap().total, 2);
+
+        // One excluded tag disqualifies a clip however many others it matches.
+        add_tags(&c, &[1], &["hero".into()]).unwrap();
+        let contradicting = FootageQuery {
+            tags: vec!["hero".into()],
+            exclude_tags: vec!["cabang".into()],
+            limit: 100,
+            ..Default::default()
+        };
+        assert_eq!(footage::list(&c, &contradicting).unwrap().total, 0);
+    }
+
     #[test]
     fn folder_and_footage_tags_are_the_same_namespace_and_do_not_double_count() {
         let c = db();
