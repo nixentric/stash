@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.24 — 2026-08-17
+
+**Folder filters stay where you left them**
+
+- **Opening a folder and coming back keeps the filter on.** The filter you set to find that folder used to be gone by the time you returned to it, which made it useless for working through a list.
+- **Clearing them is still something you do on purpose** — the Clear button beside Filters, or Reset filters inside the menu.
+- **A filter for a tag that has since been deleted lets itself go**, rather than quietly hiding every folder.
+
+**The Inspector shows the bigger picture**
+
+- **The preview panel was asking for the card-sized thumbnail** and drawing it across a panel several times that wide. It now asks for the same large preview Quick Look uses, and falls back to the small one when there is nothing cached.
+
 ## v0.5.23 — 2026-08-17
 
 **Thumbnails that are not blurry**
