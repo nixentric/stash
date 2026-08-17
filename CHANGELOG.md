@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.29 — 2026-08-17
+
+**⌘⏎ does the thing**
+
+- **The bulk bar's Apply answers to ⌘/Ctrl+Enter**, from wherever the cursor is. Typing a tag and then reaching for the mouse to commit it was the slow half of tagging forty folders.
+- **So do Add Tags, Mark as Used and Edit Folder Brand.** The Add Footage tabs already did.
+- **The bulk shortcut stands down while a dialog is open**, so the keystroke always belongs to whatever is in front.
+
+**Open Local, from the right-click menu**
+
+- **No more opening the preview to reach it.** It appears for footage whose original is on this computer, exactly as it does in the preview.
+
 ## v0.5.28 — 2026-08-17
 
 **Opening a library, properly this time**
