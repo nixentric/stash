@@ -56,7 +56,7 @@ import {
   useTags,
   useBrands,
 } from "@/hooks/queries";
-import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
+import { useThumbSrc, useVisible } from "@/hooks/use-thumbnail";
 import { Marquee, useMarquee } from "@/hooks/use-marquee";
 import { Select } from "@/components/dialogs/BrandDialogs";
 import { useUi } from "@/store/ui";
@@ -115,11 +115,22 @@ export const driveFolderUrl = (id: string) => `https://drive.google.com/drive/fo
  * is actually a different one.
  */
 const Thumb = memo(function Thumb({ id, className = "size-8" }: { id: number; className?: string }) {
-  const thumb = useThumbnail(id, true);
-  return thumb.data ? (
-    <img src={thumb.data} alt="" loading="lazy" className={cn(className, "shrink-0 rounded-sm object-cover")} />
-  ) : (
-    <div className={cn(className, "shrink-0 rounded-sm bg-thumb-bg")} />
+  const thumb = useThumbSrc(id, true);
+  // The placeholder is the background rather than a branch, so the row keeps its
+  // shape while the image is still on its way in.
+  return (
+    <div className={cn(className, "shrink-0 overflow-hidden rounded-sm bg-thumb-bg")}>
+      {thumb.src && (
+        <img
+          src={thumb.src}
+          onError={thumb.onError}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="size-full object-cover"
+        />
+      )}
+    </div>
   );
 });
 

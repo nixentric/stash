@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ipc } from "@/lib/ipc";
 import { keys } from "./queries";
+import { subscribeThumbs, thumbGeneration } from "@/lib/thumbs";
 
 /**
  * Loads a thumbnail only once its card is near the viewport.
@@ -30,6 +31,63 @@ export function useVisible<E extends HTMLElement>(rootMargin = "300px") {
   }, [rootMargin]);
 
   return { ref, visible };
+}
+
+/**
+ * A thumbnail the webview fetches for itself, over `stash://thumb/{id}`.
+ *
+ * The bytes never touch JavaScript: no base64 string in the heap, no copy held
+ * by a query cache, and the decoded image belongs to the webview, which drops it
+ * when it goes off screen. A list of a few thousand covers is the difference
+ * between a few hundred megabytes and a few tens.
+ *
+ * The generate-if-missing step the IPC version does is kept, moved onto the
+ * image's own error: a 404 means "nothing stored yet", so the provider chain is
+ * asked once and the URL is bumped to reload it. A second failure is a footage
+ * with no obtainable preview, which is an ordinary outcome, not an error.
+ */
+export function useThumbSrc(id: number, enabled: boolean) {
+  const [version, setVersion] = useState(0);
+  const [missing, setMissing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const attempted = useRef(false);
+  const gen = useSyncExternalStore(subscribeThumbs, thumbGeneration);
+
+  // A footage whose picture could not be made is worth asking about again once
+  // the stored thumbnails change — that is what a bulk refresh just did.
+  useEffect(() => {
+    attempted.current = false;
+    setVersion(0);
+    setMissing(false);
+    setGenerating(false);
+  }, [id, gen]);
+
+  const onError = () => {
+    if (attempted.current) {
+      setMissing(true);
+      return;
+    }
+    attempted.current = true;
+    setGenerating(true);
+    ipc
+      .refreshThumbnail(id, false)
+      .then((found) => (found ? setVersion((v) => v + 1) : setMissing(true)))
+      .catch(() => setMissing(true))
+      .finally(() => setGenerating(false));
+  };
+
+  // ponytail: a thumbnail replaced in place (Inspector → Set thumbnail) only
+  // reaches an off-screen card when it next scrolls back into view. Give the URL
+  // the row's updated_at if that ever reads as stale.
+  return {
+    src:
+      enabled && !missing
+        ? `stash://thumb/${id}${gen + version ? `?v=${gen + version}` : ""}`
+        : undefined,
+    missing,
+    generating,
+    onError,
+  };
 }
 
 /**

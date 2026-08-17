@@ -7,6 +7,7 @@ import { invalidateLibrary, keys, reportError } from "@/hooks/queries";
 import { baseName, isImagePath, isMediaPath } from "@/lib/utils";
 import type { NewFootage } from "@/lib/types";
 import { useUi } from "@/store/ui";
+import { thumbsChanged } from "@/lib/thumbs";
 
 /** The footage card under the cursor, if the drop landed on one. */
 function cardIdAt(x: number, y: number): number | null {
@@ -44,6 +45,7 @@ export function useFileDrop(enabled: boolean) {
         try {
           await ipc.setThumbnailFromPath(cardId, single);
           qc.invalidateQueries({ queryKey: keys.thumb(cardId, false) });
+          thumbsChanged();
           qc.invalidateQueries({ queryKey: keys.thumb(cardId, true) });
           qc.invalidateQueries({ queryKey: keys.detail(cardId) });
           toast.success("Thumbnail set");

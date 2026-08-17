@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import { ipc, asIpcError } from "@/lib/ipc";
 import type * as T from "@/lib/types";
+import { thumbsChanged } from "@/lib/thumbs";
 
 export const keys = {
   library: ["library"] as const,
@@ -254,6 +255,7 @@ export function useBrandAction() {
       // old one has to be dropped or the card keeps drawing the flattened copy.
       if (a.type === "saveLogo") {
         qc.invalidateQueries({ queryKey: ["thumb"] });
+        thumbsChanged();
       }
     },
     onError: (e) => reportError(e),

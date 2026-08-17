@@ -39,6 +39,7 @@ import type { GoogleStatus, PortableThumbnailSize, Theme } from "@/lib/types";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Update } from "@tauri-apps/plugin-updater";
+import { thumbsChanged } from "@/lib/thumbs";
 
 type Pane = "general" | "appearance" | "library" | "preview" | "integrations" | "support";
 
@@ -559,6 +560,7 @@ function PreviewPane() {
               const i = await ipc.cacheInfo();
               setInfo(i.bytesOnDisk);
               qc.invalidateQueries({ queryKey: ["thumb"] });
+              thumbsChanged();
               toast.success("Preview cache cleared");
             }}
           >
@@ -569,7 +571,7 @@ function PreviewPane() {
 
       <Field
         label="Rebuild thumbnails"
-        hint="Re-encodes every thumbnail in the library from its source. Worth doing once after an update that changes how previews are made — logos with transparent backgrounds keep their transparency now, and older thumbnails were flattened."
+        hint="Re-fetches every thumbnail in the library from its source. Worth doing once after an update that changes how previews are made — Drive is now asked for a 960 px rendition instead of the 220 px one it offers by default, so anything stored before this will look soft next to a new one."
       >
         <Button
           variant="secondary"
@@ -584,6 +586,7 @@ function PreviewPane() {
               toast.info(`Rebuilding ${ids.length} thumbnail(s)…`);
               const n = await ipc.fetchThumbnails(ids, true);
               qc.invalidateQueries({ queryKey: ["thumb"] });
+              thumbsChanged();
               invalidateLibrary(qc);
               toast.success(`Rebuilt ${n} of ${ids.length} thumbnail(s)`);
             } catch (e) {

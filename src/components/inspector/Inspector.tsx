@@ -37,6 +37,7 @@ import {
 } from "@/hooks/queries";
 import { useThumbnail } from "@/hooks/use-thumbnail";
 import { useUi } from "@/store/ui";
+import { thumbsChanged } from "@/lib/thumbs";
 
 export function Inspector() {
   const { selection, setInspectorOpen, setQuickLookId } = useUi();
@@ -275,6 +276,7 @@ export function Inspector() {
                   try {
                     const ok = await ipc.refreshThumbnail(d.id, true);
                     qc.invalidateQueries({ queryKey: keys.thumb(d.id, false) });
+                    thumbsChanged();
                     qc.invalidateQueries({ queryKey: keys.thumb(d.id, true) });
                     qc.invalidateQueries({ queryKey: keys.detail(d.id) });
                     toast[ok ? "success" : "info"](
@@ -295,6 +297,7 @@ export function Inspector() {
                   onClick={async () => {
                     await ipc.clearThumbnail(d.id);
                     qc.invalidateQueries({ queryKey: keys.thumb(d.id, false) });
+                    thumbsChanged();
                     qc.invalidateQueries({ queryKey: keys.detail(d.id) });
                   }}
                 >

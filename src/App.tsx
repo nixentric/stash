@@ -58,6 +58,7 @@ import type {
   BrandAdditionalInfo,
   JobProgress,
 } from "@/lib/types";
+import { thumbsChanged } from "@/lib/thumbs";
 
 export default function App() {
   const qc = useQueryClient();
@@ -212,6 +213,7 @@ export default function App() {
       if (p.phase === "done" || p.phase === "cancelled") {
         setJob(null);
         qc.invalidateQueries({ queryKey: ["thumb"] });
+        thumbsChanged();
         invalidateLibrary(qc);
       } else {
         setJob(p);
@@ -295,6 +297,7 @@ export default function App() {
       if (!dataUrl) {
         // Already written by the caller; just refresh what is on screen.
         qc.invalidateQueries({ queryKey: keys.thumb(id, false) });
+        thumbsChanged();
         qc.invalidateQueries({ queryKey: keys.detail(id) });
         return;
       }
@@ -302,6 +305,7 @@ export default function App() {
         await ipc.setThumbnailFromBytes(id, dataUrl);
         qc.invalidateQueries({ queryKey: keys.thumb(id, false) });
         qc.invalidateQueries({ queryKey: keys.thumb(id, true) });
+        thumbsChanged();
         qc.invalidateQueries({ queryKey: keys.detail(id) });
         toast.success("Thumbnail set");
       } catch (e) {

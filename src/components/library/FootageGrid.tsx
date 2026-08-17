@@ -6,7 +6,7 @@ import { FootageContextMenu } from "./FootageContextMenu";
 import { EmptyState } from "./EmptyState";
 import { cn } from "@/lib/utils";
 import { duration as fmtDuration, accessibilityLabel, date } from "@/lib/format";
-import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
+import { useThumbSrc, useVisible } from "@/hooks/use-thumbnail";
 import { useDownloadedIds } from "@/hooks/queries";
 import { useSelectionHandlers } from "@/hooks/use-selection";
 import { Marquee, useMarquee } from "@/hooks/use-marquee";
@@ -257,7 +257,7 @@ function ListRow({
   onContextMenu: () => void;
 }) {
   const { ref, visible } = useVisible<HTMLDivElement>();
-  const thumb = useThumbnail(item.id, visible);
+  const thumb = useThumbSrc(item.id, visible);
   const used = item.usageCount > 0;
   const warning = accessibilityLabel[item.accessibility];
 
@@ -277,9 +277,18 @@ function ListRow({
       )}
     >
       <div className="relative size-[20px] shrink-0 overflow-hidden rounded-sm bg-thumb-bg">
-        {thumb.data ? (
-          <img src={thumb.data} alt="" className="size-full object-cover" draggable={false} />
-        ) : (
+        {thumb.src && (
+          <img
+            src={thumb.src}
+            onError={thumb.onError}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover"
+            draggable={false}
+          />
+        )}
+        {thumb.missing && (
           <ImageOff className="absolute inset-0 m-auto size-2.5 text-subtle-foreground/50" />
         )}
         {item.mediaType === "video" && (

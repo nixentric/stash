@@ -49,6 +49,7 @@ import { useUi } from "@/store/ui";
 import { GROUPS, UniversalSearch } from "@/components/library/UniversalSearch";
 import { MissingPreviewsDialog } from "@/components/dialogs/MissingPreviewsDialog";
 import { emptyQuery, type MediaType, type SortKey } from "@/lib/types";
+import { thumbsChanged } from "@/lib/thumbs";
 
 const SORT_LABELS: Record<SortKey, string> = {
   newestAdded: "Newest added",
@@ -175,6 +176,7 @@ export function Toolbar({
       toast.info(`Fetching ${ids.length} preview(s)…`);
       const n = await ipc.fetchThumbnails(ids, false);
       qc.invalidateQueries({ queryKey: ["thumb"] });
+      thumbsChanged();
       invalidateLibrary(qc);
       if (n < ids.length) {
         toast.info(`Refreshed ${n} of ${ids.length} — ${ids.length - n} still have no preview.`);

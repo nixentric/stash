@@ -1,4 +1,5 @@
 //! `stash://media/{footage_id}` — ranged media for `<video>` and `<img>`.
+//! `stash://thumb/{footage_id}` — the stored thumbnail, for every list on screen.
 //!
 //! A `<video>` element cannot attach an `Authorization` header, so authenticated
 //! Drive playback needs a shim. The two options are a local HTTP proxy (an open
@@ -82,11 +83,46 @@ pub fn is_web_still(name: &str) -> bool {
     ext_mime(name).is_some()
 }
 
-fn footage_id_from(request: &Request<Vec<u8>>) -> Option<i64> {
+/// `("media" | "thumb", footage_id)`.
+///
+/// macOS/Linux: `stash://media/12` · Windows: `http://stash.localhost/media/12`.
+/// Both end in `<kind>/<id>`, so the last two segments are all this needs.
+fn route_from(request: &Request<Vec<u8>>) -> Option<(String, i64)> {
     let uri = request.uri().to_string();
-    // macOS/Linux: stash://media/12  ·  Windows: http://stash.localhost/media/12
-    let tail = uri.rsplit('/').next()?;
-    tail.split(['?', '#']).next()?.parse().ok()
+    let path = uri.split("://").nth(1)?;
+    let path = path.split(['?', '#']).next()?;
+    let mut back = path.rsplit('/');
+    let id: i64 = back.next()?.parse().ok()?;
+    Some((back.next()?.to_string(), id))
+}
+
+/// The portable thumbnail, straight from the library file.
+///
+/// Serving it here rather than as a base64 data URL through IPC is what keeps a
+/// scrolled library from costing a gigabyte: the bytes never enter the JS heap,
+/// and the webview owns the decoded copy, so it can drop it the moment the
+/// image is off screen.
+fn serve_thumb(state: &AppState, footage_id: i64) -> Result<Response<Vec<u8>>> {
+    let bytes = state
+        .with_library(|lib| crate::db::repo::thumbnail::get(&lib.conn, footage_id))?
+        .ok_or_else(|| AppError::NotFound("No thumbnail".into()))?;
+
+    // Same sniff as the data-URL path: JPEG unless the encoder kept alpha.
+    let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        "image/png"
+    } else {
+        "image/jpeg"
+    };
+
+    Ok(Response::builder()
+        .status(200)
+        .header("Content-Type", mime)
+        .header("Content-Length", bytes.len().to_string())
+        // A thumbnail can be replaced in place, and the URL does not change when
+        // it is. Reading it again is one indexed row out of a local file.
+        .header("Cache-Control", "no-store")
+        .body(bytes)
+        .unwrap_or_else(|_| Response::new(Vec::new())))
 }
 
 fn err_response(status: u16, message: &str) -> Response<Vec<u8>> {
@@ -248,14 +284,19 @@ pub fn handle<R: tauri::Runtime>(
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
 
-    let Some(footage_id) = footage_id_from(&request) else {
+    let Some((kind, footage_id)) = route_from(&request) else {
         responder.respond(err_response(400, "Bad media request"));
         return;
     };
 
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
-        let response = match serve(&state, footage_id, range_header).await {
+        let result = match kind.as_str() {
+            "thumb" => serve_thumb(&state, footage_id),
+            "media" => serve(&state, footage_id, range_header).await,
+            _ => Err(AppError::NotFound("Unknown stash:// route".into())),
+        };
+        let response = match result {
             Ok(r) => r,
             Err(AppError::NotConnected) => err_response(409, "Not connected to Google Drive"),
             Err(AppError::PermissionRequired) => err_response(403, "No access to this source"),

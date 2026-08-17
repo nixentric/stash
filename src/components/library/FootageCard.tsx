@@ -3,7 +3,7 @@ import { HardDriveDownload, Heart, ImageOff, Link2, Play, Star, TriangleAlert } 
 import { cn } from "@/lib/utils";
 import { DotmSquare3 } from "@/components/ui/dotm-square-3";
 import { duration as fmtDuration, accessibilityLabel } from "@/lib/format";
-import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
+import { useThumbSrc, useVisible } from "@/hooks/use-thumbnail";
 import type { FootageListItem } from "@/lib/types";
 
 interface Props {
@@ -32,7 +32,7 @@ export const FootageCard = memo(function FootageCard({
   onContextMenu,
 }: Props) {
   const { ref, visible } = useVisible<HTMLDivElement>();
-  const thumb = useThumbnail(item.id, visible);
+  const thumb = useThumbSrc(item.id, visible);
   const used = item.usageCount > 0;
   const warning = accessibilityLabel[item.accessibility];
 
@@ -57,16 +57,22 @@ export const FootageCard = memo(function FootageCard({
     >
       {/* Thumbnail */}
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-thumb-bg">
-        {thumb.data ? (
+        {/* Only when there is something to say. The webview fetches the picture
+            itself now, so an ordinary wait is the plain background — running a
+            loading animation behind every card on screen is not free. */}
+        {(thumb.generating || thumb.missing) && (
+          <Placeholder loading={thumb.generating} mediaType={item.mediaType} />
+        )}
+        {thumb.src && (
           <img
-            src={thumb.data}
+            src={thumb.src}
+            onError={thumb.onError}
             alt=""
             loading="lazy"
+            decoding="async"
             draggable={false}
-            className="size-full object-cover"
+            className="absolute inset-0 size-full object-cover"
           />
-        ) : (
-          <Placeholder loading={visible && thumb.isLoading} mediaType={item.mediaType} />
         )}
 
         {item.mediaType === "video" && (
