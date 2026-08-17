@@ -3,6 +3,23 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.23 — 2026-08-17
+
+**Thumbnails that are not blurry**
+
+- **Google Drive is asked for a 960 px preview**, not the 220 px one its link points at by default. That 220 px picture was being stretched across a card several times its size, which is exactly as soft as it sounds.
+- **Everything stored before this stays soft until it is re-fetched.** Settings → Preview → **Rebuild all** goes and gets them again.
+
+**The hover preview can be turned off**
+
+- **Source Folders → the gear → Preview on hover.** A picture that appears under the cursor is welcome right up until it is in your way, so it is a switch, and it stays where you left it.
+
+**The pictures stop going through JavaScript**
+
+- **Thumbnails are served straight to the webview** over `stash://thumb/{id}`, instead of being handed to the interface as base64 text through the app's own message channel.
+- **That is where the memory was going.** A library of four thousand covers had four thousand copies in the interface's memory on top of the pictures themselves, and nothing could let go of them while a list was open. Now the webview owns them and drops each one when it scrolls out of sight.
+- **A cover still missing is fetched once, on the spot**, exactly as before — and a file that genuinely has no preview says so instead of retrying forever.
+
 ## v0.5.22 — 2026-08-17
 
 **Pick folders by dragging over them**
