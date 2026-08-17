@@ -3,6 +3,16 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.32 — 2026-08-17
+
+**Download a whole selection, as a queue**
+
+- **Select twenty images, right-click, "Download 20 Originals".** Download used to appear only when exactly one row was selected, so twenty files meant twenty right-clicks.
+- **They come down one at a time, in order.** Twenty parallel fetches from the same Drive account finish later than the same twenty in order, and one bar that says *file 4 of 20* is readable in a way that twenty toasts are not.
+- **Stop is there while it runs**, and takes effect between files — whatever is in flight finishes, so the queue never leaves a half-written file behind.
+- **One unreachable file no longer takes the other nineteen with it.** The queue carries on and the reasons are reported together at the end: *Downloaded 18 of 20*, with what went wrong underneath.
+- **Files already on this computer cost nothing.** Nothing is filtered out in the menu — the app asks for the selection and the backend skips what is already here, so the count you see is the count you get.
+
 ## v0.5.31 — 2026-08-17
 
 **Downloads say how far along they are, wherever you start them**
