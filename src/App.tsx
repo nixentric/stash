@@ -337,6 +337,17 @@ export default function App() {
     return () => window.removeEventListener("paste", onPaste);
   }, [selection, setThumbnailFromDataUrl]);
 
+  // Before the answer is in, neither screen is the right one. Showing Welcome
+  // while the last library is still opening put a whole other app on screen for
+  // a moment and then tore it down — the "broken" step on the way in.
+  if (library.isLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-background">
+        <DotmCircular2 size={36} colorPreset="solid-mint" ariaLabel="Opening library" />
+      </div>
+    );
+  }
+
   if (!hasLibrary) {
     return (
       <TooltipProvider delayDuration={400}>
@@ -348,7 +359,10 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div className="flex h-full w-full overflow-hidden">
+      {/* The library arrives all at once — sidebar, toolbar and a grid of
+          hundreds. A short fade is the difference between arriving and being
+          dropped. */}
+      <div className="flex h-full w-full overflow-hidden animate-in fade-in duration-300">
         <div className="w-[13.5rem] shrink-0">
           <Sidebar
             onNewCollection={() => setNewCollectionOpen(true)}

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { DotmCircular2 } from "@/components/ui/dotm-circular-2";
 import { PlayfulTitle } from "@/components/welcome/PlayfulTitle";
 import { FallingStashBackground } from "@/components/welcome/FallingStashBackground";
+import { pendingPlatform, pendingUpdateNote } from "@/lib/updates";
 
 export function Welcome() {
   const qc = useQueryClient();
@@ -59,7 +60,15 @@ export function Welcome() {
         toast.success("You are on the latest version.");
       }
     } catch (e) {
-      reportError(e, "Could not reach the update server");
+      // Same answer the Settings pane gives: a release that exists without this
+      // machine's package yet is a "try again shortly", not a failure.
+      const pending = pendingPlatform(e);
+      if (pending) {
+        const note = pendingUpdateNote(pending);
+        toast.info(note.title, { description: note.body, duration: 10_000 });
+      } else {
+        reportError(e, "Could not reach the update server");
+      }
     } finally {
       setChecking(false);
     }

@@ -40,6 +40,7 @@ import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { thumbsChanged } from "@/lib/thumbs";
+import { pendingPlatform, pendingUpdateNote } from "@/lib/updates";
 
 type Pane = "general" | "appearance" | "library" | "preview" | "integrations" | "support";
 
@@ -142,7 +143,7 @@ function Field({
 function GeneralPane() {
   const qc = useQueryClient();
   const prefs = usePrefs();
-  const [status, setStatus] = useState<Update | 'latest' | null>(null);
+  const [status, setStatus] = useState<Update | "latest" | { pending: string } | null>(null);
   const [checking, setChecking] = useState(false);
   // Asked once: the running binary's version cannot change while it runs.
   const [version, setVersion] = useState<string | null>(null);
@@ -159,7 +160,12 @@ function GeneralPane() {
       const update = await checkUpdate();
       setStatus(update || 'latest');
     } catch (e) {
-      reportError(e, "Could not reach the update server");
+      // "There is a version, yours is still uploading" is not a failure to
+      // report as one — it is an answer, and it belongs where the question was
+      // asked rather than in an error toast.
+      const pending = pendingPlatform(e);
+      if (pending) setStatus({ pending });
+      else reportError(e, "Could not reach the update server");
     } finally {
       setChecking(false);
     }
@@ -211,7 +217,7 @@ function GeneralPane() {
               {checking ? "Checking…" : "Check now"}
             </Button>
 
-            {status && status !== 'latest' && (
+            {status && status !== 'latest' && !("pending" in status) && (
               <Button size="sm" onClick={async () => {
                 const id = toast.loading(
                    <div className="flex items-center gap-3 py-1">
@@ -261,6 +267,15 @@ function GeneralPane() {
               </span>
             )}
           </div>
+
+          {status && status !== 'latest' && "pending" in status && (
+            <div className="rounded-md border border-warning/30 bg-warning/5 p-2.5">
+              <p className="text-[12.5px] font-medium">{pendingUpdateNote(status.pending).title}</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                {pendingUpdateNote(status.pending).body}
+              </p>
+            </div>
+          )}
         </div>
       </Field>
 
