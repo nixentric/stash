@@ -3,6 +3,12 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.26 — 2026-08-17
+
+**Add Footage is ready for the paste**
+
+- **The Drive Folder tab puts the cursor in its link box**, so ⌘V works the moment the window opens. The Links tab has always done this; the tab most people pin was the one that did not.
+
 ## v0.5.25 — 2026-08-17
 
 **No more question marks where a picture should be**
