@@ -372,7 +372,21 @@ export function SourceFoldersPage() {
 
   const brands = useBrands(true);
 
-  const [facets, setFacets] = useState<Facet[]>([]);
+  /**
+   * Filters outlive the page.
+   *
+   * Opening a folder unmounts this table, and coming back used to hand you an
+   * unfiltered list — the filter you set to find the folder was gone by the time
+   * you returned to it. Clearing them stays a thing you do on purpose, with the
+   * Clear button or Reset filters.
+   */
+  const [facets, setFacets] = useState<Facet[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("stash:folder_facets") ?? "[]");
+    } catch {
+      return [];
+    }
+  });
   const [sort, setSort] = useState<Sort>({ key: "added", dir: -1 });
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -553,6 +567,24 @@ export function SourceFoldersPage() {
     setBulkText([...kept, value].join(", ") + ", ");
     setBulkHighlight(0);
   };
+
+  useEffect(() => {
+    localStorage.setItem("stash:folder_facets", JSON.stringify(facets));
+  }, [facets]);
+
+  // A remembered filter for a tag that has since been deleted would hide every
+  // folder with no way to tell why. Waits for the folders themselves: before they
+  // arrive there is nothing to filter by, and every remembered facet would look
+  // stale.
+  useEffect(() => {
+    if (!folders.data) return;
+    setFacets((cur) => {
+      const alive = cur.filter((f) =>
+        facetGroups.some((g) => g.fieldId === f.fieldId && g.values.includes(f.value)),
+      );
+      return alive.length === cur.length ? cur : alive;
+    });
+  }, [facetGroups, folders.data]);
 
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: "added", label: "Added" },

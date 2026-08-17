@@ -56,7 +56,11 @@ export function Inspector() {
     }
   }, [detail.data?.id, detail.data?.displayName, detail.data?.notes]);
 
-  const thumb = useThumbnail(id ?? -1, id != null, false);
+  // The large tier, like Quick Look: this panel shows the picture at a few
+  // hundred points across, and the portable thumbnail is sized for a card. It
+  // falls back to the portable one when nothing is cached, so asking for the
+  // bigger one never costs a picture.
+  const thumb = useThumbnail(id ?? -1, id != null, true);
 
   if (selection.length === 0 || (selection.length > 1 && !id)) {
     return (
