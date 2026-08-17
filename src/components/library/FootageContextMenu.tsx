@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Eye,
   FolderInput,
+  FolderOpen,
   HardDriveDownload,
   Hash,
   Heart,
@@ -247,6 +248,18 @@ export function FootageContextMenu({
                     <ContextMenuItem onSelect={downloadOriginal}>
                       <HardDriveDownload />
                       Download Original
+                    </ContextMenuItem>
+                  )}
+                  {/* Only once there is a file to reveal — the same condition
+                      the preview's own button uses, off the same cached answer. */}
+                  {target.data?.localPath && (
+                    <ContextMenuItem
+                      onSelect={() =>
+                        ipc.revealInFileManager(target.data!.localPath!).catch(reportError)
+                      }
+                    >
+                      <FolderOpen />
+                      Open Local
                     </ContextMenuItem>
                   )}
                   <ContextMenuItem onSelect={chooseThumbnail}>
