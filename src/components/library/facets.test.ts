@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFacets, sortFolders, type Facet } from "./SourceFoldersPage";
+import { applyFacets, mergeValues, sortFolders, type Facet } from "./SourceFoldersPage";
 import type { FolderNode } from "@/lib/types";
 
 const folder = (
@@ -73,5 +73,15 @@ describe("sortFolders", () => {
   it("keeps folders with an empty column at the bottom in both directions", () => {
     expect(order({ key: "brand", dir: 1 })).toEqual(["B", "A", "C"]);
     expect(order({ key: "brand", dir: -1 })).toEqual(["A", "B", "C"]);
+  });
+});
+
+describe("mergeValues", () => {
+  it("adds to a multi-value cell without dropping what is there", () => {
+    expect(mergeValues(["kol"], ["test", "kol"], true)).toEqual(["kol", "test"]);
+  });
+
+  it("replaces a single-value cell", () => {
+    expect(mergeValues(["Serang"], ["Bandung"], false)).toEqual(["Bandung"]);
   });
 });

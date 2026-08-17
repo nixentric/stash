@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
@@ -44,7 +44,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ipc } from "@/lib/ipc";
-import { invalidateLibrary, reportError, useFolders, useFolderFields, useFootage, useTags, useBrands } from "@/hooks/queries";
+import {
+  invalidateLibrary,
+  reportError,
+  toastUndo,
+  useFolders,
+  useFolderFields,
+  useFootage,
+  useTags,
+  useBrands,
+} from "@/hooks/queries";
 import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
 import { Select } from "@/components/dialogs/BrandDialogs";
 import { useUi } from "@/store/ui";
@@ -137,6 +146,15 @@ export function applyFacets(folders: FolderNode[], facets: Facet[]): FolderNode[
       tags.every((f) => matches(folder, f)) &&
       [...byField.values()].every((group) => group.some((f) => matches(folder, f))),
   );
+}
+
+/**
+ * What a bulk edit writes into a cell: multi-value cells (tags, columns marked
+ * "multiple") gain the new values without losing what is there, single-value
+ * cells are replaced — the same rule the per-row editors already follow.
+ */
+export function mergeValues(current: string[], added: string[], multi: boolean): string[] {
+  return multi ? [...new Set([...current, ...added])] : [added.join(", ")];
 }
 
 /**
@@ -303,6 +321,13 @@ export function SourceFoldersPage() {
 
   const [manageColumnsOpen, setManageColumnsOpen] = useState(false);
 
+  // Bulk editing: which folders are ticked, and what the bar writes to.
+  const [picked, setPicked] = useState<string[]>([]);
+  const [bulkTarget, setBulkTarget] = useState("Tags");
+  const [bulkText, setBulkText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const lastPickedIdx = useRef<number | null>(null);
+
   const allTags = useTags(true);
   const tagSuggestions = useMemo(() => {
     const q = tagInputText.trim().toLowerCase();
@@ -388,17 +413,10 @@ export function SourceFoldersPage() {
     ...(fields.data ?? []).map((c) => ({ key: `field:${c.id}` as SortKey, label: c.name })),
   ];
 
-  const commitTag = async (folderPath: string, existingTags: string[], tagText: string) => {
+  const commitTag = async (folder: FolderNode, tagText: string) => {
     const tag = tagText.trim().toLowerCase().replace(/\s+/g, " ");
-    if (!tag) return;
-    if (!existingTags.includes(tag)) {
-      const newTags = [...existingTags, tag];
-      try {
-        await ipc.setFolderTags(folderPath, newTags);
-        invalidateLibrary(qc);
-      } catch (err) {
-        reportError(err, "Could not add tag");
-      }
+    if (tag && !folder.tags.includes(tag)) {
+      await setTags([folder], (f) => [...f.tags, tag], `Tag "${tag}" added`);
     }
     setTagInputText("");
     setHighlightIdx(0);
@@ -434,6 +452,147 @@ export function SourceFoldersPage() {
   const isActive = (f: Facet) => facets.some((x) => sameFacet(x, f));
   const toggleFacet = (f: Facet) =>
     setFacets((cur) => (cur.some((x) => sameFacet(x, f)) ? cur.filter((x) => !sameFacet(x, f)) : [...cur, f]));
+
+  /**
+   * Bulk editing works off the *visible* rows, so a folder hidden by a filter is
+   * never written to even if it was ticked before the filter went on.
+   */
+  const pickedRows = rows.filter((f) => picked.includes(f.containerPath));
+  const allPicked = rows.length > 0 && pickedRows.length === rows.length;
+
+  const toggleRow = (idx: number, shift: boolean) => {
+    const path = rows[idx]!.containerPath;
+    if (shift && lastPickedIdx.current !== null) {
+      const [lo, hi] =
+        lastPickedIdx.current < idx ? [lastPickedIdx.current, idx] : [idx, lastPickedIdx.current];
+      const range = rows.slice(lo, hi + 1).map((f) => f.containerPath);
+      setPicked((cur) => [...new Set([...cur, ...range])]);
+    } else {
+      setPicked((cur) => (cur.includes(path) ? cur.filter((p) => p !== path) : [...cur, path]));
+    }
+    lastPickedIdx.current = idx;
+  };
+
+  /**
+   * The one place folder edits are written, whether they came from a cell or
+   * from the bulk bar.
+   *
+   * The `FolderNode`s handed in are the values as they were before the write,
+   * so undoing is just writing them back — no snapshot type, no history stack.
+   *
+   * ponytail: sequential writes — a few hundred folders at worst, and one
+   * failing row should not leave the rest half-applied silently.
+   */
+  const applyFolders = async (
+    targets: FolderNode[],
+    write: (f: FolderNode) => Promise<void>,
+    back: (f: FolderNode) => Promise<void>,
+    message: string,
+    failMsg: string,
+  ) => {
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    try {
+      for (const f of targets) await write(f);
+      toastUndo(qc, message, async () => {
+        for (const f of targets) await back(f);
+      });
+    } catch (err) {
+      reportError(err, failMsg);
+    } finally {
+      invalidateLibrary(qc);
+      setBulkBusy(false);
+    }
+  };
+
+  const undoBrand = (f: FolderNode) => ipc.setFolderBrand(f.containerPath, f.brandId);
+  const undoTags = (f: FolderNode) => ipc.setFolderTags(f.containerPath, f.tags);
+  const undoField = (fieldId: number) => (f: FolderNode) =>
+    ipc.setFolderFieldValue(
+      f.containerPath,
+      fieldId,
+      f.fields.find((v) => v.fieldId === fieldId)?.value ?? "",
+    );
+
+  /** How many folders a message is about: "3 folders", or nothing when it is one. */
+  const on = (targets: FolderNode[]) =>
+    targets.length === 1 ? "" : ` on ${count(targets.length)} folders`;
+
+  const setBrand = (targets: FolderNode[], brandName: string) => {
+    const brandId = (brands.data ?? []).find((b) => b.name === brandName)?.id ?? null;
+    return applyFolders(
+      targets,
+      (f) => ipc.setFolderBrand(f.containerPath, brandId),
+      undoBrand,
+      brandId === null ? `Brand cleared${on(targets)}` : `Brand set to ${brandName}${on(targets)}`,
+      "Could not update the brand",
+    );
+  };
+
+  const setTags = (targets: FolderNode[], tags: (f: FolderNode) => string[], message: string) =>
+    applyFolders(
+      targets,
+      (f) => ipc.setFolderTags(f.containerPath, tags(f)),
+      undoTags,
+      message,
+      "Could not update the tags",
+    );
+
+  const setField = (
+    targets: FolderNode[],
+    fieldId: number,
+    value: (f: FolderNode) => string,
+    message: string,
+  ) =>
+    applyFolders(
+      targets,
+      (f) => ipc.setFolderFieldValue(f.containerPath, fieldId, value(f)),
+      undoField(fieldId),
+      message,
+      "Could not update the value",
+    );
+
+  /** Values of a comma-joined custom column cell. */
+  const cellValues = (f: FolderNode, fieldId: number) =>
+    (f.fields.find((v) => v.fieldId === fieldId)?.value ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  /** Adds to tags and to multi-value columns; single-value columns are replaced. */
+  const bulkAddValue = async () => {
+    const parts = bulkText.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+
+    if (bulkTarget === "Tags") {
+      const tags = parts.map((t) => t.toLowerCase().replace(/\s+/g, " "));
+      await setTags(
+        pickedRows,
+        (f) => mergeValues(f.tags, tags, true),
+        `Tags added${on(pickedRows)}`,
+      );
+    } else {
+      const col = customColumns.find((c) => c.name === bulkTarget);
+      if (!col) return;
+      const multi = multipleTagFields.includes(col.id);
+      await setField(
+        pickedRows,
+        col.id,
+        (f) => mergeValues(cellValues(f, col.id), parts, multi).join(", "),
+        `${col.name} updated${on(pickedRows)}`,
+      );
+    }
+    setBulkText("");
+  };
+
+  const bulkClearTarget = () => {
+    if (bulkTarget === "Tags") {
+      return setTags(pickedRows, () => [], `Tags cleared${on(pickedRows)}`);
+    }
+    const col = customColumns.find((c) => c.name === bulkTarget);
+    if (!col) return;
+    return setField(pickedRows, col.id, () => "", `${col.name} cleared${on(pickedRows)}`);
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -551,16 +710,84 @@ export function SourceFoldersPage() {
         </div>
       )}
 
+      {/* Bulk bar — only there when something is ticked, so the table reads the
+          same as before until you actually want to edit several folders. */}
+      {pickedRows.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <span className="tnum shrink-0 text-[12px] font-medium">
+            {count(pickedRows.length)} selected
+          </span>
+
+          <div className="w-40 shrink-0">
+            <Select
+              value="Set brand…"
+              options={brandOptions}
+              onChange={(name) => setBrand(pickedRows, name)}
+            />
+          </div>
+
+          <div className="w-32 shrink-0">
+            <Select
+              value={bulkTarget}
+              options={["Tags", ...customColumns.map((c) => c.name)]}
+              onChange={setBulkTarget}
+            />
+          </div>
+
+          <input
+            type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            placeholder={`Add to ${bulkTarget.toLowerCase()}… (comma separated)`}
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                bulkAddValue();
+              }
+            }}
+            className="h-8 w-56 rounded-md border border-input bg-surface px-2 text-[13px]
+                       focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <Button size="sm" disabled={bulkBusy || !bulkText.trim()} onClick={bulkAddValue}>
+            <Plus />
+            Apply
+          </Button>
+          <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={bulkClearTarget}>
+            Clear {bulkTarget}
+          </Button>
+
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setPicked([])}>
+            <X />
+            Deselect
+          </Button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-border">
         <table
           className="w-full border-collapse text-left"
-          style={{ minWidth: `${1000 + customColumns.length * 160}px` }}
+          style={{ minWidth: `${1040 + customColumns.length * 160}px` }}
         >
           <thead>
             <tr
               className="group/head border-b border-border bg-muted/40 text-[11px] font-medium
                          uppercase tracking-wide text-subtle-foreground"
             >
+              <th className="w-8 px-3 py-2">
+                <input
+                  type="checkbox"
+                  aria-label="Select every folder shown"
+                  checked={allPicked}
+                  onChange={() =>
+                    setPicked(allPicked ? [] : rows.map((f) => f.containerPath))
+                  }
+                  className="size-3.5 cursor-pointer accent-primary"
+                />
+              </th>
               <th className="w-[116px] min-w-[116px] px-4 py-2 font-medium">Preview</th>
               <SortHeader label="Folder" column="path" sort={sort} onSort={toggleSort} className="min-w-[12rem]" />
               <SortHeader label="Brand" column="brand" sort={sort} onSort={toggleSort} className="min-w-[10rem]" />
@@ -600,7 +827,7 @@ export function SourceFoldersPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((folder) => (
+            {rows.map((folder, idx) => (
               <ContextMenu key={folder.containerPath}>
                 <ContextMenuTrigger asChild>
                 <tr
@@ -613,10 +840,24 @@ export function SourceFoldersPage() {
                       setView({ kind: "folder", path: folder.containerPath });
                     }
                   }}
-                  className="cursor-pointer border-b border-border outline-none
-                             transition-colors last:border-0 hover:bg-accent/50 focus-visible:ring-2
-                             focus-visible:ring-ring/50"
+                  className={cn(
+                    `cursor-pointer border-b border-border outline-none transition-colors
+                     last:border-0 hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/50`,
+                    picked.includes(folder.containerPath) && "bg-accent/40",
+                  )}
                 >
+                  <td className="w-8 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    {/* Shift-click extends from the last tick, so a run of
+                        folders is one click apart instead of forty. */}
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${folder.displayName ?? folder.containerPath}`}
+                      checked={picked.includes(folder.containerPath)}
+                      onChange={() => {}}
+                      onClick={(e) => toggleRow(idx, e.shiftKey)}
+                      className="size-3.5 cursor-pointer accent-primary"
+                    />
+                  </td>
                   <td className="w-[116px] min-w-[116px] px-3 py-2.5">
                     <FolderPreview path={folder.containerPath} />
                   </td>
@@ -660,13 +901,7 @@ export function SourceFoldersPage() {
                             value={folder.brandName ?? NO_BRAND}
                             options={brandOptions}
                             onChange={async (newBrandName) => {
-                              try {
-                                const selectedBrandId = (brands.data ?? []).find((b) => b.name === newBrandName)?.id ?? null;
-                                await ipc.setFolderBrand(folder.containerPath, selectedBrandId);
-                                invalidateLibrary(qc);
-                              } catch (err) {
-                                reportError(err, "Could not update folder brand");
-                              }
+                              await setBrand([folder], newBrandName);
                               setEditingBrandPath(null);
                             }}
                           />
@@ -704,14 +939,9 @@ export function SourceFoldersPage() {
                               <button
                                 type="button"
                                 title="Clear brand"
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  try {
-                                    await ipc.setFolderBrand(folder.containerPath, null);
-                                    invalidateLibrary(qc);
-                                  } catch (err) {
-                                    reportError(err, "Could not clear brand");
-                                  }
+                                  setBrand([folder], NO_BRAND);
                                 }}
                                 className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                               >
@@ -759,15 +989,13 @@ export function SourceFoldersPage() {
                               <button
                                 type="button"
                                 aria-label={`Remove tag ${t}`}
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  const newTags = folder.tags.filter((x) => x !== t);
-                                  try {
-                                    await ipc.setFolderTags(folder.containerPath, newTags);
-                                    invalidateLibrary(qc);
-                                  } catch (err) {
-                                    reportError(err, "Could not remove tag");
-                                  }
+                                  setTags(
+                                    [folder],
+                                    (f) => f.tags.filter((x) => x !== t),
+                                    `Tag "${t}" removed`,
+                                  );
                                 }}
                                 className="text-subtle-foreground transition-colors hover:text-foreground"
                               >
@@ -796,7 +1024,7 @@ export function SourceFoldersPage() {
                                   e.preventDefault();
                                   const selected = tagSuggestions[highlightIdx] ?? tagInputText;
                                   if (selected.trim()) {
-                                    await commitTag(folder.containerPath, folder.tags, selected);
+                                    await commitTag(folder, selected);
                                   } else {
                                     setEditingTagsPath(null);
                                   }
@@ -823,7 +1051,7 @@ export function SourceFoldersPage() {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 if (tagInputText.trim()) {
-                                  await commitTag(folder.containerPath, folder.tags, tagInputText);
+                                  await commitTag(folder, tagInputText);
                                 }
                                 setEditingTagsPath(null);
                               }}
@@ -840,7 +1068,7 @@ export function SourceFoldersPage() {
                                     onMouseDown={async (ev) => {
                                       ev.preventDefault();
                                       ev.stopPropagation();
-                                      await commitTag(folder.containerPath, folder.tags, s);
+                                      await commitTag(folder, s);
                                     }}
                                     className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
                                       idx === highlightIdx
@@ -904,14 +1132,9 @@ export function SourceFoldersPage() {
                                 <button
                                   type="button"
                                   title="Clear all tags"
-                                  onClick={async (e) => {
+                                  onClick={(e) => {
                                     e.stopPropagation();
-                                    try {
-                                      await ipc.setFolderTags(folder.containerPath, []);
-                                      invalidateLibrary(qc);
-                                    } catch (err) {
-                                      reportError(err, "Could not clear tags");
-                                    }
+                                    setTags([folder], () => [], "Tags cleared");
                                   }}
                                   className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                 >
@@ -930,6 +1153,27 @@ export function SourceFoldersPage() {
                     const currentTags = rawValue.split(",").map((t) => t.trim()).filter(Boolean);
                     const isEditing = editingColumnPath === folder.containerPath && editingColumnId === c.id;
 
+                    // One writer per cell, so every path here — typing, picking a
+                    // suggestion, clearing — gets the same undo.
+                    const addValue = (raw: string) => {
+                      const v = raw.trim();
+                      if (!v || currentTags.includes(v)) return;
+                      return setField(
+                        [folder],
+                        c.id,
+                        (f) => [...cellValues(f, c.id), v].join(", "),
+                        `${c.name}: "${v}" added`,
+                      );
+                    };
+                    const writeValue = (raw: string, message: string) =>
+                      setField([folder], c.id, () => raw, message);
+                    /** Single-value cell. Leaving the value alone is not an edit. */
+                    const commitColumn = (raw: string) => {
+                      const v = raw.trim();
+                      if (v === rawValue) return;
+                      return writeValue(v, v ? `${c.name} set to "${v}"` : `${c.name} cleared`);
+                    };
+
                     return (
                       <td key={c.id} className="px-3 py-2.5 min-w-[10rem]" onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
@@ -944,15 +1188,12 @@ export function SourceFoldersPage() {
                                   <button
                                     type="button"
                                     aria-label={`Remove tag ${t}`}
-                                    onClick={async (e) => {
+                                    onClick={(e) => {
                                       e.stopPropagation();
-                                      const newTags = currentTags.filter((x) => x !== t);
-                                      try {
-                                        await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
-                                        invalidateLibrary(qc);
-                                      } catch (err) {
-                                        reportError(err, "Could not remove tag");
-                                      }
+                                      writeValue(
+                                        currentTags.filter((x) => x !== t).join(", "),
+                                        `${c.name}: "${t}" removed`,
+                                      );
                                     }}
                                     className="text-subtle-foreground transition-colors hover:text-foreground"
                                   >
@@ -979,16 +1220,7 @@ export function SourceFoldersPage() {
                                       e.preventDefault();
                                       const selected = columnSuggestions[colHighlightIdx] ?? columnInputText;
                                       if (selected.trim()) {
-                                        const newTag = selected.trim();
-                                        if (!currentTags.includes(newTag)) {
-                                          const newTags = [...currentTags, newTag];
-                                          try {
-                                            await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
-                                            invalidateLibrary(qc);
-                                          } catch (err) {
-                                            reportError(err, "Could not add tag");
-                                          }
-                                        }
+                                        await addValue(selected);
                                         setColumnInputText("");
                                       } else {
                                         setEditingColumnPath(null);
@@ -1020,18 +1252,7 @@ export function SourceFoldersPage() {
                                   onMouseDown={async (e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    if (columnInputText.trim()) {
-                                      const newTag = columnInputText.trim();
-                                      if (!currentTags.includes(newTag)) {
-                                        const newTags = [...currentTags, newTag];
-                                        try {
-                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
-                                          invalidateLibrary(qc);
-                                        } catch (err) {
-                                          reportError(err, "Could not add tag");
-                                        }
-                                      }
-                                    }
+                                    if (columnInputText.trim()) await addValue(columnInputText);
                                     setEditingColumnPath(null);
                                     setEditingColumnId(null);
                                   }}
@@ -1048,15 +1269,7 @@ export function SourceFoldersPage() {
                                         onMouseDown={async (ev) => {
                                           ev.preventDefault();
                                           ev.stopPropagation();
-                                          if (!currentTags.includes(s)) {
-                                            const newTags = [...currentTags, s];
-                                            try {
-                                              await ipc.setFolderFieldValue(folder.containerPath, c.id, newTags.join(", "));
-                                              invalidateLibrary(qc);
-                                            } catch (err) {
-                                              reportError(err, "Could not add tag");
-                                            }
-                                          }
+                                          await addValue(s);
                                           setColumnInputText("");
                                         }}
                                         className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] transition-colors ${
@@ -1091,12 +1304,7 @@ export function SourceFoldersPage() {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
                                     const selected = columnSuggestions[colHighlightIdx] ?? columnInputText;
-                                    try {
-                                      await ipc.setFolderFieldValue(folder.containerPath, c.id, selected.trim());
-                                      invalidateLibrary(qc);
-                                    } catch (err) {
-                                      reportError(err, "Could not update column value");
-                                    }
+                                    await commitColumn(selected);
                                     setEditingColumnPath(null);
                                     setEditingColumnId(null);
                                   } else if (e.key === "Escape") {
@@ -1112,12 +1320,7 @@ export function SourceFoldersPage() {
                                 }}
                                 onBlur={() => {
                                   setTimeout(async () => {
-                                    try {
-                                      await ipc.setFolderFieldValue(folder.containerPath, c.id, columnInputText.trim());
-                                      invalidateLibrary(qc);
-                                    } catch (err) {
-                                      // ignore
-                                    }
+                                    await commitColumn(columnInputText);
                                     setEditingColumnPath(null);
                                     setEditingColumnId(null);
                                   }, 200);
@@ -1134,12 +1337,7 @@ export function SourceFoldersPage() {
                                       onMouseDown={async (ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
-                                        try {
-                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, s.trim());
-                                          invalidateLibrary(qc);
-                                        } catch (err) {
-                                          reportError(err, "Could not update column value");
-                                        }
+                                        await commitColumn(s);
                                         setEditingColumnPath(null);
                                         setEditingColumnId(null);
                                       }}
@@ -1208,15 +1406,10 @@ export function SourceFoldersPage() {
                                     <button
                                       type="button"
                                       title="Clear all values"
-                                      onClick={async (e) => {
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        try {
-                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, "");
-                                          invalidateLibrary(qc);
-                                        } catch (err) {
-                                          reportError(err, "Could not clear values");
-                                        }
-                                      }}
+                                        writeValue("", `${c.name} cleared`);
+                                        }}
                                       className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                     >
                                       <X className="size-3" />
@@ -1249,15 +1442,10 @@ export function SourceFoldersPage() {
                                     <button
                                       type="button"
                                       title="Clear value"
-                                      onClick={async (e) => {
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        try {
-                                          await ipc.setFolderFieldValue(folder.containerPath, c.id, "");
-                                          invalidateLibrary(qc);
-                                        } catch (err) {
-                                          reportError(err, "Could not clear value");
-                                        }
-                                      }}
+                                        writeValue("", `${c.name} cleared`);
+                                        }}
                                       className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                     >
                                       <X className="size-3" />
