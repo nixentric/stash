@@ -718,6 +718,10 @@ function DriveTab({
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input
+              // Ready for ⌘V the moment the dialog opens — the same reason the
+              // Links tab autofocuses its box. Pasting a link is what people
+              // came here to do; clicking the field first is a step for nothing.
+              autoFocus
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && scanFromUrl()}
