@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { ipc } from "@/lib/ipc";
 import { invalidateLibrary, reportError } from "@/hooks/queries";
 import type { Project } from "@/lib/types";
+import { useSubmitHotkey } from "@/hooks/use-hotkeys";
 
 interface Props {
   open: boolean;
@@ -77,6 +78,9 @@ export function MarkUsedDialog({ open, onOpenChange, ids, projects }: Props) {
       setBusy(false);
     }
   }
+
+  // The project is the only required choice, so ⌘⏎ means "with that one".
+  useSubmitHotkey(open && !busy && projectId != null, () => void submit(projectId));
 
   async function createAndUse() {
     setBusy(true);

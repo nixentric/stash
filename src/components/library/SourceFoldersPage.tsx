@@ -18,8 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/misc";
-import { cn } from "@/lib/utils";
+import { Badge, Tooltip } from "@/components/ui/misc";
+import { cn, mod } from "@/lib/utils";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -58,6 +58,7 @@ import {
 } from "@/hooks/queries";
 import { useThumbSrc, useVisible } from "@/hooks/use-thumbnail";
 import { Marquee, useMarquee } from "@/hooks/use-marquee";
+import { useSubmitHotkey } from "@/hooks/use-hotkeys";
 import { Select } from "@/components/dialogs/BrandDialogs";
 import { useUi } from "@/store/ui";
 import { emptyQuery, type FolderNode } from "@/lib/types";
@@ -806,6 +807,19 @@ export function SourceFoldersPage() {
     setBulkText("");
   };
 
+  // ⌘⏎ applies, from wherever the cursor is. Typing a tag and reaching for the
+  // mouse to commit it is the slow half of tagging forty folders. Not while a
+  // dialog is up: the keystroke belongs to whatever is in front.
+  useSubmitHotkey(
+    pickedRows.length > 0 &&
+      !bulkBusy &&
+      !!bulkText.trim() &&
+      !manageColumnsOpen &&
+      !doomed &&
+      !renaming,
+    bulkAddValue,
+  );
+
   const bulkClearTarget = () => {
     if (bulkTarget === "Tags") {
       return setTags(pickedRows, () => [], `Tags cleared${on(pickedRows)}`);
@@ -1057,10 +1071,12 @@ export function SourceFoldersPage() {
               </div>
             )}
           </div>
-          <Button size="sm" disabled={bulkBusy || !bulkText.trim()} onClick={bulkAddValue}>
-            <Plus />
-            Apply
-          </Button>
+          <Tooltip content={`Add to ${bulkTarget.toLowerCase()}`} shortcut={`${mod} ⏎`} side="top">
+            <Button size="sm" disabled={bulkBusy || !bulkText.trim()} onClick={bulkAddValue}>
+              <Plus />
+              Apply
+            </Button>
+          </Tooltip>
           <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={bulkClearTarget}>
             Clear {bulkTarget}
           </Button>

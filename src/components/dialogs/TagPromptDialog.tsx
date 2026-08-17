@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TagInput } from "@/components/inspector/TagInput";
 import { useFootageAction } from "@/hooks/queries";
+import { useSubmitHotkey } from "@/hooks/use-hotkeys";
 
 export function TagPromptDialog({
   open,
@@ -28,6 +29,12 @@ export function TagPromptDialog({
     if (open) setTags([]);
   }, [open]);
 
+  const submit = () => {
+    action.mutate({ type: "addTags", ids, tags });
+    onOpenChange(false);
+  };
+  useSubmitHotkey(open && tags.length > 0, submit);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -44,14 +51,7 @@ export function TagPromptDialog({
           <Button variant="ghost" size="lg" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            size="lg"
-            disabled={tags.length === 0}
-            onClick={() => {
-              action.mutate({ type: "addTags", ids, tags });
-              onOpenChange(false);
-            }}
-          >
+          <Button size="lg" disabled={tags.length === 0} onClick={submit}>
             Add {tags.length > 0 && `(${tags.length})`}
           </Button>
         </DialogFooter>

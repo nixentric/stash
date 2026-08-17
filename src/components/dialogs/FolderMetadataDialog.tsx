@@ -6,6 +6,7 @@ import { ipc } from "@/lib/ipc";
 import type { FolderNode } from "@/lib/types";
 import { invalidateLibrary, reportError, useBrands } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSubmitHotkey } from "@/hooks/use-hotkeys";
 
 /** Shown when a folder belongs to nobody in particular. */
 const NO_BRAND = "No brand";
@@ -36,6 +37,8 @@ export function FolderMetadataDialog({ folder, onClose }: { folder: FolderNode |
       setSaving(false);
     }
   };
+
+  useSubmitHotkey(!!folder && !saving, () => void save());
 
   return (
     <Dialog open={!!folder} onOpenChange={(open) => !open && onClose()}>
