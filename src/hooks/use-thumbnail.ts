@@ -50,6 +50,11 @@ export function useThumbSrc(id: number, enabled: boolean) {
   const [version, setVersion] = useState(0);
   const [missing, setMissing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // An <img> that failed is not blank: the webview draws its own broken-image
+  // mark in it. Taking the element away is the only way to stop that, and while
+  // a preview is being fetched — which can take a while behind a queue of them —
+  // that mark is the whole card.
+  const [broken, setBroken] = useState(false);
   const attempted = useRef(false);
   const gen = useSyncExternalStore(subscribeThumbs, thumbGeneration);
 
@@ -60,9 +65,11 @@ export function useThumbSrc(id: number, enabled: boolean) {
     setVersion(0);
     setMissing(false);
     setGenerating(false);
+    setBroken(false);
   }, [id, gen]);
 
   const onError = () => {
+    setBroken(true);
     if (attempted.current) {
       setMissing(true);
       return;
@@ -71,7 +78,16 @@ export function useThumbSrc(id: number, enabled: boolean) {
     setGenerating(true);
     ipc
       .refreshThumbnail(id, false)
-      .then((found) => (found ? setVersion((v) => v + 1) : setMissing(true)))
+      .then((found) => {
+        if (!found) {
+          setMissing(true);
+          return;
+        }
+        // A different URL, so the webview fetches rather than reusing the
+        // failure it remembers.
+        setBroken(false);
+        setVersion((v) => v + 1);
+      })
       .catch(() => setMissing(true))
       .finally(() => setGenerating(false));
   };
@@ -81,7 +97,7 @@ export function useThumbSrc(id: number, enabled: boolean) {
   // the row's updated_at if that ever reads as stale.
   return {
     src:
-      enabled && !missing
+      enabled && !missing && !broken
         ? `stash://thumb/${id}${gen + version ? `?v=${gen + version}` : ""}`
         : undefined,
     missing,

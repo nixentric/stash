@@ -281,6 +281,9 @@ function FacetChip({
 type SortKey = "path" | "used" | "brand" | "added" | "updated" | `field:${number}`;
 type Sort = { key: SortKey; dir: 1 | -1 };
 
+/** Newest first: the folders you just imported are the ones you came for. */
+const DEFAULT_SORT: Sort = { key: "added", dir: -1 };
+
 /** Dates are ISO-8601, so string order is chronological order — no parsing. */
 function sortValue(folder: FolderNode, key: SortKey): string | number {
   switch (key) {
@@ -387,7 +390,16 @@ export function SourceFoldersPage() {
       return [];
     }
   });
-  const [sort, setSort] = useState<Sort>({ key: "added", dir: -1 });
+  const [sort, setSort] = useState<Sort>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("stash:folder_sort") ?? "null");
+      // Anything could be in storage — an old build's key, a hand-edited value.
+      // A bad one costs the table its order, so it has to look right to be used.
+      return saved?.key && (saved.dir === 1 || saved.dir === -1) ? saved : DEFAULT_SORT;
+    } catch {
+      return DEFAULT_SORT;
+    }
+  });
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState<FolderNode | null>(null);
@@ -571,6 +583,17 @@ export function SourceFoldersPage() {
   useEffect(() => {
     localStorage.setItem("stash:folder_facets", JSON.stringify(facets));
   }, [facets]);
+
+  useEffect(() => {
+    localStorage.setItem("stash:folder_sort", JSON.stringify(sort));
+  }, [sort]);
+
+  // Ordering by a column that has since been deleted sorts every row as blank,
+  // which reads as "the table is broken" rather than "that column is gone".
+  useEffect(() => {
+    if (!fields.data || !sort.key.startsWith("field:")) return;
+    if (!fields.data.some((c) => `field:${c.id}` === sort.key)) setSort(DEFAULT_SORT);
+  }, [fields.data, sort.key]);
 
   // A remembered filter for a tag that has since been deleted would hide every
   // folder with no way to tell why. Waits for the folders themselves: before they
