@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.27 — 2026-08-17
+
+**"There is an update, but not for your Mac yet"**
+
+- **Checking for updates while a release is still uploading used to show the updater's own words**: *None of the fallback platforms `["darwin-aarch64-app", "darwin-aarch64"]` were found in the response `platforms` object*. It now says what that means — a newer version is out, the package for your machine has not finished uploading, try again in a few minutes — and names the package it is waiting for.
+- **Every other update failure is still reported as one.** "Wait a moment" and "the update server is unreachable" are different answers.
+
+**Opening a library is no longer a jolt**
+
+- **The Welcome screen no longer flashes on the way in.** Starting with a library to reopen used to draw the whole Welcome screen for a moment and then tear it down — the app now waits for the answer before choosing a screen, and shows that it is working.
+- **The library fades in** rather than appearing mid-render.
+
 ## v0.5.26 — 2026-08-17
 
 **Add Footage is ready for the paste**
