@@ -17,19 +17,17 @@ export function useVisible<E extends HTMLElement>(rootMargin = "300px") {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || visible) return;
+    if (!el) return;
+    // Both ways. Latching on at the first sighting meant a list you scrolled
+    // once kept every image it had ever shown: the queries stayed active, so
+    // nothing was ever collected and memory only went up.
     const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setVisible(true);
-          io.disconnect();
-        }
-      },
+      ([entry]) => setVisible(!!entry?.isIntersecting),
       { rootMargin },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [visible, rootMargin]);
+  }, [rootMargin]);
 
   return { ref, visible };
 }
@@ -52,6 +50,13 @@ export function useThumbnail(id: number, enabled: boolean, large = false) {
     queryFn: () => ipc.getThumbnail(id, large),
     enabled,
     staleTime: 5 * 60_000,
+    // Thumbnails are base64 data URLs, by far the heaviest thing in the cache,
+    // and the default holds every one for five minutes after its card is gone.
+    // Dropped soon after nothing is showing it instead; the re-read is one local
+    // SQL round trip. The large ones are whole-screen images, so they go sooner.
+    // ponytail: a time bound, not a size bound — swap for an LRU if scroll-back
+    // starts flickering.
+    gcTime: large ? 10_000 : 30_000,
   });
 
   useEffect(() => {

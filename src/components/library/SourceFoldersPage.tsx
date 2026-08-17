@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
@@ -10,6 +10,7 @@ import {
   Filter,
   FolderTree,
   ImageOff,
+  ListChecks,
   Pencil,
   Plus,
   Settings,
@@ -46,6 +47,7 @@ import {
 import { ipc } from "@/lib/ipc";
 import {
   invalidateLibrary,
+  keys,
   reportError,
   toastUndo,
   useFolders,
@@ -55,6 +57,7 @@ import {
   useBrands,
 } from "@/hooks/queries";
 import { useThumbnail, useVisible } from "@/hooks/use-thumbnail";
+import { Marquee, useMarquee } from "@/hooks/use-marquee";
 import { Select } from "@/components/dialogs/BrandDialogs";
 import { useUi } from "@/store/ui";
 import { emptyQuery, type FolderNode } from "@/lib/types";
@@ -103,13 +106,74 @@ export function TaggedFolders({ tag }: { tag: string }) {
 /** Where a Drive folder lives on the web. Its id is all the URL needs. */
 export const driveFolderUrl = (id: string) => `https://drive.google.com/drive/folders/${id}`;
 
-/** One thumbnail in a folder's preview strip. */
-function Thumb({ id }: { id: number }) {
+/**
+ * One thumbnail in a folder's preview strip.
+ *
+ * Memoised on purpose: the table is not virtualized, so every tick of a
+ * selection re-renders all of it, and each of these carries a query hook and an
+ * effect. Its props are a number and a class, so nothing re-runs unless the row
+ * is actually a different one.
+ */
+const Thumb = memo(function Thumb({ id, className = "size-8" }: { id: number; className?: string }) {
   const thumb = useThumbnail(id, true);
   return thumb.data ? (
-    <img src={thumb.data} alt="" loading="lazy" className="size-8 shrink-0 rounded-sm object-cover" />
+    <img src={thumb.data} alt="" loading="lazy" className={cn(className, "shrink-0 rounded-sm object-cover")} />
   ) : (
-    <div className="size-8 shrink-0 rounded-sm bg-thumb-bg" />
+    <div className={cn(className, "shrink-0 rounded-sm bg-thumb-bg")} />
+  );
+});
+
+/**
+ * Bigger covers floating by the cursor, so a row can be read without opening the
+ * folder. Fixed to the viewport and pointer-transparent: the card never steals
+ * the hover that spawned it, and never scrolls away from the cursor.
+ */
+function HoverPreview({ path, x, y }: { path: string; x: number; y: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Below the cursor while there is room, above it near the bottom of the window
+  // — a card pinned to the edge covers the row you are pointing at.
+  const CARD = 220; // size-52 thumb plus the padding around it
+  const place = (cx: number, cy: number) => ({
+    left: Math.min(cx + 20, window.innerWidth - 240),
+    top: cy + 16 + CARD <= window.innerHeight ? cy + 16 : Math.max(cy - 16 - CARD, 8),
+    below: cy + 16 + CARD <= window.innerHeight,
+  });
+
+  // Following the cursor writes straight to the node. Through state it re-rendered
+  // this card — and re-ran its query hooks — on every pixel of mouse movement.
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      const el = ref.current;
+      if (!el) return;
+      const at = place(e.clientX, e.clientY);
+      el.style.left = `${at.left}px`;
+      el.style.top = `${at.top}px`;
+    };
+    window.addEventListener("mousemove", move);
+    return () => window.removeEventListener("mousemove", move);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The same query the row's preview strip already ran, so hovering costs no
+  // fetch of its own — only the first of the three is shown.
+  const page = useFootage({ ...emptyQuery(), containerPath: path, limit: 3 }, true);
+  const first = page.data?.items?.[0];
+  if (!first) return null;
+
+  const at = place(x, y);
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        `pointer-events-none fixed z-50 rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg
+         animate-in fade-in duration-150`,
+        at.below ? "slide-in-from-top-2" : "slide-in-from-bottom-2",
+      )}
+      style={{ left: at.left, top: at.top }}
+    >
+      <Thumb id={first.id} className="size-52" />
+    </div>
   );
 }
 
@@ -270,22 +334,24 @@ function SortHeader({
  * it. Gated on visibility — a library with hundreds of folders would otherwise
  * fire hundreds of queries on mount.
  */
-function FolderPreview({ path }: { path: string }) {
+const FolderPreview = memo(function FolderPreview({ path }: { path: string }) {
   const { ref, visible } = useVisible<HTMLDivElement>();
   const page = useFootage({ ...emptyQuery(), containerPath: path, limit: 3 }, visible);
   const items = page.data?.items ?? [];
 
   return (
-    <div ref={ref} className="flex gap-1">
-      {items.map((i) => (
-        <Thumb key={i.id} id={i.id} />
-      ))}
+    // Scrolled out of sight, the images come down with it — a decoded bitmap for
+    // a row nobody is looking at is memory for nothing. The list itself stays
+    // cached, so scrolling back is instant.
+    <div ref={ref} className="flex min-h-8 gap-1">
+      {visible &&
+        items.map((i) => <Thumb key={i.id} id={i.id} />)}
       {visible && !page.isLoading && items.length === 0 && (
         <ImageOff className="size-4 text-subtle-foreground" />
       )}
     </div>
   );
-}
+});
 
 export function SourceFoldersPage() {
   const folders = useFolders(true);
@@ -321,12 +387,47 @@ export function SourceFoldersPage() {
 
   const [manageColumnsOpen, setManageColumnsOpen] = useState(false);
 
-  // Bulk editing: which folders are ticked, and what the bar writes to.
+  // Bulk editing: which folders are ticked, and what the bar writes to. The tick
+  // column is off until asked for — a column of empty boxes on every row is noise
+  // on the many days you are only reading the table.
+  const [selectMode, setSelectMode] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [bulkTarget, setBulkTarget] = useState("Tags");
   const [bulkText, setBulkText] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkHighlight, setBulkHighlight] = useState(0);
+  const [bulkFocused, setBulkFocused] = useState(false);
   const lastPickedIdx = useRef<number | null>(null);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * Dragging a box over the rows picks them, the same gesture as the library
+   * grid. It turns the tick column on by itself: dragging is how you say "I am
+   * selecting now", so having to arm it first would be a button in the way.
+   */
+  const marquee = useMarquee(
+    "tr[data-id]",
+    () => picked,
+    (paths) => {
+      setSelectMode(true);
+      setPicked(paths);
+    },
+    scrollRef,
+  );
+
+  // Which row the cursor rests on, and where, for the floating preview.
+  const [hover, setHover] = useState<{ path: string; x: number; y: number } | null>(null);
+  const hoverTimer = useRef<number | null>(null);
+  const clearHover = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHover(null);
+  };
+  // Delayed, so running the cursor down the table does not flash a card per row.
+  const startHover = (path: string) => (e: React.MouseEvent) => {
+    const { clientX: x, clientY: y } = e;
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHover({ path, x, y }), 350);
+  };
 
   const allTags = useTags(true);
   const tagSuggestions = useMemo(() => {
@@ -404,6 +505,38 @@ export function SourceFoldersPage() {
     return groups.filter((g) => g.values.length > 0);
   }, [folders.data, fields.data]);
 
+  /**
+   * What the bulk bar can complete to: known tags, or the values that column
+   * already holds — the same pool the filter menu offers, so bulk editing cannot
+   * invent a near-miss of a value that already exists ("kol" vs "kols").
+   *
+   * Only the last comma-separated word is being typed; the ones before it are
+   * finished and are dropped from the list.
+   */
+  const bulkSuggestions = useMemo(() => {
+    const parts = bulkText.split(",");
+    const q = parts[parts.length - 1]!.trim().toLowerCase();
+    if (!q) return [];
+    const done = parts.slice(0, -1).map((s) => s.trim().toLowerCase());
+    const colId = (fields.data ?? []).find((c) => c.name === bulkTarget)?.id;
+    const pool =
+      bulkTarget === "Tags"
+        ? (allTags.data ?? []).map((t) => t.name)
+        : (facetGroups.find((g) => g.fieldId === colId)?.values ?? []);
+    return pool
+      .filter((v) => v.toLowerCase().includes(q) && !done.includes(v.toLowerCase()))
+      .slice(0, 6);
+  }, [bulkText, bulkTarget, allTags.data, facetGroups, fields.data]);
+
+  const showBulkSuggestions = bulkFocused && bulkSuggestions.length > 0;
+
+  /** Replaces the half-typed word with the picked value and opens the next one. */
+  const takeBulkSuggestion = (value: string) => {
+    const kept = bulkText.split(",").slice(0, -1).map((s) => s.trim()).filter(Boolean);
+    setBulkText([...kept, value].join(", ") + ", ");
+    setBulkHighlight(0);
+  };
+
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: "added", label: "Added" },
     { key: "updated", label: "Updated" },
@@ -440,7 +573,12 @@ export function SourceFoldersPage() {
   };
 
   const customColumns = fields.data ?? [];
-  const rows = sortFolders(applyFacets(folders.data ?? [], facets), sort);
+  // Filtering and sorting every folder on every keystroke and every tick of a
+  // drag was the table's own contribution to the lag.
+  const rows = useMemo(
+    () => sortFolders(applyFacets(folders.data ?? [], facets), sort),
+    [folders.data, facets, sort],
+  );
   // Clicking the column you are already on flips it; a new column starts
   // ascending, except the dates, where "newest first" is what you want.
   const toggleSort = (key: SortKey) =>
@@ -457,7 +595,13 @@ export function SourceFoldersPage() {
    * Bulk editing works off the *visible* rows, so a folder hidden by a filter is
    * never written to even if it was ticked before the filter went on.
    */
-  const pickedRows = rows.filter((f) => picked.includes(f.containerPath));
+  // A set, not the array: a marquee over 200 folders asked "is this one picked?"
+  // 200 times per row.
+  const pickedSet = useMemo(() => new Set(picked), [picked]);
+  const pickedRows = useMemo(
+    () => rows.filter((f) => pickedSet.has(f.containerPath)),
+    [rows, pickedSet],
+  );
   const allPicked = rows.length > 0 && pickedRows.length === rows.length;
 
   const toggleRow = (idx: number, shift: boolean) => {
@@ -500,7 +644,12 @@ export function SourceFoldersPage() {
     } catch (err) {
       reportError(err, failMsg);
     } finally {
-      invalidateLibrary(qc);
+      // Only what these writes touch. `invalidateLibrary` also drops every
+      // ["footage"] query, and each row's preview strip is one of those — adding
+      // a single tag refetched a thumbnail list per visible folder.
+      qc.invalidateQueries({ queryKey: keys.folders });
+      qc.invalidateQueries({ queryKey: keys.folderFields });
+      qc.invalidateQueries({ queryKey: keys.tags });
       setBulkBusy(false);
     }
   };
@@ -668,6 +817,25 @@ export function SourceFoldersPage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Turning selection off drops the ticks with it: leaving them hidden but
+            live is how you bulk-edit rows you forgot you had picked. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Show tick boxes for editing several folders at once"
+          onClick={() =>
+            setSelectMode((on) => {
+              if (on) setPicked([]);
+              return !on;
+            })
+          }
+          className={cn(selectMode && "text-foreground")}
+        >
+          <ListChecks />
+          Select
+          {picked.length > 0 && <Badge className="ml-0.5">{pickedRows.length}</Badge>}
+        </Button>
+
         {facets.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => setFacets([])}>
             <X />
@@ -686,7 +854,11 @@ export function SourceFoldersPage() {
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <div
+        ref={scrollRef}
+        onMouseDown={marquee.onMouseDown}
+        className={cn("min-h-0 flex-1 overflow-y-auto p-6", marquee.dragging && "select-none")}
+      >
       {facets.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           {facets.map((f) => (
@@ -711,9 +883,22 @@ export function SourceFoldersPage() {
       )}
 
       {/* Bulk bar — only there when something is ticked, so the table reads the
-          same as before until you actually want to edit several folders. */}
+          same as before until you actually want to edit several folders.
+          Floats over the bottom of the window: ticking a row far down the table
+          used to mean scrolling back to the top to act on it.
+          The wrapper does the centring and the inner bar the animation — sharing
+          one element would have the keyframe's transform eat the -translate-x. */}
       {pickedRows.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-6">
+        <div
+          // The bar sits over the table; pressing it is not the start of a
+          // selection drag.
+          onMouseDown={(e) => e.stopPropagation()}
+          className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-xl border border-border
+                     bg-surface-raised px-3 py-2 shadow-xl
+                     animate-in fade-in slide-in-from-bottom-8 duration-300
+                     ease-[cubic-bezier(.34,1.56,.64,1)]"
+        >
           <span className="tnum shrink-0 text-[12px] font-medium">
             {count(pickedRows.length)} selected
           </span>
@@ -734,24 +919,72 @@ export function SourceFoldersPage() {
             />
           </div>
 
-          <input
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            placeholder={`Add to ${bulkTarget.toLowerCase()}… (comma separated)`}
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                bulkAddValue();
-              }
-            }}
-            className="h-8 w-56 rounded-md border border-input bg-surface px-2 text-[13px]
-                       focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              placeholder={`Add to ${bulkTarget.toLowerCase()}… (comma separated)`}
+              value={bulkText}
+              onChange={(e) => {
+                setBulkText(e.target.value);
+                setBulkHighlight(0);
+              }}
+              onFocus={() => setBulkFocused(true)}
+              onBlur={() => setBulkFocused(false)}
+              onKeyDown={(e) => {
+                // Enter completes the word while the list is up, and applies once
+                // there is nothing left to complete — so a typo is never written
+                // to every ticked folder by one keystroke too many.
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const pick = showBulkSuggestions ? bulkSuggestions[bulkHighlight] : undefined;
+                  if (pick) takeBulkSuggestion(pick);
+                  else bulkAddValue();
+                } else if (e.key === "Escape") {
+                  setBulkFocused(false);
+                } else if (e.key === "ArrowDown" && showBulkSuggestions) {
+                  e.preventDefault();
+                  setBulkHighlight((h) => (h + 1) % bulkSuggestions.length);
+                } else if (e.key === "ArrowUp" && showBulkSuggestions) {
+                  e.preventDefault();
+                  setBulkHighlight((h) => (h - 1 + bulkSuggestions.length) % bulkSuggestions.length);
+                }
+              }}
+              className="h-8 w-56 rounded-md border border-input bg-surface px-2 text-[13px]
+                         focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            {showBulkSuggestions && (
+              <div
+                // Upwards: the bar sits at the bottom of the window, so downwards
+                // would be off screen.
+                className="absolute bottom-full left-0 z-50 mb-1 max-h-40 min-w-[10rem] overflow-y-auto
+                           rounded-md border border-border bg-surface-raised p-1 shadow-md"
+              >
+                {bulkSuggestions.map((s, idx) => (
+                  <button
+                    key={s}
+                    type="button"
+                    // mousedown, not click: the input keeps focus, so the list
+                    // stays up for the next value.
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      takeBulkSuggestion(s);
+                    }}
+                    className={`w-full rounded px-1.5 py-0.5 text-left text-[12px] transition-colors ${
+                      idx === bulkHighlight
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-accent"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <Button size="sm" disabled={bulkBusy || !bulkText.trim()} onClick={bulkAddValue}>
             <Plus />
             Apply
@@ -765,6 +998,7 @@ export function SourceFoldersPage() {
             Deselect
           </Button>
         </div>
+        </div>
       )}
 
       <div className="overflow-x-auto rounded-lg border border-border">
@@ -777,17 +1011,19 @@ export function SourceFoldersPage() {
               className="group/head border-b border-border bg-muted/40 text-[11px] font-medium
                          uppercase tracking-wide text-subtle-foreground"
             >
-              <th className="w-8 px-3 py-2">
-                <input
-                  type="checkbox"
-                  aria-label="Select every folder shown"
-                  checked={allPicked}
-                  onChange={() =>
-                    setPicked(allPicked ? [] : rows.map((f) => f.containerPath))
-                  }
-                  className="size-3.5 cursor-pointer accent-primary"
-                />
-              </th>
+              {selectMode && (
+                <th className="w-8 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label="Select every folder shown"
+                    checked={allPicked}
+                    onChange={() =>
+                      setPicked(allPicked ? [] : rows.map((f) => f.containerPath))
+                    }
+                    className="size-3.5 cursor-pointer accent-primary"
+                  />
+                </th>
+              )}
               <th className="w-[116px] min-w-[116px] px-4 py-2 font-medium">Preview</th>
               <SortHeader label="Folder" column="path" sort={sort} onSort={toggleSort} className="min-w-[12rem]" />
               <SortHeader label="Brand" column="brand" sort={sort} onSort={toggleSort} className="min-w-[10rem]" />
@@ -833,7 +1069,15 @@ export function SourceFoldersPage() {
                 <tr
                   role="button"
                   tabIndex={0}
-                  onClick={() => setView({ kind: "folder", path: folder.containerPath })}
+                  data-id={folder.containerPath}
+                  onMouseEnter={startHover(folder.containerPath)}
+                  onMouseLeave={clearHover}
+                  // A drag that ends on a row is a selection, not a request to
+                  // open the folder it happened to stop over.
+                  onClick={() => {
+                    if (marquee.dragged.current) return;
+                    setView({ kind: "folder", path: folder.containerPath });
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -843,21 +1087,23 @@ export function SourceFoldersPage() {
                   className={cn(
                     `cursor-pointer border-b border-border outline-none transition-colors
                      last:border-0 hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/50`,
-                    picked.includes(folder.containerPath) && "bg-accent/40",
+                    pickedSet.has(folder.containerPath) && "bg-accent/40",
                   )}
                 >
-                  <td className="w-8 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    {/* Shift-click extends from the last tick, so a run of
-                        folders is one click apart instead of forty. */}
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${folder.displayName ?? folder.containerPath}`}
-                      checked={picked.includes(folder.containerPath)}
-                      onChange={() => {}}
-                      onClick={(e) => toggleRow(idx, e.shiftKey)}
-                      className="size-3.5 cursor-pointer accent-primary"
-                    />
-                  </td>
+                  {selectMode && (
+                    <td className="w-8 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {/* Shift-click extends from the last tick, so a run of
+                          folders is one click apart instead of forty. */}
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${folder.displayName ?? folder.containerPath}`}
+                        checked={pickedSet.has(folder.containerPath)}
+                        onChange={() => {}}
+                        onClick={(e) => toggleRow(idx, e.shiftKey)}
+                        className="size-3.5 cursor-pointer accent-primary"
+                      />
+                    </td>
+                  )}
                   <td className="w-[116px] min-w-[116px] px-3 py-2.5">
                     <FolderPreview path={folder.containerPath} />
                   </td>
@@ -1060,7 +1306,7 @@ export function SourceFoldersPage() {
                               <Check className="size-3.5" />
                             </button>
                             {tagSuggestions.length > 0 && (
-                              <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                              <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-md">
                                 {tagSuggestions.map((s, idx) => (
                                   <button
                                     key={s}
@@ -1261,7 +1507,7 @@ export function SourceFoldersPage() {
                                   <Check className="size-3.5" />
                                 </button>
                                 {columnSuggestions.length > 0 && (
-                                  <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                                  <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-md">
                                     {columnSuggestions.map((s, idx) => (
                                       <button
                                         key={s}
@@ -1329,7 +1575,7 @@ export function SourceFoldersPage() {
                                 autoFocus
                               />
                               {columnSuggestions.length > 0 && (
-                                <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                                <div className="absolute left-0 top-full z-50 mt-1 min-w-[8rem] max-h-32 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-md">
                                   {columnSuggestions.map((s, idx) => (
                                     <button
                                       key={s}
@@ -1549,6 +1795,14 @@ export function SourceFoldersPage() {
           </p>
         )}
       </div>
+
+      {/* Not while a cell is open: an editor is a place you park the cursor, and
+          a card popping over it is in the way. */}
+      {hover && !marquee.dragging && !editingTagsPath && !editingColumnPath && !editingBrandPath && (
+        <HoverPreview path={hover.path} x={hover.x} y={hover.y} />
+      )}
+
+      <Marquee boxRef={marquee.boxRef} />
 
       <Dialog open={!!doomed} onOpenChange={(open) => !open && setDoomed(null)}>
         <DialogContent className="w-[min(28rem,92vw)]">
