@@ -3,6 +3,23 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.30 — 2026-08-17
+
+**Every filter can now say "not this"**
+
+- **One click keeps, two clicks drops.** Every row in the Filters menu cycles: click once to show only those items (✓), click again to hide them (✕), click a third time to stop filtering by it. Excluding Videos used to mean ticking Images and hoping nothing else was in the library.
+- **Filter by tag from the library toolbar at last.** The Filters menu lists your tags and each one cycles the same way — keep only `kol`, or hide everything tagged `draft`, without leaving the view you are in.
+- **Favorites goes both ways.** ✓ shows only favorites, ✕ hides them, so the ones you have already picked out can be got out of the way while you go through the rest.
+- **Rating became a band, not a floor.** Min and Max sit side by side: "3 to 4 stars" is now a thing you can ask for. Dragging one end past the other pushes the other along instead of leaving you with an empty grid and no explanation.
+- **An excluded tag hides the folder's clips too**, exactly when including it would have found them — the same "folder tags cover files" switch decides both directions, so filtering never disagrees with itself.
+- **A tag view wins over an old exclusion.** Clicking `iphone` in the sidebar while `iphone` was excluded shows the tag's files rather than an empty screen.
+
+**Source Folders filters too**
+
+- **Brands, tags and every custom column cycle the same three ways**, from the Filters menu or straight from the chips in the table.
+- **Excluded chips read as excluded** — struck through and in red, both in the table and in the row of active filters above it — so a filter that is removing rows never looks like one that is keeping them.
+- **Exclusions apply after everything else.** Matching one is enough to be gone, however many included values a folder also carries.
+
 ## v0.5.29 — 2026-08-17
 
 **⌘⏎ does the thing**
