@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.34 — 2026-08-18
+
+**Two things that only went wrong on Windows**
+
+- **Changing the downloads folder said "Access is denied. (os error 5)"** and changed nothing. Moving the folder moved *everything* in the old one — and the Windows default sits in Documents, so it was trying to drag your own subfolders across. Only files Stash put there move now, and one that will not move no longer takes the setting with it.
+- **A downloaded HEIC photo went blank on Windows.** Google's viewer was showing it, then downloading it replaced that with a broken image: Windows' webview cannot decode HEIC or TIFF at all. Those stay on Google's viewer there, and the downloaded file is still the full-quality original on disk.
+
 ## v0.5.33 — 2026-08-18
 
 **The same library, opened on Windows, shows its pictures**
