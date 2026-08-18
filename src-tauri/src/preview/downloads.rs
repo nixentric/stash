@@ -81,11 +81,16 @@ fn disk_error(dir: &Path, e: std::io::Error) -> AppError {
     ) {
         return AppError::Io(e.to_string());
     }
+    let grant = if cfg!(target_os = "macos") {
+        " — choosing it in the dialog is what grants access — or allow Stash under System \
+         Settings → Privacy & Security → Files and Folders"
+    } else {
+        " that you can write to"
+    };
     AppError::Invalid(format!(
-        "Stash is not allowed to write to {}. Pick a downloads folder in Settings → Library — \
-         choosing it in the dialog is what grants access — or allow Stash under System Settings → \
-         Privacy & Security → Files and Folders.",
-        dir.display()
+        "Stash is not allowed to write to {}. Pick a downloads folder in Settings → Library{}.",
+        dir.display(),
+        grant
     ))
 }
 
@@ -114,6 +119,14 @@ fn id_from_name(name: &str) -> Option<i64> {
         return None;
     }
     name.split_once('-')?.0.parse::<i64>().ok()
+}
+
+/// A file this folder owns: a download, finished or in flight.
+fn is_download(name: &str) -> bool {
+    id_from_name(name).is_some()
+        || name
+            .strip_suffix(".part")
+            .is_some_and(|n| id_from_name(n).is_some())
 }
 
 /// Every footage id that has a downloaded original, from one directory read.
@@ -263,12 +276,26 @@ pub fn set_dir(state: &AppState, new_dir: &Path) -> Result<()> {
     std::fs::create_dir_all(new_dir).map_err(|e| disk_error(new_dir, e))?;
 
     if old.exists() && old != new_dir {
-        for entry in std::fs::read_dir(&old)?.flatten() {
-            let to = new_dir.join(entry.file_name());
+        // Best effort throughout: an old folder that cannot be read, or a file
+        // that will not move, must not block the setting the user changed.
+        for entry in std::fs::read_dir(&old).into_iter().flatten().flatten() {
+            // Only our own downloads move. The old folder is often a folder the
+            // user also keeps their own things in — Documents, say — and
+            // dragging those along (or failing on a subfolder we cannot copy)
+            // is not something changing a setting should do.
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if !is_download(name) || !entry.file_type().is_ok_and(|t| t.is_file()) {
+                continue;
+            }
+            let to = new_dir.join(name);
             // Rename is instant on the same volume; across volumes it fails and
-            // the copy is the only way over.
-            if std::fs::rename(entry.path(), &to).is_err() {
-                std::fs::copy(entry.path(), &to)?;
+            // the copy is the only way over. A file that refuses to move is
+            // left where it is and re-downloaded on demand — the preference is
+            // what the user asked to change.
+            if std::fs::rename(entry.path(), &to).is_err()
+                && std::fs::copy(entry.path(), &to).is_ok()
+            {
                 let _ = std::fs::remove_file(entry.path());
             }
         }
@@ -294,6 +321,16 @@ mod tests {
         assert_eq!(id_from_name("12-photo.jpg.part"), None);
         assert_eq!(id_from_name("notes.txt"), None);
         assert_eq!(id_from_name(".DS_Store"), None);
+    }
+
+    #[test]
+    fn only_our_own_downloads_are_carried_to_a_new_folder() {
+        assert!(is_download("12-photo.jpg"));
+        assert!(is_download("12-photo.jpg.part"));
+        // Whatever else lives in the folder the user pointed us at stays put.
+        assert!(!is_download("Tax return.pdf"));
+        assert!(!is_download("desktop.ini"));
+        assert!(!is_download("My Music"));
     }
 
     #[test]

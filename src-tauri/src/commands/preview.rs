@@ -100,9 +100,20 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
             _ => false,
         };
 
+    // A still this webview cannot decode is not a preview, downloaded or not:
+    // WebView2 renders neither HEIC nor TIFF, so serving the local copy would
+    // trade Google's working embed for a broken image.
+    let showable = media_type != MediaType::Image
+        || preview::scheme::is_web_still(
+            src.original_filename
+                .as_deref()
+                .or(src.local_path.as_deref())
+                .unwrap_or_default(),
+        );
+
     let (kind, url, reason) = match src.provider.as_str() {
         // The original is already here. Nothing remote is worth asking for.
-        _ if downloaded => (served_kind, Some(preview::scheme::url("media", id)), None),
+        _ if downloaded && showable => (served_kind, Some(preview::scheme::url("media", id)), None),
 
         // Local files stream straight off disk through the same scheme handler.
         "local" => (served_kind, Some(preview::scheme::url("media", id)), None),

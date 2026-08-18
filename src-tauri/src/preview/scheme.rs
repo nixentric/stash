@@ -77,10 +77,19 @@ fn ext_mime(name: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether an `<img>` can decode this still at all. A DNG or PSD cannot, and
-/// that is a fact about the format, not a failure worth retrying.
+/// Whether *this* platform's webview can decode the still. A DNG or PSD cannot
+/// be decoded anywhere, and that is a fact about the format, not a failure
+/// worth retrying.
+///
+/// WKWebView decodes whatever macOS decodes — HEIC and TIFF included. WebView2
+/// is Chromium and decodes neither, so a downloaded iPhone photo is a broken
+/// image on Windows where Google's embed was rendering it a moment earlier.
 pub fn is_web_still(name: &str) -> bool {
-    ext_mime(name).is_some()
+    match ext_mime(name) {
+        Some("image/heic" | "image/tiff") => cfg!(target_os = "macos"),
+        Some(_) => true,
+        None => false,
+    }
 }
 
 /// `("media" | "thumb", footage_id)`.
@@ -386,6 +395,20 @@ mod tests {
         assert_eq!(MediaType::from_mime_or_name(None, name), MediaType::Image);
         assert_eq!(ext_mime(name), Some("image/jpeg"));
         assert_eq!(ext_mime("/Clips/a.mov"), None);
+    }
+
+    /// HEIC and TIFF decode in WKWebView and nowhere else. Getting this wrong
+    /// on Windows turned a working Drive embed into a broken image the moment
+    /// the file was downloaded.
+    #[test]
+    fn only_macos_claims_to_decode_heic_and_tiff() {
+        assert!(is_web_still("IMG_0011.JPG"));
+        assert!(is_web_still("shot.png"));
+        assert_eq!(is_web_still("IMG_0011.HEIC"), cfg!(target_os = "macos"));
+        assert_eq!(is_web_still("scan.tiff"), cfg!(target_os = "macos"));
+        // No webview decodes these, on any platform.
+        assert!(!is_web_still("raw.dng"));
+        assert!(!is_web_still("layers.psd"));
     }
 
     #[test]
