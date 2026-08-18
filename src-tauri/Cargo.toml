@@ -46,9 +46,18 @@ keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+# HEIC is HEVC inside a HEIF box. No Rust decoder handles it and WebView2 will
+# not either, so an iPhone library was a wall of broken images on Windows.
+# macOS is deliberately absent below: WKWebView decodes HEIC natively, and
+# leaving libheif out keeps its HEVC plugin out of the .app.
+libheif-rs = { version = "2.7", default-features = false, features = ["v1_17"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service"] }
+# Built from the crate's own sources rather than the distro's: Ubuntu 22.04 —
+# the oldest glibc we still ship for — carries libheif 1.12 and this needs
+# 1.17. HEVC comes from the system libde265 it is linked against.
+libheif-rs = { version = "2.7", default-features = false, features = ["v1_17", "embedded-libheif"] }
 
 [features]
 default = ["custom-protocol"]
@@ -60,3 +69,13 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# vcpkg builds libheif and its HEVC decoder into the exe on Windows, so the
+# installer stays a single file with no DLLs to lose.
+[package.metadata.vcpkg]
+git = "https://github.com/microsoft/vcpkg"
+tag = "2026.07.29"
+dependencies = ["libheif[hevc]"]
+
+[package.metadata.vcpkg.target]
+x86_64-pc-windows-msvc = { triplet = "x64-windows-static-md", dependencies = ["libheif[hevc]"] }

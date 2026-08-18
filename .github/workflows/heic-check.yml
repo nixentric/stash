@@ -1,0 +1,62 @@
+# Throwaway check for the libheif wiring: the Windows and Linux builds are the
+# only ones that compile it, and neither can be tried on a Mac. Runs on the
+# `heic` branch and on demand — not on main, and not on tags.
+name: HEIC build check
+
+on:
+  push:
+    branches: ["heic"]
+  workflow_dispatch:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libglib2.0-dev libgtk-3-dev \
+            cmake libde265-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Cache the vcpkg build
+        if: matrix.platform == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target/vcpkg
+          key: vcpkg-libheif-${{ runner.os }}-2026.07.29
+
+      - name: Build libheif with vcpkg
+        if: matrix.platform == 'windows-latest'
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-vcpkg --locked
+          cargo vcpkg -v build
+
+      # generate_context! embeds the built frontend, so it has to exist before
+      # the Rust side will compile at all.
+      - run: npm ci
+      - run: npm run build
+
+      - name: Compile the app, tests included
+        working-directory: src-tauri
+        run: cargo test --no-run

@@ -77,18 +77,23 @@ fn ext_mime(name: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether *this* platform's webview can decode the still. A DNG or PSD cannot
-/// be decoded anywhere, and that is a fact about the format, not a failure
-/// worth retrying.
-///
-/// WKWebView decodes whatever macOS decodes — HEIC and TIFF included. WebView2
-/// is Chromium and decodes neither, so a downloaded iPhone photo is a broken
-/// image on Windows where Google's embed was rendering it a moment earlier.
+/// Whether an `<img>` can be shown this still at all — natively or after the
+/// app converts it. A DNG or PSD can be neither, and that is a fact about the
+/// format, not a failure worth retrying.
 pub fn is_web_still(name: &str) -> bool {
+    ext_mime(name).is_some()
+}
+
+/// Whether *this* webview decodes the format as it sits on disk.
+///
+/// WKWebView decodes whatever macOS decodes, HEIC and TIFF included. WebView2
+/// and WebKitGTK are Chromium- and WebKit-on-Linux-shaped and decode neither,
+/// so those two get a JPEG made from the same pixels instead of the original
+/// bytes. Everything else is served untouched on every platform.
+fn native_still(name: &str) -> bool {
     match ext_mime(name) {
         Some("image/heic" | "image/tiff") => cfg!(target_os = "macos"),
-        Some(_) => true,
-        None => false,
+        _ => true,
     }
 }
 
@@ -195,6 +200,41 @@ fn serve_file(
     Ok(partial(buf, r.start, r.end, total, mime))
 }
 
+/// A file from disk, converted first if this webview cannot read it as it is.
+///
+/// The conversion is what makes a downloaded iPhone photo visible on Windows
+/// and Linux. If it fails — a HEVC variant libheif will not touch, a corrupt
+/// file — the stored thumbnail stands in, because a small picture of the right
+/// photo beats a broken image icon.
+fn serve_still(
+    state: &AppState,
+    footage_id: i64,
+    path: &std::path::Path,
+    still: bool,
+    mime: &str,
+    range_header: Option<&str>,
+) -> Result<Response<Vec<u8>>> {
+    if !still || native_still(&path.to_string_lossy()) {
+        return serve_file(path, still, mime, range_header);
+    }
+
+    let converted = std::fs::read(path).map_err(AppError::from).and_then(|raw| {
+        crate::preview::encode::to_web_still(&raw)
+    });
+    match converted {
+        Ok(bytes) => Ok(Response::builder()
+            .status(200)
+            .header("Content-Type", "image/jpeg")
+            .header("Content-Length", bytes.len().to_string())
+            .body(bytes)
+            .unwrap_or_else(|_| Response::new(Vec::new()))),
+        Err(e) => {
+            log::warn!("could not convert {} for the webview: {e}", path.display());
+            serve_thumb(state, footage_id)
+        }
+    }
+}
+
 async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) -> Result<Response<Vec<u8>>> {
     let src = state.with_library(|lib| footage_repo::get_source(&lib.conn, footage_id))?;
 
@@ -206,6 +246,7 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
         .or_else(|| src.original_filename.clone())
         .unwrap_or_default();
     let still = MediaType::from_mime_or_name(src.mime_type.as_deref(), &name) == MediaType::Image;
+
     let mime = src
         .mime_type
         .clone()
@@ -216,7 +257,7 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
     // A downloaded original outranks every remote route: it is already here, it
     // needs no account, and it is the whole file rather than a preview of it.
     if let Some(path) = crate::preview::downloads::find(state, footage_id) {
-        return serve_file(&path, still, &mime, range_header.as_deref());
+        return serve_still(state, footage_id, &path, still, &mime, range_header.as_deref());
     }
 
     match src.provider.as_str() {
@@ -225,7 +266,14 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
                 .local_path
                 .clone()
                 .ok_or_else(|| AppError::NotFound("No file path".into()))?;
-            serve_file(std::path::Path::new(&path), still, &mime, range_header.as_deref())
+            serve_still(
+                state,
+                footage_id,
+                std::path::Path::new(&path),
+                still,
+                &mime,
+                range_header.as_deref(),
+            )
         }
 
         "google_drive" => {

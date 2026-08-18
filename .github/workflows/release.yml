@@ -34,7 +34,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libglib2.0-dev libgtk-3-dev
+            librsvg2-dev patchelf libglib2.0-dev libgtk-3-dev \
+            cmake libde265-dev
 
       - uses: actions/setup-node@v4
         with:
@@ -48,6 +49,24 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+
+      # libheif decodes the HEIC that WebView2 cannot. On Windows it comes from
+      # vcpkg and is linked into the exe; building it from source takes half an
+      # hour, so the built tree is cached on the vcpkg tag rather than rebuilt
+      # every release.
+      - name: Cache the vcpkg build
+        if: matrix.platform == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target/vcpkg
+          key: vcpkg-libheif-${{ runner.os }}-2026.07.29
+
+      - name: Build libheif with vcpkg
+        if: matrix.platform == 'windows-latest'
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-vcpkg --locked
+          cargo vcpkg -v build
 
       - run: npm ci
 
