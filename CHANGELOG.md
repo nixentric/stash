@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.36 — 2026-08-18
+
+- Windows and Linux now use Google Sans Flex for the interface, self-hosted so
+  nothing is fetched at runtime. macOS keeps San Francisco, which is what
+  belongs there.
+- Settings → License credits the typefaces too, with their versions.
+
 ## v0.5.35 — 2026-08-18
 
 **iPhone photos, visible on Windows and Linux**
