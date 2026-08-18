@@ -4862,5 +4862,21 @@
       "url": "https://github.com/strukturag/libde265",
       "note": "The HEVC decoder libheif hands the actual pixels to."
     }
+  ],
+  "fonts": [
+    {
+      "name": "Google Sans Flex",
+      "version": "v22",
+      "license": "OFL-1.1",
+      "url": "https://fonts.google.com/specimen/Google+Sans+Flex",
+      "note": "The interface typeface on Windows and Linux."
+    },
+    {
+      "name": "Special Gothic Expanded One",
+      "version": "v2",
+      "license": "OFL-1.1",
+      "url": "https://fonts.google.com/specimen/Special+Gothic+Expanded+One",
+      "note": "The wordmark."
+    }
   ]
 }

@@ -19,6 +19,14 @@
           ? "oklch(0.168 0.005 265)"
           : "oklch(0.994 0 0)";
       } catch {}
+
+      // San Francisco is the right typeface on macOS and nowhere else. Rather
+      // than trusting three different webviews to agree on which of
+      // `-apple-system` / `ui-sans-serif` / `system-ui` resolves to what, the
+      // platform is asked once, here, before anything paints.
+      if (!/Mac OS X/.test(navigator.userAgent)) {
+        document.documentElement.dataset.font = "flex";
+      }
     </script>
   </head>
   <body>

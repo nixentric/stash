@@ -344,6 +344,11 @@ function LicensePane() {
         items={licenses.native}
       />
       <LicenseList
+        title="Fonts"
+        hint="Self-hosted rather than fetched, so the app still makes no network request of its own."
+        items={licenses.fonts}
+      />
+      <LicenseList
         title="Rust crates"
         hint="What the app itself is written against."
         items={licenses.rust.direct}

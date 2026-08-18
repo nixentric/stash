@@ -122,15 +122,37 @@ const native = [
   },
 ];
 
+// Typefaces, self-hosted as woff2 so the app makes no network request of its
+// own. Versions are Google Fonts' own revision numbers, taken from the path
+// the file was fetched from.
+const fonts = [
+  {
+    name: "Google Sans Flex",
+    version: "v22",
+    license: "OFL-1.1",
+    url: "https://fonts.google.com/specimen/Google+Sans+Flex",
+    note: "The interface typeface on Windows and Linux.",
+  },
+  {
+    name: "Special Gothic Expanded One",
+    version: "v2",
+    license: "OFL-1.1",
+    url: "https://fonts.google.com/specimen/Special+Gothic+Expanded+One",
+    note: "The wordmark.",
+  },
+];
+
 const out = {
   // Generated file — edit scripts/licenses.mjs, not this.
   rust: rustDeps(),
   node: nodeDeps(),
   native,
+  fonts,
 };
 
 writeFileSync(join(root, "src/lib/licenses.json"), JSON.stringify(out, null, 2) + "\n");
 console.log(
   `licenses.json: ${out.rust.direct.length}+${out.rust.rest.length} crates, ` +
-    `${out.node.direct.length}+${out.node.rest.length} packages, ${native.length} native libraries`,
+    `${out.node.direct.length}+${out.node.rest.length} packages, ` +
+    `${native.length} native libraries, ${fonts.length} fonts`,
 );
