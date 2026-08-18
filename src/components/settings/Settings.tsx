@@ -343,54 +343,98 @@ function LicensePane() {
         hint="Shipped inside the Windows and Linux builds. macOS decodes HEIC on its own and carries neither."
         items={licenses.native}
       />
-      <LicenseList title="Rust crates" items={licenses.rust} />
-      <LicenseList title="Web packages" items={licenses.node} />
+      <LicenseList
+        title="Rust crates"
+        hint="What the app itself is written against."
+        items={licenses.rust.direct}
+        rest={licenses.rust.rest}
+      />
+      <LicenseList
+        title="Web packages"
+        hint="The interface, and everything that builds it."
+        items={licenses.node.direct}
+        rest={licenses.node.rest}
+      />
     </Pane>
   );
 }
 
+type Credit = { name: string; version: string; license: string; url: string; note?: string };
+
+/**
+ * The named dependencies, with the rest of the tree folded behind a disclosure.
+ *
+ * A `<details>` rather than a state flag: the browser already knows how to open
+ * and close one, and six hundred rows should not be in the DOM until someone
+ * actually asks to see them.
+ */
 function LicenseList({
   title,
   hint,
   items,
+  rest,
 }: {
   title: string;
   hint?: string;
-  items: { name: string; version: string; license: string; url: string; note?: string }[];
+  items: Credit[];
+  rest?: Credit[];
 }) {
+  const total = items.length + (rest?.length ?? 0);
+
   return (
     <div className="flex flex-col gap-2">
       <div>
         <p className="text-[12.5px] font-medium">
-          {title} <span className="text-subtle-foreground">· {items.length}</span>
+          {title} <span className="text-subtle-foreground">· {total}</span>
         </p>
         {hint && <p className="mt-0.5 text-[11.5px] text-subtle-foreground">{hint}</p>}
       </div>
 
       <div className="overflow-hidden rounded-md border border-border">
         {items.map((it, i) => (
-          <button
-            key={`${it.name}@${it.version}`}
-            type="button"
-            onClick={() => ipc.openExternal(it.url).catch(reportError)}
-            title={it.url}
-            className={cn(
-              "group flex w-full items-baseline gap-2 px-3 py-1.5 text-left outline-none",
-              "hover:bg-accent/60 focus-visible:bg-accent/60",
-              i > 0 && "hairline-t",
-            )}
-          >
-            <span className="shrink-0 text-[12px] font-medium">{it.name}</span>
-            <span className="tnum shrink-0 text-[11.5px] text-subtle-foreground">{it.version}</span>
-            {it.note && (
-              <span className="truncate text-[11.5px] text-muted-foreground">{it.note}</span>
-            )}
-            <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{it.license}</span>
-            <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-50" />
-          </button>
+          <CreditRow key={`${it.name}@${it.version}`} it={it} first={i === 0} />
         ))}
+
+        {rest && rest.length > 0 && (
+          <details className="group/details">
+            <summary
+              className={cn(
+                "flex cursor-pointer list-none items-center gap-1.5 px-3 py-1.5",
+                "text-[11.5px] text-muted-foreground hover:bg-accent/60",
+                items.length > 0 && "hairline-t",
+              )}
+            >
+              <ChevronRight className="size-3 transition-transform group-open/details:rotate-90" />
+              {rest.length} more in the tree, pulled in by the ones above
+            </summary>
+            {rest.map((it) => (
+              <CreditRow key={`${it.name}@${it.version}`} it={it} />
+            ))}
+          </details>
+        )}
       </div>
     </div>
+  );
+}
+
+function CreditRow({ it, first }: { it: Credit; first?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => ipc.openExternal(it.url).catch(reportError)}
+      title={it.url}
+      className={cn(
+        "group flex w-full items-baseline gap-2 px-3 py-1.5 text-left outline-none",
+        "hover:bg-accent/60 focus-visible:bg-accent/60",
+        !first && "hairline-t",
+      )}
+    >
+      <span className="shrink-0 text-[12px] font-medium">{it.name}</span>
+      <span className="tnum shrink-0 text-[11.5px] text-subtle-foreground">{it.version}</span>
+      {it.note && <span className="truncate text-[11.5px] text-muted-foreground">{it.note}</span>}
+      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{it.license}</span>
+      <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-50" />
+    </button>
   );
 }
 

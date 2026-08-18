@@ -1,15 +1,16 @@
 // Regenerates src/lib/licenses.json — the list Settings → License shows.
 //
-// Direct dependencies only. The transitive tree is thousands of crates and
-// packages, and a list nobody can read credits nobody; what is here is what
-// Stash actually chose to depend on, with the version it is built against.
+// Everything, not just the direct dependencies: a crate three levels down is
+// still someone's work that Stash is built on. The ones Stash names itself are
+// separated out, because that is the shorter and more useful list to read
+// first — the rest of the tree is behind a disclosure.
 //
 //   npm run licenses
 //
 // Run it whenever a dependency is added, removed, or bumped.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -44,33 +45,61 @@ function rustDeps() {
       .map((d) => d.pkg),
   );
 
-  return meta.packages
-    .filter((p) => direct.has(p.id))
-    .map((p) => ({
-      name: p.name,
-      version: p.version,
-      license: p.license ?? "see repository",
-      url: tidyUrl(p.repository) ?? `https://crates.io/crates/${p.name}`,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const entry = (p) => ({
+    name: p.name,
+    version: p.version,
+    license: p.license ?? "see repository",
+    url: tidyUrl(p.repository) ?? `https://crates.io/crates/${p.name}`,
+  });
+
+  const all = meta.packages.filter((p) => p.id !== meta.resolve.root);
+  return {
+    direct: all.filter((p) => direct.has(p.id)).map(entry).sort(byName),
+    rest: all.filter((p) => !direct.has(p.id)).map(entry).sort(byName),
+  };
 }
 
+const byName = (a, b) => a.name.localeCompare(b.name);
+
 function nodeDeps() {
+  const modules = join(root, "node_modules");
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-  return Object.keys(pkg.dependencies ?? {})
-    .map((name) => {
-      const manifest = join(root, "node_modules", name, "package.json");
-      if (!existsSync(manifest)) return null;
-      const m = JSON.parse(readFileSync(manifest, "utf8"));
-      return {
-        name,
-        version: m.version,
-        license: typeof m.license === "string" ? m.license : (m.license?.type ?? "see repository"),
-        url: tidyUrl(m.repository?.url ?? m.repository) ?? `https://npmjs.com/package/${name}`,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const direct = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+  ]);
+
+  const read = (name) => {
+    const manifest = join(modules, name, "package.json");
+    if (!existsSync(manifest)) return null;
+    const m = JSON.parse(readFileSync(manifest, "utf8"));
+    if (!m.name || !m.version) return null;
+    return {
+      name,
+      version: m.version,
+      license: typeof m.license === "string" ? m.license : (m.license?.type ?? "see repository"),
+      url: tidyUrl(m.repository?.url ?? m.repository) ?? `https://npmjs.com/package/${name}`,
+    };
+  };
+
+  // Everything installed, not just what package.json names: the build tooling
+  // and every package it pulled in are as much a part of this app as the
+  // libraries that ship inside it.
+  const installed = [];
+  for (const dir of readdirSync(modules)) {
+    if (dir.startsWith(".")) continue;
+    if (dir.startsWith("@")) {
+      for (const sub of readdirSync(join(modules, dir))) installed.push(`${dir}/${sub}`);
+    } else {
+      installed.push(dir);
+    }
+  }
+
+  const entries = installed.map(read).filter(Boolean);
+  return {
+    direct: entries.filter((e) => direct.has(e.name)).sort(byName),
+    rest: entries.filter((e) => !direct.has(e.name)).sort(byName),
+  };
 }
 
 // C libraries, which no package manifest in this repo lists. Their versions are
@@ -102,5 +131,6 @@ const out = {
 
 writeFileSync(join(root, "src/lib/licenses.json"), JSON.stringify(out, null, 2) + "\n");
 console.log(
-  `licenses.json: ${out.rust.length} crates, ${out.node.length} packages, ${native.length} native libraries`,
+  `licenses.json: ${out.rust.direct.length}+${out.rust.rest.length} crates, ` +
+    `${out.node.direct.length}+${out.node.rest.length} packages, ${native.length} native libraries`,
 );
