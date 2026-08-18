@@ -453,18 +453,24 @@ mod tests {
         assert_eq!(ext_mime("/Clips/a.mov"), None);
     }
 
-    /// HEIC and TIFF decode in WKWebView and nowhere else. Getting this wrong
-    /// on Windows turned a working Drive embed into a broken image the moment
-    /// the file was downloaded.
+    /// Every platform can *show* a HEIC — only one can show it without the app
+    /// converting it first. Confusing the two is what turned a working Drive
+    /// embed into a broken image on Windows the moment the file was downloaded.
     #[test]
-    fn only_macos_claims_to_decode_heic_and_tiff() {
-        assert!(is_web_still("IMG_0011.JPG"));
-        assert!(is_web_still("shot.png"));
-        assert_eq!(is_web_still("IMG_0011.HEIC"), cfg!(target_os = "macos"));
-        assert_eq!(is_web_still("scan.tiff"), cfg!(target_os = "macos"));
-        // No webview decodes these, on any platform.
+    fn heic_and_tiff_are_showable_everywhere_but_native_only_on_macos() {
+        for name in ["IMG_0011.JPG", "shot.png", "IMG_0011.HEIC", "scan.tiff"] {
+            assert!(is_web_still(name), "{name} should be showable");
+        }
+        // Nothing converts these, so no webview can be given them at all.
         assert!(!is_web_still("raw.dng"));
         assert!(!is_web_still("layers.psd"));
+
+        // Served untouched everywhere.
+        assert!(native_still("IMG_0011.JPG"));
+        assert!(native_still("shot.png"));
+        // Converted first, unless the webview is WKWebView.
+        assert_eq!(native_still("IMG_0011.HEIC"), cfg!(target_os = "macos"));
+        assert_eq!(native_still("scan.tiff"), cfg!(target_os = "macos"));
     }
 
     #[test]
