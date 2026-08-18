@@ -75,6 +75,18 @@ pub fn decode(_source: &[u8]) -> Result<image::DynamicImage> {
 mod tests {
     use super::*;
 
+    /// The real thing, end to end. This is the check that catches a libheif
+    /// built without its HEVC decoder — a build that compiles, links, and then
+    /// cannot open a single iPhone photo.
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn a_real_iphone_style_heic_decodes_to_pixels() {
+        let raw = include_bytes!("../../tests/fixtures/sample.heic");
+        assert!(is_heic(raw));
+        let img = decode(raw).expect("libheif has no HEVC decoder in this build");
+        assert!(img.width() > 100 && img.height() > 100);
+    }
+
     #[test]
     fn heif_brands_are_recognized_and_nothing_else_is() {
         let mut heic = b"\0\0\0\x18ftypheic".to_vec();

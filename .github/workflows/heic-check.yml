@@ -57,6 +57,8 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Compile the app, tests included
+      # Not just "does it compile": the HEIC fixture has to actually decode,
+      # which is the only way to catch a libheif linked without HEVC.
+      - name: Compile and run the tests
         working-directory: src-tauri
-        run: cargo test --no-run
+        run: cargo test --lib

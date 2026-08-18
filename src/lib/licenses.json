@@ -1,0 +1,376 @@
+{
+  "rust": [
+    {
+      "name": "base64",
+      "version": "0.22.1",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/marshallpierce/rust-base64"
+    },
+    {
+      "name": "chrono",
+      "version": "0.4.45",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/chronotope/chrono"
+    },
+    {
+      "name": "fontdb",
+      "version": "0.23.0",
+      "license": "MIT",
+      "url": "https://github.com/RazrFalcon/fontdb"
+    },
+    {
+      "name": "image",
+      "version": "0.25.10",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/image-rs/image"
+    },
+    {
+      "name": "keyring",
+      "version": "3.6.3",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/hwchen/keyring-rs"
+    },
+    {
+      "name": "libheif-rs",
+      "version": "2.7.0",
+      "license": "MIT",
+      "url": "https://github.com/Cykooz/libheif-rs"
+    },
+    {
+      "name": "log",
+      "version": "0.4.33",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/rust-lang/log"
+    },
+    {
+      "name": "rand",
+      "version": "0.9.5",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/rust-random/rand"
+    },
+    {
+      "name": "reqwest",
+      "version": "0.12.28",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/seanmonstar/reqwest"
+    },
+    {
+      "name": "resvg",
+      "version": "0.45.1",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/linebender/resvg"
+    },
+    {
+      "name": "rusqlite",
+      "version": "0.37.0",
+      "license": "MIT",
+      "url": "https://github.com/rusqlite/rusqlite"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/serde-rs/serde"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.151",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/serde-rs/json"
+    },
+    {
+      "name": "sha2",
+      "version": "0.10.9",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/RustCrypto/hashes"
+    },
+    {
+      "name": "tauri",
+      "version": "2.11.5",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/tauri-apps/tauri"
+    },
+    {
+      "name": "tauri-plugin-dialog",
+      "version": "2.7.2",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "tauri-plugin-opener",
+      "version": "2.5.4",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "tauri-plugin-process",
+      "version": "2.3.1",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "tauri-plugin-updater",
+      "version": "2.10.1",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "thiserror",
+      "version": "2.0.20",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/dtolnay/thiserror"
+    },
+    {
+      "name": "tokio",
+      "version": "1.53.1",
+      "license": "MIT",
+      "url": "https://github.com/tokio-rs/tokio"
+    },
+    {
+      "name": "url",
+      "version": "2.5.8",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/servo/rust-url"
+    }
+  ],
+  "node": [
+    {
+      "name": "@dnd-kit/core",
+      "version": "6.3.1",
+      "license": "MIT",
+      "url": "https://github.com/clauderic/dnd-kit"
+    },
+    {
+      "name": "@dnd-kit/sortable",
+      "version": "10.0.0",
+      "license": "MIT",
+      "url": "https://github.com/clauderic/dnd-kit"
+    },
+    {
+      "name": "@dnd-kit/utilities",
+      "version": "3.2.2",
+      "license": "MIT",
+      "url": "https://github.com/clauderic/dnd-kit"
+    },
+    {
+      "name": "@radix-ui/react-checkbox",
+      "version": "1.3.11",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-context-menu",
+      "version": "2.3.7",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-dialog",
+      "version": "1.1.23",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-dropdown-menu",
+      "version": "2.1.24",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-label",
+      "version": "2.1.15",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-popover",
+      "version": "1.1.23",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-scroll-area",
+      "version": "1.2.18",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-select",
+      "version": "2.3.7",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-separator",
+      "version": "1.1.15",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-slot",
+      "version": "1.3.3",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-switch",
+      "version": "1.3.7",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-tabs",
+      "version": "1.1.21",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-toggle-group",
+      "version": "1.1.19",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@radix-ui/react-tooltip",
+      "version": "1.2.16",
+      "license": "MIT",
+      "url": "https://github.com/radix-ui/primitives"
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "5.101.4",
+      "license": "MIT",
+      "url": "https://github.com/TanStack/query"
+    },
+    {
+      "name": "@tanstack/react-virtual",
+      "version": "3.14.9",
+      "license": "MIT",
+      "url": "https://github.com/TanStack/virtual"
+    },
+    {
+      "name": "@tauri-apps/api",
+      "version": "2.11.1",
+      "license": "Apache-2.0 OR MIT",
+      "url": "https://github.com/tauri-apps/tauri"
+    },
+    {
+      "name": "@tauri-apps/plugin-dialog",
+      "version": "2.7.2",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "@tauri-apps/plugin-opener",
+      "version": "2.5.4",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "@tauri-apps/plugin-process",
+      "version": "2.3.1",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "@tauri-apps/plugin-updater",
+      "version": "2.10.1",
+      "license": "MIT OR Apache-2.0",
+      "url": "https://github.com/tauri-apps/plugins-workspace"
+    },
+    {
+      "name": "@tiptap/extension-link",
+      "version": "3.30.1",
+      "license": "MIT",
+      "url": "https://github.com/ueberdosis/tiptap"
+    },
+    {
+      "name": "@tiptap/pm",
+      "version": "3.30.1",
+      "license": "MIT",
+      "url": "https://github.com/ueberdosis/tiptap"
+    },
+    {
+      "name": "@tiptap/react",
+      "version": "3.30.1",
+      "license": "MIT",
+      "url": "https://github.com/ueberdosis/tiptap"
+    },
+    {
+      "name": "@tiptap/starter-kit",
+      "version": "3.30.1",
+      "license": "MIT",
+      "url": "https://github.com/ueberdosis/tiptap"
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "0.7.1",
+      "license": "Apache-2.0",
+      "url": "https://github.com/joe-bell/cva"
+    },
+    {
+      "name": "clsx",
+      "version": "2.1.1",
+      "license": "MIT",
+      "url": "lukeed/clsx"
+    },
+    {
+      "name": "lucide-react",
+      "version": "1.31.0",
+      "license": "ISC",
+      "url": "https://github.com/lucide-icons/lucide"
+    },
+    {
+      "name": "matter-js",
+      "version": "0.20.0",
+      "license": "MIT",
+      "url": "https://github.com/liabru/matter-js"
+    },
+    {
+      "name": "react",
+      "version": "19.2.8",
+      "license": "MIT",
+      "url": "https://github.com/react/react"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.8",
+      "license": "MIT",
+      "url": "https://github.com/react/react"
+    },
+    {
+      "name": "sonner",
+      "version": "2.0.8",
+      "license": "MIT",
+      "url": "https://github.com/emilkowalski/sonner"
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "3.6.0",
+      "license": "MIT",
+      "url": "https://github.com/dcastil/tailwind-merge"
+    },
+    {
+      "name": "zustand",
+      "version": "5.0.15",
+      "license": "MIT",
+      "url": "https://github.com/pmndrs/zustand"
+    }
+  ],
+  "native": [
+    {
+      "name": "libheif",
+      "version": "1.23",
+      "license": "LGPL-2.1-or-later",
+      "url": "https://github.com/strukturag/libheif",
+      "note": "Decodes the HEIC photos those two webviews cannot."
+    },
+    {
+      "name": "libde265",
+      "version": "1.0",
+      "license": "LGPL-3.0-or-later",
+      "url": "https://github.com/strukturag/libde265",
+      "note": "The HEVC decoder libheif hands the actual pixels to."
+    }
+  ]
+}

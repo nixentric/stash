@@ -33,6 +33,7 @@ import { bytes } from "@/lib/format";
 import { ipc } from "@/lib/ipc";
 import { invalidateLibrary, keys, reportError, useGoogleStatus, usePrefs } from "@/hooks/queries";
 import { applyTheme } from "@/lib/theme";
+import licenses from "@/lib/licenses.json";
 import { emptyQuery } from "@/lib/types";
 import { ADD_FOOTAGE_TABS } from "@/components/dialogs/AddFootageDialog";
 import type { GoogleStatus, PortableThumbnailSize, Theme } from "@/lib/types";
@@ -42,7 +43,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { thumbsChanged } from "@/lib/thumbs";
 import { pendingPlatform, pendingUpdateNote } from "@/lib/updates";
 
-type Pane = "general" | "appearance" | "library" | "preview" | "integrations" | "support";
+type Pane = "general" | "appearance" | "library" | "preview" | "integrations" | "license" | "support";
 
 export function Settings({
   open,
@@ -69,6 +70,7 @@ export function Settings({
               ["library", "Library"],
               ["preview", "Preview"],
               ["integrations", "Integrations"],
+              ["license", "License"],
               // The one item that asks for something rather than configuring
               // something, so it carries a mark to set it apart from the rest.
               ["support", "Support"],
@@ -98,6 +100,7 @@ export function Settings({
           {pane === "library" && <LibraryPane />}
           {pane === "preview" && <PreviewPane />}
           {pane === "integrations" && <IntegrationsPane />}
+          {pane === "license" && <LicensePane />}
           {pane === "support" && <SupportPane />}
         </div>
       </DialogContent>
@@ -294,6 +297,103 @@ function GeneralPane() {
  * allowed the one loud button in the app — Ko-fi's own red rather than the
  * app's primary, because it is a link out to Ko-fi, not a Stash action.
  */
+/**
+ * Who else built this.
+ *
+ * Direct dependencies only, with the version Stash is actually built against —
+ * the full transitive tree runs to thousands of names, and a list nobody reads
+ * credits nobody. libheif and libde265 are listed apart because they are C
+ * libraries under the LGPL: that licence asks for the notice, and they are the
+ * reason iPhone photos show up on Windows and Linux at all.
+ */
+function LicensePane() {
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(console.error);
+  }, []);
+
+  return (
+    <Pane title="License">
+      <div className="rounded-md border border-border bg-muted/40 p-3">
+        <p className="text-[12.5px] font-medium">
+          Stash {version ?? "…"} — MIT
+        </p>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+          Yours to use, change, and pass on. The source is all there, and so is everything below:
+          Stash is mostly other people's work, held together. Thank you to everyone who wrote a
+          line of it — this app would not exist without you.
+        </p>
+        <button
+          type="button"
+          onClick={() =>
+            ipc.openExternal("https://github.com/nixentric/stash/blob/main/LICENSE").catch(reportError)
+          }
+          className="mt-2 flex items-center gap-1.5 text-[12px] font-medium text-foreground
+                     underline-offset-2 outline-none hover:underline
+                     focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          Read the license
+          <ExternalLink className="size-3" />
+        </button>
+      </div>
+
+      <LicenseList
+        title="Bundled libraries"
+        hint="Shipped inside the Windows and Linux builds. macOS decodes HEIC on its own and carries neither."
+        items={licenses.native}
+      />
+      <LicenseList title="Rust crates" items={licenses.rust} />
+      <LicenseList title="Web packages" items={licenses.node} />
+    </Pane>
+  );
+}
+
+function LicenseList({
+  title,
+  hint,
+  items,
+}: {
+  title: string;
+  hint?: string;
+  items: { name: string; version: string; license: string; url: string; note?: string }[];
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <p className="text-[12.5px] font-medium">
+          {title} <span className="text-subtle-foreground">· {items.length}</span>
+        </p>
+        {hint && <p className="mt-0.5 text-[11.5px] text-subtle-foreground">{hint}</p>}
+      </div>
+
+      <div className="overflow-hidden rounded-md border border-border">
+        {items.map((it, i) => (
+          <button
+            key={`${it.name}@${it.version}`}
+            type="button"
+            onClick={() => ipc.openExternal(it.url).catch(reportError)}
+            title={it.url}
+            className={cn(
+              "group flex w-full items-baseline gap-2 px-3 py-1.5 text-left outline-none",
+              "hover:bg-accent/60 focus-visible:bg-accent/60",
+              i > 0 && "hairline-t",
+            )}
+          >
+            <span className="shrink-0 text-[12px] font-medium">{it.name}</span>
+            <span className="tnum shrink-0 text-[11.5px] text-subtle-foreground">{it.version}</span>
+            {it.note && (
+              <span className="truncate text-[11.5px] text-muted-foreground">{it.note}</span>
+            )}
+            <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{it.license}</span>
+            <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-50" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SupportPane() {
   return (
     <Pane title="Support Stash">
