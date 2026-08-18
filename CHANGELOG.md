@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.35 — 2026-08-18
+
+**iPhone photos, visible on Windows and Linux**
+
+- **HEIC now opens everywhere.** A HEIC is HEVC in a HEIF box: macOS decodes it, Windows and Linux never have, and the app was handing their webviews a file they could do nothing with — worst right after downloading one, which swapped Google's working preview for a broken image. Stash decodes it itself now, and shows the picture.
+- **Full resolution, nothing cropped or shrunk.** The photo is converted for display only; the .HEIC on disk is untouched, exactly as it came off the phone.
+- **Local HEIC files get thumbnails too** on those two platforms, not just the ones from Drive.
+- **Settings → License** lists everything Stash is built from — every direct dependency, the version it is actually built against, its licence, and a link to its source. Two of them, libheif and libde265, are the reason the point above works.
+
 ## v0.5.34 — 2026-08-18
 
 **Two things that only went wrong on Windows**

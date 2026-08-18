@@ -204,6 +204,21 @@ pub fn cached(source: &[u8]) -> Result<Encoded> {
     })
 }
 
+/// The same picture, in something the webview will actually decode.
+///
+/// Full resolution and no size cap beyond the input guard: this is the file the
+/// user opened, not a thumbnail of it. Quality 95 is the top of the useful
+/// range — above it the file doubles and nothing on a screen changes — and the
+/// HEIC on disk is untouched either way, so nothing about the original is lost.
+pub fn to_web_still(source: &[u8]) -> Result<Vec<u8>> {
+    if source.len() > MAX_SOURCE_BYTES {
+        return Err(AppError::Other("Image is too large to process".into()));
+    }
+    // ponytail: transcoded per request. A 12 MP HEIC is ~0.5 s; cache it next to
+    // the preview cache if reopening the same photo ever feels slow.
+    encode_jpeg(&decode(source, u32::MAX)?, 95)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,19 +350,4 @@ mod tests {
         assert!(c.width > p.width);
         assert_eq!(c.width.max(c.height), CACHE_MAX_EDGE);
     }
-}
-
-/// The same picture, in something the webview will actually decode.
-///
-/// Full resolution and no size cap beyond the input guard: this is the file the
-/// user opened, not a thumbnail of it. Quality 95 is the top of the useful
-/// range — above it the file doubles and nothing on a screen changes — and the
-/// HEIC on disk is untouched either way, so nothing about the original is lost.
-pub fn to_web_still(source: &[u8]) -> Result<Vec<u8>> {
-    if source.len() > MAX_SOURCE_BYTES {
-        return Err(AppError::Other("Image is too large to process".into()));
-    }
-    // ponytail: transcoded per request. A 12 MP HEIC is ~0.5 s; cache it next to
-    // the preview cache if reopening the same photo ever feels slow.
-    encode_jpeg(&decode(source, u32::MAX)?, 95)
 }

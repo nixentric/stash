@@ -206,7 +206,7 @@ fn serve_file(
 /// and Linux. If it fails — a HEVC variant libheif will not touch, a corrupt
 /// file — the stored thumbnail stands in, because a small picture of the right
 /// photo beats a broken image icon.
-fn serve_still(
+async fn serve_still(
     state: &AppState,
     footage_id: i64,
     path: &std::path::Path,
@@ -218,9 +218,16 @@ fn serve_still(
         return serve_file(path, still, mime, range_header);
     }
 
-    let converted = std::fs::read(path).map_err(AppError::from).and_then(|raw| {
+    // Decoding a 12 MP photo is a second of pure CPU. On the async runtime's
+    // own thread that second is a second of every other IPC call waiting.
+    let owned = path.to_path_buf();
+    let converted = tauri::async_runtime::spawn_blocking(move || {
+        let raw = std::fs::read(&owned).map_err(AppError::from)?;
         crate::preview::encode::to_web_still(&raw)
-    });
+    })
+    .await
+    .map_err(|e| AppError::Other(format!("Preview conversion did not finish: {e}")))?;
+
     match converted {
         Ok(bytes) => Ok(Response::builder()
             .status(200)
@@ -257,7 +264,7 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
     // A downloaded original outranks every remote route: it is already here, it
     // needs no account, and it is the whole file rather than a preview of it.
     if let Some(path) = crate::preview::downloads::find(state, footage_id) {
-        return serve_still(state, footage_id, &path, still, &mime, range_header.as_deref());
+        return serve_still(state, footage_id, &path, still, &mime, range_header.as_deref()).await;
     }
 
     match src.provider.as_str() {
@@ -274,6 +281,7 @@ async fn serve(state: &AppState, footage_id: i64, range_header: Option<String>) 
                 &mime,
                 range_header.as_deref(),
             )
+            .await
         }
 
         "google_drive" => {
