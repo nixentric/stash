@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.33 — 2026-08-18
+
+**The same library, opened on Windows, shows its pictures**
+
+- **Thumbnails were blank on Windows and fine on macOS**, from the identical `.footagedb` file. The pictures were in the file the whole time — the app was asking for them at an address Windows' webview does not answer.
+- **Previews and video playback had the same problem**, for the same reason: everything served by the app's own `stash://` handler.
+- **Nothing to migrate, nothing to re-sync.** Update on the Windows machine and the library you already have draws itself.
+
 ## v0.5.32 — 2026-08-17
 
 **Download a whole selection, as a queue**
