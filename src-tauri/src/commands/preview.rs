@@ -102,10 +102,10 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
 
     let (kind, url, reason) = match src.provider.as_str() {
         // The original is already here. Nothing remote is worth asking for.
-        _ if downloaded => (served_kind, Some(format!("stash://media/{id}")), None),
+        _ if downloaded => (served_kind, Some(preview::scheme::url("media", id)), None),
 
         // Local files stream straight off disk through the same scheme handler.
-        "local" => (served_kind, Some(format!("stash://media/{id}")), None),
+        "local" => (served_kind, Some(preview::scheme::url("media", id)), None),
 
         // Drive stills go through Google's own viewer rather than our scheme.
         // Fetching a still means buffering the whole file before one pixel
@@ -124,7 +124,7 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
 
         // Connected: authenticated ranged streaming. Nothing is downloaded
         // beyond the bytes the player asks for.
-        "google_drive" if connected => (served_kind, Some(format!("stash://media/{id}")), None),
+        "google_drive" if connected => (served_kind, Some(preview::scheme::url("media", id)), None),
 
         // Link mode: Google's own published embed. Works only for files shared
         // as "Anyone with the link", which is why it is best-effort and why the

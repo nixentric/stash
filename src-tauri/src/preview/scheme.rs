@@ -96,6 +96,20 @@ fn route_from(request: &Request<Vec<u8>>) -> Option<(String, i64)> {
     Some((back.next()?.to_string(), id))
 }
 
+/// The URL the *webview* must use to reach the scheme handler.
+///
+/// WKWebView answers `stash://`; WebView2 does not — on Windows Tauri serves the
+/// same handler at `http://stash.localhost/…`. Handing a Windows webview a
+/// `stash://` URL is a broken image, which is what a library opened on a second
+/// machine looked like.
+pub fn url(kind: &str, footage_id: i64) -> String {
+    if cfg!(windows) {
+        format!("http://stash.localhost/{kind}/{footage_id}")
+    } else {
+        format!("stash://{kind}/{footage_id}")
+    }
+}
+
 /// The portable thumbnail, straight from the library file.
 ///
 /// Serving it here rather than as a base64 data URL through IPC is what keeps a
@@ -313,6 +327,14 @@ pub fn handle<R: tauri::Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn both_platform_urls_route_back_to_kind_and_id() {
+        for u in ["stash://thumb/12", "http://stash.localhost/thumb/12?v=3"] {
+            let req = Request::builder().uri(u).body(Vec::new()).unwrap();
+            assert_eq!(route_from(&req), Some(("thumb".into(), 12)));
+        }
+    }
 
     #[test]
     fn absent_range_serves_a_bounded_opening_chunk() {

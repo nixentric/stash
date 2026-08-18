@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { ipc } from "@/lib/ipc";
 import { keys } from "./queries";
 import { subscribeThumbs, thumbGeneration } from "@/lib/thumbs";
@@ -98,7 +99,7 @@ export function useThumbSrc(id: number, enabled: boolean) {
   return {
     src:
       enabled && !missing && !broken
-        ? `stash://thumb/${id}${gen + version ? `?v=${gen + version}` : ""}`
+        ? `${convertFileSrc("thumb", "stash")}/${id}${gen + version ? `?v=${gen + version}` : ""}`
         : undefined,
     missing,
     generating,
