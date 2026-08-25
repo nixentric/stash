@@ -208,6 +208,26 @@ fn local_state(path: &str) -> Accessibility {
     }
 }
 
+/// One source, checked, as it happens.
+///
+/// A folder of five hundred files takes as long as five hundred round trips,
+/// and a spinner for the whole of it says nothing. This is emitted per file so
+/// the dialog can count down and, more to the point, name a broken file the
+/// moment it is found instead of at the end (§27).
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncItem {
+    /// So the dialog can offer to stop the run it is watching.
+    pub job_id: String,
+    pub done: u64,
+    pub total: u64,
+    pub footage_id: i64,
+    /// The name on screen, not the filename at the source.
+    pub name: String,
+    /// This one came back gone. The dialog lists it right away.
+    pub gone: bool,
+}
+
 /// Metadata-only synchronization (§31, §8).
 ///
 /// Never transfers file content. Never touches user metadata — a file renamed in
@@ -223,13 +243,17 @@ pub async fn sync_library(
     state: State<'_, AppState>,
     ids: Option<Vec<i64>>,
 ) -> Result<SyncReport> {
-    let targets: Vec<(i64, String, Option<String>, Option<String>)> = state.with_library(|lib| {
-        let sql = "SELECT footage_id, provider, external_id, local_path FROM sources
-                   WHERE (provider = 'google_drive' AND external_id IS NOT NULL)
-                      OR (provider = 'local' AND local_path IS NOT NULL)";
+    let targets: Vec<(i64, String, Option<String>, Option<String>, String)> = state
+        .with_library(|lib| {
+        let sql = "SELECT s.footage_id, s.provider, s.external_id, s.local_path, f.display_name
+                     FROM sources s JOIN footages f ON f.id = s.footage_id
+                    WHERE (s.provider = 'google_drive' AND s.external_id IS NOT NULL)
+                       OR (s.provider = 'local' AND s.local_path IS NOT NULL)";
         let mut stmt = lib.conn.prepare(sql)?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+            .query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     })?;
@@ -254,7 +278,17 @@ pub async fn sync_library(
     let total = targets.len() as u64;
     let mut report = SyncReport::default();
 
-    let progress = |done: u64| {
+    // ponytail: every file up to 200, then every eighth. A local folder of
+    // thousands answers in microseconds and would otherwise be a re-render per
+    // file; over the network the round trip is the pace and nothing is skipped.
+    // A broken file is never throttled — being seen at once is the whole point.
+    // Drop this if the readout ever needs an exact live count.
+    let chatty = total <= 200;
+
+    // The window's own bar reads `job:progress`, the dialog reads `sync:item`.
+    // One tick feeds both, so they cannot drift apart — the dialog just hears
+    // from it less often.
+    let tick = |done: u64, footage_id: i64, name: &str, gone: bool| {
         let _ = app.emit(
             "job:progress",
             JobProgress {
@@ -265,14 +299,29 @@ pub async fn sync_library(
                 message: None,
             },
         );
+        if !(gone || chatty || done % 8 == 0 || done == total) {
+            return;
+        }
+        let _ = app.emit(
+            "sync:item",
+            SyncItem {
+                job_id: job_id.clone(),
+                done,
+                total,
+                footage_id,
+                name: name.to_string(),
+                gone,
+            },
+        );
     };
 
-    for (footage_id, provider, external_id, local_path) in targets {
+    for (footage_id, provider, external_id, local_path, name) in targets {
         if token.is_cancelled() {
             report.cancelled = true;
             break;
         }
         report.checked += 1;
+        let mut gone = false;
 
         if provider == "local" {
             let state_now = local_state(local_path.as_deref().unwrap_or_default());
@@ -280,12 +329,15 @@ pub async fn sync_library(
                 footage_repo::set_accessibility(&lib.conn, footage_id, state_now)
             })?;
             match state_now {
-                Accessibility::SourceMissing => report.missing_ids.push(footage_id),
+                Accessibility::SourceMissing => {
+                    report.missing_ids.push(footage_id);
+                    gone = true;
+                }
                 Accessibility::Available => report.updated += 1,
                 // The volume is not there to ask. Not gone, not fine.
                 _ => report.failed += 1,
             }
-            progress(report.checked);
+            tick(report.checked, footage_id, &name, gone);
             continue;
         }
 
@@ -300,6 +352,7 @@ pub async fn sync_library(
                     )
                 })?;
                 report.missing_ids.push(footage_id);
+                gone = true;
             }
             Ok(file) => {
                 let (width, height) = file.dimensions();
@@ -356,6 +409,7 @@ pub async fn sync_library(
                     )
                 })?;
                 report.missing_ids.push(footage_id);
+                gone = true;
             }
             Err(AppError::PermissionRequired) => {
                 state.with_library(|lib| {
@@ -373,7 +427,7 @@ pub async fn sync_library(
             }
         }
 
-        progress(report.checked);
+        tick(report.checked, footage_id, &name, gone);
     }
 
     state.jobs.finish(&job_id);

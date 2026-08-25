@@ -530,6 +530,19 @@ export interface SyncReport {
   cancelled: boolean;
 }
 
+/** One source, checked, as it happens. Emitted as `sync:item` during a check. */
+export interface SyncItem {
+  /** So a dialog watching the run can offer to stop it. */
+  jobId: string;
+  done: number;
+  total: number;
+  footageId: number;
+  /** The name on screen, not the filename at the source. */
+  name: string;
+  /** This one came back gone. */
+  gone: boolean;
+}
+
 export interface JobProgress {
   jobId: string;
   phase: "scanning" | "importing" | "thumbnails" | "syncing" | "done" | "cancelled" | "error";
