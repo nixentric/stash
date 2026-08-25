@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.39 — 2026-08-26
+
+- Check Source now shows its work: a progress bar with the file it is on, and
+  broken files listed the moment they are found rather than all at once at the
+  end. On a folder of hundreds that is the difference between watching and
+  waiting.
+- A check can be stopped part-way. Everything it learned up to that point is
+  kept, and the files it found are still there to act on.
+
 ## v0.5.38 — 2026-08-25
 
 - Fixed: files that are perfectly fine were being filed as gone. A RAW or PSD

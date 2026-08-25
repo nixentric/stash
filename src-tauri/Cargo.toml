@@ -1,6 +1,6 @@
 [package]
 name = "stash"
-version = "0.5.38"
+version = "0.5.39"
 description = "Portable visual footage catalog"
 edition = "2021"
 license = "MIT"
