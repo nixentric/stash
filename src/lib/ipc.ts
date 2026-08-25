@@ -92,6 +92,11 @@ export const ipc = {
   clearThumbnail: (id: number) => invoke<void>("clear_thumbnail", { id }),
   downloadOriginal: (id: number) => invoke<string>("download_original", { id }),
   downloadedIds: () => invoke<number[]>("downloaded_ids"),
+  /** Deletes downloaded originals only. The library records are left alone. */
+  deleteDownloads: (ids: number[]) => invoke<number>("delete_downloads", { ids }),
+  /** Renames downloaded originals out of the id namespace, so keeping one after
+      its record goes away cannot hand it to the next import. */
+  releaseDownloads: (ids: number[]) => invoke<number>("release_downloads", { ids }),
   previewFailure: (id: number) => invoke<string>("preview_failure", { id }),
   downloadDir: () => invoke<string>("download_dir"),
   setDownloadDir: (path: string) => invoke<string>("set_download_dir", { path }),

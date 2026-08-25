@@ -184,7 +184,9 @@ pub struct SyncReport {
     pub updated: u64,
     pub renamed: u64,
     pub moved: u64,
-    pub missing: u64,
+    /// The ones an authenticated lookup says are gone — ids, not a count, so
+    /// the caller can offer to remove exactly those (§23).
+    pub missing_ids: Vec<i64>,
     pub failed: u64,
     pub cancelled: bool,
 }
@@ -243,7 +245,7 @@ pub async fn sync_library(
                         Accessibility::SourceMissing,
                     )
                 })?;
-                report.missing += 1;
+                report.missing_ids.push(footage_id);
             }
             Ok(file) => {
                 let (width, height) = file.dimensions();
@@ -299,7 +301,7 @@ pub async fn sync_library(
                         Accessibility::SourceMissing,
                     )
                 })?;
-                report.missing += 1;
+                report.missing_ids.push(footage_id);
             }
             Err(AppError::PermissionRequired) => {
                 state.with_library(|lib| {

@@ -121,12 +121,14 @@ fn id_from_name(name: &str) -> Option<i64> {
     name.split_once('-')?.0.parse::<i64>().ok()
 }
 
+/// The footage id a file in this folder belongs to, finished or in flight.
+fn owner_id(name: &str) -> Option<i64> {
+    id_from_name(name).or_else(|| id_from_name(name.strip_suffix(".part")?))
+}
+
 /// A file this folder owns: a download, finished or in flight.
 fn is_download(name: &str) -> bool {
-    id_from_name(name).is_some()
-        || name
-            .strip_suffix(".part")
-            .is_some_and(|n| id_from_name(n).is_some())
+    owner_id(name).is_some()
 }
 
 /// Every footage id that has a downloaded original, from one directory read.
@@ -142,6 +144,101 @@ pub fn downloaded_ids(state: &AppState) -> Vec<i64> {
         .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
         .filter_map(|e| id_from_name(&e.file_name().into_string().ok()?))
         .collect()
+}
+
+/// Deletes the downloaded copies of these footage.
+///
+/// Kept apart from removing the records on purpose: a record comes back with
+/// Undo, a deleted file does not. Nothing calls this without asking first.
+/// Returns how many files actually went.
+pub fn delete(state: &AppState, ids: &[i64]) -> usize {
+    dir(state).map(|d| delete_in(&d, ids)).unwrap_or(0)
+}
+
+fn delete_in(dir: &Path, ids: &[i64]) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .and_then(owner_id)
+                .is_some_and(|id| ids.contains(&id))
+        })
+        .filter(|e| std::fs::remove_file(e.path()).is_ok())
+        .count()
+}
+
+/// Hands the downloaded copies to the user, under plain names.
+///
+/// The id in front of the filename is the only link between a file here and a
+/// record, and SQLite hands a deleted id straight back to the next import. A
+/// kept download would then be served as some other footage's original, which
+/// is a wrong picture, not a missing one. Renaming it out of the id namespace
+/// is what "keep the file" has to mean. Returns how many were renamed.
+pub fn release(state: &AppState, ids: &[i64]) -> usize {
+    dir(state).map(|d| release_in(&d, ids)).unwrap_or(0)
+}
+
+fn release_in(dir: &Path, ids: &[i64]) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut n = 0;
+    for entry in entries.flatten() {
+        if !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !owner_id(name).is_some_and(|id| ids.contains(&id)) {
+            continue;
+        }
+        // A half-finished download is not a copy of anything. Handing the user
+        // a truncated file under a plain name would be worse than the landmine.
+        if name.ends_with(".part") {
+            let _ = std::fs::remove_file(entry.path());
+            continue;
+        }
+        // Everything after the first dash is the name Drive gave it.
+        let Some(plain) = name.split_once('-').map(|(_, rest)| rest) else {
+            continue;
+        };
+        // `12-2024-shoot.mp4` would come out as `2024-shoot.mp4` and land right
+        // back in the id namespace, owned by footage 2024. Trading one wrong
+        // owner for another is not releasing anything, so break the pattern.
+        let plain = if owner_id(plain).is_some() {
+            format!("_{plain}")
+        } else {
+            plain.to_string()
+        };
+        if let Some(free) = free_name(dir, &plain) {
+            if std::fs::rename(entry.path(), &free).is_ok() {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+/// `photo.jpg`, or `photo (2).jpg` when that is taken. `None` if the folder is
+/// somehow full of them — the file is then left where it is rather than
+/// overwriting something the user has.
+fn free_name(dir: &Path, plain: &str) -> Option<PathBuf> {
+    let candidate = dir.join(plain);
+    if !candidate.exists() {
+        return Some(candidate);
+    }
+    let (stem, ext) = match plain.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s, format!(".{e}")),
+        _ => (plain, String::new()),
+    };
+    (2..100)
+        .map(|i| dir.join(format!("{stem} ({i}){ext}")))
+        .find(|p| !p.exists())
 }
 
 /// Downloads the original to disk, reporting progress as it goes.
@@ -331,6 +428,86 @@ mod tests {
         assert!(!is_download("Tax return.pdf"));
         assert!(!is_download("desktop.ini"));
         assert!(!is_download("My Music"));
+    }
+
+    #[test]
+    fn deleting_a_download_takes_the_part_file_and_leaves_the_neighbours() {
+        let dir = std::env::temp_dir().join(format!("stash-dl-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["12-photo.jpg", "12-photo.jpg.part", "13-keep.jpg", "Tax return.pdf"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+
+        assert_eq!(delete_in(&dir, &[12]), 2, "the file and its .part");
+        assert!(!dir.join("12-photo.jpg").exists());
+        assert!(!dir.join("12-photo.jpg.part").exists());
+        // Another footage's download, and whatever else lives here, stay put.
+        assert!(dir.join("13-keep.jpg").exists());
+        assert!(dir.join("Tax return.pdf").exists());
+
+        // Nothing to delete is not a failure.
+        assert_eq!(delete_in(&dir, &[99]), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_kept_download_stops_answering_to_its_old_id() {
+        let dir = std::env::temp_dir().join(format!("stash-rel-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("42-photo.jpg"), b"x").unwrap();
+        std::fs::write(dir.join("43-shoot.mp4"), b"x").unwrap();
+        std::fs::write(dir.join("42-photo.jpg.part"), b"half").unwrap();
+        // Already taken by something the user put there.
+        std::fs::write(dir.join("shoot.mp4"), b"other").unwrap();
+
+        assert_eq!(release_in(&dir, &[42, 43]), 2);
+        assert!(dir.join("photo.jpg").exists());
+        // The name was taken, so the file steps aside instead of overwriting.
+        assert_eq!(std::fs::read(dir.join("shoot.mp4")).unwrap(), b"other");
+        assert!(dir.join("shoot (2).mp4").exists());
+        // And neither is claimable by a re-used id any more.
+        assert!(!dir.join("42-photo.jpg").exists());
+        // A truncated download is dropped rather than handed over.
+        assert!(!dir.join("42-photo.jpg.part").exists());
+        assert!(!dir.join("photo.jpg.part").exists());
+        assert_eq!(owner_id("photo.jpg"), None);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_recycled_id_is_not_handed_the_previous_owners_download() {
+        // What `import_footage` guards against: footage 12 was removed, its
+        // download stayed behind, and SQLite handed 12 to the next import.
+        let dir = std::env::temp_dir().join(format!("stash-reuse-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("12-old-owner.jpg"), b"old").unwrap();
+        // A Drive name that is itself id-shaped, so releasing it naively would
+        // hand it to footage 2024 instead.
+        std::fs::write(dir.join("12-2024-shoot.mp4"), b"clip").unwrap();
+        std::fs::write(dir.join("13-untouched.jpg"), b"other").unwrap();
+
+        // The ids the import was just given.
+        assert_eq!(release_in(&dir, &[12]), 2);
+
+        // Nothing left in the folder answers to 12, so the new footage
+        // downloads its own original instead of showing the old one.
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let name = entry.file_name().into_string().unwrap();
+            assert_ne!(owner_id(&name), Some(12), "{name} still belongs to 12");
+        }
+        // The previous owner's files are still there, under names the user can
+        // find, because a removed record is not a reason to delete a download.
+        assert_eq!(std::fs::read(dir.join("old-owner.jpg")).unwrap(), b"old");
+        // And neither was re-homed onto some *other* live id on the way out.
+        assert_eq!(owner_id("old-owner.jpg"), None);
+        assert_eq!(std::fs::read(dir.join("_2024-shoot.mp4")).unwrap(), b"clip");
+        assert_eq!(owner_id("_2024-shoot.mp4"), None);
+
+        // An id nobody recycled keeps its download linked.
+        assert!(dir.join("13-untouched.jpg").exists());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

@@ -373,9 +373,9 @@ export function Toolbar({
                 const r = await ipc.syncLibrary(null);
                 invalidateLibrary(qc);
                 toast.success(
-                  `Synced ${r.checked} · ${r.renamed} renamed · ${r.missing} missing`,
+                  `Synced ${r.checked} · ${r.renamed} renamed · ${r.missingIds.length} missing`,
                   // A count with no way to reach the files is a dead end.
-                  r.missing > 0
+                  r.missingIds.length > 0
                     ? {
                         action: {
                           label: "Show them",

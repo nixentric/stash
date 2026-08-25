@@ -131,6 +131,8 @@ pub fn run() {
             commands::preview::clear_thumbnail,
             commands::preview::download_original,
             commands::preview::downloaded_ids,
+            commands::preview::delete_downloads,
+            commands::preview::release_downloads,
             commands::preview::preview_failure,
             commands::preview::download_dir,
             commands::preview::set_download_dir,

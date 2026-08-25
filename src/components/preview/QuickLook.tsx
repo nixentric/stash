@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FolderOpen,
   HardDriveDownload,
+  Unplug,
   Trash2,
   X,
 } from "lucide-react";
@@ -180,6 +181,7 @@ export function QuickLook({
               kind={t?.kind}
               url={t?.url}
               poster={thumb.data ?? undefined}
+              reason={t?.reason}
               downloadable={t?.downloadable ?? false}
               onDownload={download.start}
               downloadError={download.error}
@@ -358,6 +360,7 @@ function Stage({
   kind,
   url,
   poster,
+  reason,
   downloadable,
   onDownload,
   downloadError,
@@ -366,10 +369,18 @@ function Stage({
   kind: string | undefined;
   url: string | null | undefined;
   poster?: string;
+  reason?: string | null;
   downloadable: boolean;
   onDownload: () => void;
   downloadError: string | null;
 }) {
+  // The source is gone and the backend says so. The embed would only render
+  // Google's own error page, and the thumbnail here is the last picture of
+  // this file anywhere — keep showing it, and say what happened.
+  if (kind === "gone" && poster) {
+    return <Gone poster={poster} reason={reason} />;
+  }
+
   if (!kind || !url) {
     return (
       <Unavailable
@@ -480,6 +491,32 @@ function ImageStage({
           downloadError={downloadError}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * A file whose source is gone, shown as the preview that outlived it.
+ *
+ * Nothing here offers a retry: only an authenticated 404 sets this state, and
+ * the way back is "Check Source" in the context menu, which can also clear the
+ * record out. The picture stays because the catalog is still worth reading —
+ * tags, notes and usage history did not disappear with the file (§32).
+ */
+function Gone({ poster, reason }: { poster: string; reason?: string | null }) {
+  return (
+    <div className="flex h-full min-h-0 max-w-3xl flex-col items-center justify-center gap-3">
+      <img
+        src={poster}
+        alt=""
+        className="min-h-0 max-w-full flex-1 rounded-md object-contain opacity-60 grayscale"
+      />
+      <div className="flex shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 py-2">
+        <Unplug className="size-4 shrink-0 text-muted-foreground" />
+        <p className="text-[12px] leading-relaxed text-subtle-foreground">
+          {reason ?? "This file is gone from the source."}
+        </p>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   Heart,
   Image,
   Trash2,
+  Unplug,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -35,6 +36,10 @@ import { keys, reportError, useCollections, useFootageAction, useProjects } from
 import { useUi } from "@/store/ui";
 import { MarkUsedDialog } from "@/components/dialogs/MarkUsedDialog";
 import { TagPromptDialog } from "@/components/dialogs/TagPromptDialog";
+import {
+  SourceCheckDialog,
+  type SourceCheckScope,
+} from "@/components/dialogs/SourceCheckDialog";
 import { cn } from "@/lib/utils";
 import type { FootageListItem } from "@/lib/types";
 
@@ -70,6 +75,7 @@ export function FootageContextMenu({
   const projects = useProjects(true);
   const [markUsedOpen, setMarkUsedOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
+  const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [open, setOpen] = useState(false);
 
   const ids = selection;
@@ -273,6 +279,21 @@ export function FootageContextMenu({
               )}
 
               <ContextMenuSeparator />
+              {/* Asks the source itself, rather than reading anything into a
+                  blank preview: a private file and a deleted one look the same
+                  from outside, and only a signed-in lookup tells them apart. */}
+              <ContextMenuItem
+                onSelect={() =>
+                  setChecking({
+                    ids,
+                    label: ids.length === 1 ? "this file" : `${count(ids.length)} files`,
+                  })
+                }
+              >
+                <Unplug />
+                Check {ids.length === 1 ? "Source" : `${count(ids.length)} Sources`}…
+              </ContextMenuItem>
+
               <ContextMenuItem
                 destructive
                 // Wording matters and lives with the action: this is a catalog,
@@ -294,6 +315,7 @@ export function FootageContextMenu({
         projects={projects.data ?? []}
       />
       <TagPromptDialog open={tagOpen} onOpenChange={setTagOpen} ids={ids} />
+      <SourceCheckDialog scope={checking} onClose={() => setChecking(null)} />
     </>
   );
 }

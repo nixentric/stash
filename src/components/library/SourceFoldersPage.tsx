@@ -15,6 +15,7 @@ import {
   Plus,
   Settings,
   Trash2,
+  Unplug,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,10 @@ import {
   type TriState,
 } from "@/components/ui/menu";
 import { PromptDialog } from "@/components/dialogs/PromptDialog";
+import {
+  SourceCheckDialog,
+  type SourceCheckScope,
+} from "@/components/dialogs/SourceCheckDialog";
 import {
   Dialog,
   DialogBody,
@@ -426,6 +431,7 @@ export function SourceFoldersPage() {
     }
   });
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
+  const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState<FolderNode | null>(null);
 
@@ -1905,6 +1911,19 @@ export function SourceFoldersPage() {
                     </ContextMenuItem>
                   )}
                   <ContextMenuSeparator />
+                  {/* The whole folder at once: one signed-in lookup per file,
+                      which is the only thing that can tell a deleted file from
+                      one the account simply cannot see. */}
+                  <ContextMenuItem
+                    onSelect={() =>
+                      setChecking({
+                        containerPath: folder.containerPath,
+                        label: folder.displayName ?? folder.containerPath,
+                      })
+                    }
+                  >
+                    <Unplug /> Check Sources...
+                  </ContextMenuItem>
                   <ContextMenuItem destructive onSelect={() => setDoomed(folder)}>
                     <Trash2 /> Delete Folder
                   </ContextMenuItem>
@@ -1972,6 +1991,8 @@ export function SourceFoldersPage() {
           }
         }}
       />
+
+      <SourceCheckDialog scope={checking} onClose={() => setChecking(null)} />
 
       <ManageColumnsDialog
         open={manageColumnsOpen}

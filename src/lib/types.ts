@@ -483,7 +483,7 @@ export interface ScanResult {
 
 /** How to render a preview. The UI switches on `kind` and nothing else. */
 export interface PlaybackTarget {
-  kind: "stream" | "embed" | "image" | "none";
+  kind: "stream" | "embed" | "image" | "gone" | "none";
   url: string | null;
   externalUrl: string | null;
   reason: string | null;
@@ -524,7 +524,8 @@ export interface SyncReport {
   updated: number;
   renamed: number;
   moved: number;
-  missing: number;
+  /** The ones an authenticated lookup says are gone, so the caller can act on them. */
+  missingIds: number[];
   failed: number;
   cancelled: boolean;
 }

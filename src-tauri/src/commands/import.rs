@@ -96,6 +96,20 @@ pub fn import_footage(state: State<'_, AppState>, items: Vec<NewFootage>) -> Res
         Ok(())
     })?;
 
+    // A brand new record cannot already have an original on disk, and
+    // `footages.id` is an `INTEGER PRIMARY KEY` without AUTOINCREMENT: SQLite
+    // hands a removed record's id straight back to the next import. Anything
+    // sitting under one of these ids belongs to the footage that used to be
+    // here, and would be served as this one's original — a wrong picture, not
+    // a missing one. This is the only place an id is allocated, so letting go
+    // of it here closes the hole for every way a download outlives its record.
+    //
+    // Deliberately not done in `remove_footage`: releasing there would cost
+    // Undo its property that a restored record comes back still linked to its
+    // download. The orphan is harmless until an id is reused, and that is
+    // right here. Outside `with_library_mut` — `release` takes the same lock.
+    crate::preview::downloads::release(&state, &outcome.imported);
+
     Ok(outcome)
 }
 

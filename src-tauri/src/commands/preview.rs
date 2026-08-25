@@ -1,4 +1,4 @@
-use crate::db::models::MediaType;
+use crate::db::models::{Accessibility, MediaType};
 use crate::db::repo::footage as footage_repo;
 use crate::error::{AppError, Result};
 use crate::gdrive::parse as gparse;
@@ -32,13 +32,13 @@ pub async fn refresh_thumbnail(
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackTarget {
-    /// "stream" | "embed" | "image" | "none"
+    /// "stream" | "embed" | "image" | "gone" | "none"
     pub kind: &'static str,
     /// Where to point `<video>`/`<img>`/`<iframe>`, when there is somewhere.
     pub url: Option<String>,
     /// Always offered as a fallback when the source has a web location.
     pub external_url: Option<String>,
-    /// Shown when `kind == "none"`. Plain language, no error codes.
+    /// Shown when `kind` is "none" or "gone". Plain language, no error codes.
     pub reason: Option<String>,
     /// True once the original is on disk — the preview is then the real file.
     pub downloaded: bool,
@@ -93,7 +93,12 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
                 .clone()
                 .filter(|p| std::path::Path::new(p).exists())
         });
+    // A source we already know is gone cannot be fetched, and offering the
+    // button anyway is a promise the network will break. The check in the
+    // context menu is what clears this again if the file comes back.
+    let gone = src.accessibility == Accessibility::SourceMissing.as_str();
     let downloadable = !downloaded
+        && !gone
         && match src.provider.as_str() {
             "google_drive" => src.external_id.is_some(),
             "url" => src.original_url.is_some(),
@@ -103,6 +108,20 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
     let (kind, url, reason) = match src.provider.as_str() {
         // The original is already here. Nothing remote is worth asking for.
         _ if downloaded => (served_kind, Some(preview::scheme::url("media", id)), None),
+
+        // Known gone, and no local copy. Google's embed would render its own
+        // "file does not exist" page and an authenticated fetch would 404, so
+        // hand the frontend the one thing that still works: the thumbnail
+        // already in the library. Only an authenticated 404 gets us here (§23).
+        _ if gone => (
+            "gone",
+            None,
+            Some(
+                "This file is gone from the source — deleted or moved to the trash. \
+                 What you see is the preview Stash kept."
+                    .to_string(),
+            ),
+        ),
 
         // Local files stream straight off disk through the same scheme handler.
         "local" => (served_kind, Some(preview::scheme::url("media", id)), None),
@@ -169,6 +188,26 @@ pub async fn download_original(
 ) -> Result<String> {
     let path = preview::downloads::fetch(&app, &state, id).await?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+/// Deletes the downloaded copies of these footage, leaving the records alone.
+///
+/// The other half of removing footage whose source is gone. Removing a record
+/// is undoable; deleting the file the user pulled down is not, so it is a
+/// separate call the UI only makes after asking (§32).
+#[tauri::command]
+pub fn delete_downloads(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize> {
+    Ok(preview::downloads::delete(&state, &ids))
+}
+
+/// Renames the downloaded copies so they stop belonging to these footage.
+///
+/// The "keep them" half of the same question. A file left under its old
+/// `{id}-name` would be handed to whichever import next gets that id back, so
+/// keeping it means letting go of it properly.
+#[tauri::command]
+pub fn release_downloads(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize> {
+    Ok(preview::downloads::release(&state, &ids))
 }
 
 /// Which footage already has its original on disk, for the grid's badge.
