@@ -3,6 +3,24 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.37 — 2026-08-25
+
+- **Check Source.** Right-click a file, a selection, or a whole source folder
+  and ask whether the originals are still there. Drive answers over the
+  network, catalogued local files answer from disk, and a folder check covers
+  everything beneath it. Only a signed-in lookup can tell a deleted file from
+  a private one, so that is the only thing Stash draws the conclusion from —
+  and a local path whose whole folder is missing reads as an unmounted volume,
+  not as a deletion.
+- Files that came back gone can be removed from the library in one go. If any
+  of them were downloaded, Stash asks first whether those copies go too, and
+  keeping them means keeping them: the record leaves, the file stays.
+- A file whose source is gone now shows the preview Stash kept, instead of
+  Google's own "file does not exist" page inside the preview window.
+- Fixed: a downloaded original left behind by a removed record could be handed
+  to the next import that was given the same id, which showed the wrong image
+  and revealed the wrong file in Finder.
+
 ## v0.5.36 — 2026-08-18
 
 - Windows and Linux now use Google Sans Flex for the interface, self-hosted so
