@@ -3,6 +3,18 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.38 — 2026-08-25
+
+- Fixed: files that are perfectly fine were being filed as gone. A RAW or PSD
+  in Drive, a video on a computer without ffmpeg, and a link whose server
+  answered 500 all came back as "Gone from the source" — counted in the missing
+  badge and offered up for removal, while sitting exactly where they belonged.
+  "No preview could be made" and "the file is not there" are now separate
+  answers, and only the second one concludes anything.
+- Fixed: a local file that really had been deleted was only recognized as gone
+  when a Google account happened to be connected. A path is on disk or it is
+  not — the filesystem does not need an account to be believed.
+
 ## v0.5.37 — 2026-08-25
 
 - **Check Source.** Right-click a file, a selection, or a whole source folder
