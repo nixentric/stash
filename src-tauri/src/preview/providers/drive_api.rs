@@ -60,13 +60,13 @@ impl PreviewProvider for DriveApiProvider {
             if !file.has_thumbnail {
                 // Drive has no rendition for this type. Not an error worth
                 // retrying — the user can set a thumbnail by hand.
-                return Err(AppError::NotFound(
+                return Err(AppError::NoPreview(
                     "Google Drive has no thumbnail for this file".into(),
                 ));
             }
 
             let link = file.thumbnail_link.ok_or_else(|| {
-                AppError::NotFound("Google Drive returned no thumbnail link".into())
+                AppError::NoPreview("Google Drive returned no thumbnail link".into())
             })?;
 
             // The link is short-lived (documented as "on the order of hours"), so

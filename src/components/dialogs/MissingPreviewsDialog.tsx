@@ -64,8 +64,9 @@ const BUCKETS: { key: Bucket; title: string; todo: string }[] = [
     key: "noPreview",
     title: "No preview could be made",
     todo:
-      "The source answered but nothing displayable came back — usually a RAW, PSD or other format " +
-      "no preview exists for. Open the file and set a thumbnail by hand from the Inspector.",
+      "The source answered and the file is still there — nothing displayable came back. Usually a " +
+      "RAW, PSD or other format no preview exists for, or a video on a machine without ffmpeg. " +
+      "Open the file and set a thumbnail by hand from the Inspector.",
   },
 ];
 

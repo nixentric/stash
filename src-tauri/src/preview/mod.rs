@@ -63,6 +63,37 @@ pub fn read(state: &AppState, footage_id: i64, large: bool) -> Result<Option<Str
     Ok(portable.as_deref().map(to_data_url))
 }
 
+/// What a provider chain's last failure says about the source itself.
+///
+/// The distinction everything else rests on: "I could not make a picture" is
+/// not "the file is gone". A RAW in Drive, a video on a machine without ffmpeg,
+/// a URL serving HTML — all three files are exactly where they were, and
+/// flagging them missing would offer to delete a live archive. Those arrive as
+/// `NoPreview` and conclude nothing.
+///
+/// `NotFound` is kept for the things that are evidence, and who may present it
+/// depends on the provider. A path either is on disk or is not, so the
+/// filesystem answers for itself. Drive does not: signed out, a private file
+/// answers exactly the way a deleted one does, so only a connected account's
+/// 404 counts. An HTTP source speaks for itself again — the provider only
+/// raises `NotFound` there for a 404 or a 410.
+fn conclude(err: Option<&AppError>, provider: &str, drive_connected: bool) -> Accessibility {
+    let may_say_gone = match provider {
+        "google_drive" => drive_connected,
+        _ => true,
+    };
+    match err {
+        Some(AppError::PermissionRequired) if drive_connected => Accessibility::PermissionRequired,
+        Some(AppError::PermissionRequired) => Accessibility::AuthenticationRequired,
+        Some(AppError::NotFound(_)) if may_say_gone => Accessibility::SourceMissing,
+        Some(AppError::Network(_)) => Accessibility::Offline,
+        Some(AppError::AuthExpired) => Accessibility::AuthenticationRequired,
+        // Including `NoPreview`, and including a Drive 404 nobody was signed in
+        // for: something is wrong, and it is not something we can name.
+        _ => Accessibility::Unknown,
+    }
+}
+
 /// Runs the provider chain and stores whatever it finds.
 ///
 /// Returns `false` when no provider could produce pixels — an ordinary outcome,
@@ -125,16 +156,8 @@ pub async fn refresh(state: &AppState, footage_id: i64, force: bool) -> Result<b
         }
     }
 
-    // Nothing worked. Record *why*, carefully — an anonymous failure is not
-    // evidence that a file is gone (§23).
-    let accessibility = match &last_error {
-        Some(AppError::PermissionRequired) if ctx.drive_connected => Accessibility::PermissionRequired,
-        Some(AppError::PermissionRequired) => Accessibility::AuthenticationRequired,
-        Some(AppError::NotFound(_)) if ctx.drive_connected => Accessibility::SourceMissing,
-        Some(AppError::Network(_)) => Accessibility::Offline,
-        Some(AppError::AuthExpired) => Accessibility::AuthenticationRequired,
-        _ => Accessibility::Unknown,
-    };
+    // Nothing worked. Record *why*, carefully (§23).
+    let accessibility = conclude(last_error.as_ref(), &src.provider, ctx.drive_connected);
     state.with_library(|lib| footage_repo::set_accessibility(&lib.conn, footage_id, accessibility))?;
     state.note_preview_failure(footage_id);
 
@@ -200,4 +223,56 @@ pub fn clear_custom(state: &AppState, footage_id: i64) -> Result<()> {
         state.cache.remove(&src.provider, &id);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_file_that_cannot_be_rendered_is_not_a_file_that_is_gone() {
+        // ffmpeg absent, a RAW in Drive, a URL serving HTML. Every one of these
+        // is sitting exactly where it belongs.
+        let no_preview = AppError::NoPreview("no rendition".into());
+        for provider in ["local", "google_drive", "url"] {
+            for connected in [true, false] {
+                assert_eq!(
+                    conclude(Some(&no_preview), provider, connected),
+                    Accessibility::Unknown,
+                    "{provider}, connected={connected}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_a_source_that_can_speak_for_itself_may_be_called_gone() {
+        let gone = AppError::NotFound("not there".into());
+
+        // The filesystem needs no account to be believed.
+        assert_eq!(conclude(Some(&gone), "local", false), Accessibility::SourceMissing);
+        // Nor does an HTTP 404 — the provider only raises this for 404 and 410.
+        assert_eq!(conclude(Some(&gone), "url", false), Accessibility::SourceMissing);
+
+        // Drive signed out cannot tell deleted from private, so it says nothing.
+        assert_eq!(conclude(Some(&gone), "google_drive", false), Accessibility::Unknown);
+        assert_eq!(
+            conclude(Some(&gone), "google_drive", true),
+            Accessibility::SourceMissing,
+        );
+    }
+
+    #[test]
+    fn a_refusal_reads_as_no_access_only_when_there_is_an_account_to_refuse() {
+        let denied = AppError::PermissionRequired;
+        assert_eq!(
+            conclude(Some(&denied), "google_drive", true),
+            Accessibility::PermissionRequired,
+        );
+        // Signed out, "no access" is just "nobody asked" — the fix is to connect.
+        assert_eq!(
+            conclude(Some(&denied), "google_drive", false),
+            Accessibility::AuthenticationRequired,
+        );
+    }
 }

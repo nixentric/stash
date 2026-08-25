@@ -34,6 +34,13 @@ pub enum AppError {
     #[error("{0}")]
     Invalid(String),
 
+    /// The source answered and is exactly where it should be — there is just no
+    /// picture to be had from it. A RAW in Drive, a video on a machine without
+    /// ffmpeg, a URL serving HTML. Kept apart from `NotFound` because the two
+    /// used to share it, and "no preview" read as "deleted" (§23).
+    #[error("{0}")]
+    NoPreview(String),
+
     #[error("Google Drive is not connected")]
     NotConnected,
 
@@ -70,6 +77,7 @@ impl AppError {
             Migration(_) => "migration",
             NotFound(_) => "not_found",
             Invalid(_) => "invalid",
+            NoPreview(_) => "no_preview",
             NotConnected => "not_connected",
             AuthExpired => "auth_expired",
             PermissionRequired => "permission_required",

@@ -34,7 +34,14 @@ impl PreviewProvider for HttpImageProvider {
 
             let resp = ctx.http.get(url).timeout(TIMEOUT).send().await?;
             if !resp.status().is_success() {
-                return Err(AppError::NotFound("Preview is unavailable".into()));
+                // 404 and 410 are the server saying the thing is not there.
+                // Anything else — 500, 403, a login wall — is the server having
+                // a bad day, and a bad day is not evidence that a file is gone.
+                let code = resp.status().as_u16();
+                return Err(match code {
+                    404 | 410 => AppError::NotFound("That address returns nothing".into()),
+                    _ => AppError::NoPreview(format!("The server answered {code}")),
+                });
             }
             let is_image = resp
                 .headers()
@@ -43,7 +50,7 @@ impl PreviewProvider for HttpImageProvider {
                 .map(|ct| ct.starts_with("image/"))
                 .unwrap_or(false);
             if !is_image {
-                return Err(AppError::NotFound("That URL is not an image".into()));
+                return Err(AppError::NoPreview("That URL is not an image".into()));
             }
 
             let bytes = resp.bytes().await?;

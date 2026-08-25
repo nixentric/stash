@@ -68,11 +68,13 @@ fn grab_video_frame(path: &Path) -> Result<Vec<u8>> {
         .stderr(Stdio::null())
         .output()
         .map_err(|_| {
-            AppError::NotFound("Install ffmpeg to generate video thumbnails, or set one manually".into())
+            AppError::NoPreview(
+                "Install ffmpeg to generate video thumbnails, or set one manually".into(),
+            )
         })?;
 
     if !out.status.success() || out.stdout.is_empty() {
-        return Err(AppError::NotFound("Could not read a frame from this video".into()));
+        return Err(AppError::NoPreview("Could not read a frame from this video".into()));
     }
     Ok(out.stdout)
 }
