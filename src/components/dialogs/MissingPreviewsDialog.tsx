@@ -56,7 +56,9 @@ const BUCKETS: { key: Bucket; title: string; todo: string }[] = [
   {
     key: "offline",
     title: "Could not be reached",
-    todo: "Nothing is wrong with these files — the network was. Refresh again when you are back online.",
+    todo:
+      "Nothing is wrong with these files — the network was, or the volume they live on was not " +
+      "mounted. Refresh again once you are back online, or the drive is plugged in.",
   },
   {
     key: "noPreview",

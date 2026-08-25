@@ -191,51 +191,105 @@ pub struct SyncReport {
     pub cancelled: bool,
 }
 
+/// What a catalogued path on this computer says about itself.
+///
+/// A deleted file leaves its folder behind. A whole tree that vanished at once
+/// is a volume that is not mounted, and calling those files deleted would flag
+/// a healthy archive on the strength of an unplugged cable — the local half of
+/// the rule that only real evidence produces `SourceMissing` (§23).
+fn local_state(path: &str) -> Accessibility {
+    let p = std::path::Path::new(path);
+    if p.exists() {
+        Accessibility::Available
+    } else if p.parent().is_some_and(|d| d.as_os_str().is_empty() || d.exists()) {
+        Accessibility::SourceMissing
+    } else {
+        Accessibility::Offline
+    }
+}
+
 /// Metadata-only synchronization (§31, §8).
 ///
 /// Never transfers file content. Never touches user metadata — a file renamed in
 /// Drive updates `original_filename` and leaves the user's display name, tags,
 /// notes and usage history exactly as they were.
+///
+/// Both kinds of source in one pass: Drive answers over the network, a
+/// catalogued local file answers from the filesystem, and "is my footage still
+/// there" is one question to the person asking it.
 #[tauri::command]
 pub async fn sync_library(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     ids: Option<Vec<i64>>,
 ) -> Result<SyncReport> {
-    state.drive.ensure_restored(&state.prefs).await;
-    if !state.drive.is_connected().await {
-        return Err(AppError::NotConnected);
-    }
-
-    let targets: Vec<(i64, String)> = state.with_library(|lib| {
-        let sql = "SELECT footage_id, external_id FROM sources
-                   WHERE provider = 'google_drive' AND external_id IS NOT NULL";
+    let targets: Vec<(i64, String, Option<String>, Option<String>)> = state.with_library(|lib| {
+        let sql = "SELECT footage_id, provider, external_id, local_path FROM sources
+                   WHERE (provider = 'google_drive' AND external_id IS NOT NULL)
+                      OR (provider = 'local' AND local_path IS NOT NULL)";
         let mut stmt = lib.conn.prepare(sql)?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     })?;
 
-    let targets: Vec<(i64, String)> = match &ids {
+    let targets: Vec<_> = match &ids {
         Some(filter) => targets
             .into_iter()
-            .filter(|(id, _)| filter.contains(id))
+            .filter(|(id, ..)| filter.contains(id))
             .collect(),
         None => targets,
     };
+
+    // Only the Drive half needs an account. A library of local files answers
+    // with the network unplugged, and refusing to check it would be an odd kind
+    // of principle.
+    state.drive.ensure_restored(&state.prefs).await;
+    if targets.iter().any(|(_, p, ..)| p == "google_drive") && !state.drive.is_connected().await {
+        return Err(AppError::NotConnected);
+    }
 
     let (job_id, token) = state.jobs.start("sync");
     let total = targets.len() as u64;
     let mut report = SyncReport::default();
 
-    for (footage_id, external_id) in targets {
+    let progress = |done: u64| {
+        let _ = app.emit(
+            "job:progress",
+            JobProgress {
+                job_id: job_id.clone(),
+                phase: "syncing".into(),
+                done,
+                total: Some(total),
+                message: None,
+            },
+        );
+    };
+
+    for (footage_id, provider, external_id, local_path) in targets {
         if token.is_cancelled() {
             report.cancelled = true;
             break;
         }
         report.checked += 1;
 
+        if provider == "local" {
+            let state_now = local_state(local_path.as_deref().unwrap_or_default());
+            state.with_library(|lib| {
+                footage_repo::set_accessibility(&lib.conn, footage_id, state_now)
+            })?;
+            match state_now {
+                Accessibility::SourceMissing => report.missing_ids.push(footage_id),
+                Accessibility::Available => report.updated += 1,
+                // The volume is not there to ask. Not gone, not fine.
+                _ => report.failed += 1,
+            }
+            progress(report.checked);
+            continue;
+        }
+
+        let external_id = external_id.unwrap_or_default();
         match state.drive.get_file(&external_id).await {
             Ok(file) if file.trashed => {
                 state.with_library(|lib| {
@@ -319,16 +373,7 @@ pub async fn sync_library(
             }
         }
 
-        let _ = app.emit(
-            "job:progress",
-            JobProgress {
-                job_id: job_id.clone(),
-                phase: "syncing".into(),
-                done: report.checked,
-                total: Some(total),
-                message: None,
-            },
-        );
+        progress(report.checked);
     }
 
     state.jobs.finish(&job_id);
@@ -344,4 +389,33 @@ pub async fn sync_library(
     );
 
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_deleted_file_is_gone_but_an_unmounted_volume_is_only_unreachable() {
+        let dir = std::env::temp_dir().join(format!("stash-local-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("clip.mov");
+        std::fs::write(&file, b"x").unwrap();
+        let path = file.to_str().unwrap();
+
+        assert_eq!(local_state(path), Accessibility::Available);
+
+        std::fs::remove_file(&file).unwrap();
+        // The folder it lived in is still there, so the file itself went.
+        assert_eq!(local_state(path), Accessibility::SourceMissing);
+
+        // A whole tree that is not there is a volume nobody plugged in — saying
+        // "deleted" would condemn a healthy archive.
+        assert_eq!(
+            local_state("/Volumes/Archive 2024/shoot/clip.mov"),
+            Accessibility::Offline
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

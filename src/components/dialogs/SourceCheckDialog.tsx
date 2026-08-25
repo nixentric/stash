@@ -155,7 +155,7 @@ export function SourceCheckDialog({
                   withDownloads.length === 1 ? "file was" : "files were"
                 } downloaded to this computer. Those copies still open — the source being gone does not touch them.`
               : checking
-                ? `Asking Google Drive about ${scope?.label ?? "these files"}. Metadata only — nothing is downloaded.`
+                ? `Asking about ${scope?.label ?? "these files"} — Drive over the network, catalogued files on disk. Metadata only, nothing is downloaded.`
                 : `${scope?.label ?? ""}`}
           </DialogDescription>
         </DialogHeader>

@@ -109,11 +109,15 @@ pub async fn playback_target(state: State<'_, AppState>, id: i64) -> Result<Play
         // The original is already here. Nothing remote is worth asking for.
         _ if downloaded => (served_kind, Some(preview::scheme::url("media", id)), None),
 
-        // Known gone, and no local copy. Google's embed would render its own
-        // "file does not exist" page and an authenticated fetch would 404, so
-        // hand the frontend the one thing that still works: the thumbnail
-        // already in the library. Only an authenticated 404 gets us here (§23).
-        _ if gone => (
+        // Known gone, and nothing on this computer to play instead. Google's
+        // embed would render its own "file does not exist" page and an
+        // authenticated fetch would 404, so hand the frontend the one thing
+        // that still works: the thumbnail already in the library.
+        //
+        // The `local_path` guard is what lets a stale flag heal itself — a
+        // catalogued file that is back on disk plays, whatever the last check
+        // concluded.
+        _ if gone && local_path.is_none() => (
             "gone",
             None,
             Some(
