@@ -3,6 +3,12 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.41 — 2026-08-31
+
+- The source folder filter is remembered. Opening a folder and coming back no
+  longer hands you the whole list again, the same way the facet filters have
+  always stayed put.
+
 ## v0.5.40 — 2026-08-31
 
 - Source folders have a filter field of their own. Type part of a name, a path,
