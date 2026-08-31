@@ -647,6 +647,8 @@ export function SourceFoldersPage() {
   const [doomed, setDoomed] = useState<DeletePlan>(NOTHING_DOOMED);
   const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [renaming, setRenaming] = useState<FolderNode | null>(null);
 
   // States for inline editing
@@ -888,6 +890,11 @@ export function SourceFoldersPage() {
   const confirmDelete = async () => {
     const { fileIds } = planTotals(doomed);
     if (!doomed.folders.length && !fileIds.length) return;
+    // A ref, not the `deleting` state: a held Enter key repeats faster than a
+    // re-render, and both presses would read the state from the render they
+    // were dispatched in. Guards the button's double-click just the same.
+    if (deletingRef.current) return;
+    deletingRef.current = true;
     setDeleting(true);
     try {
       // ponytail: one call per folder, in order — the cascade already lives in
@@ -913,6 +920,7 @@ export function SourceFoldersPage() {
       invalidateLibrary(qc);
       reportError(e, "Could not delete");
     } finally {
+      deletingRef.current = false;
       setDeleting(false);
     }
   };
@@ -2314,7 +2322,17 @@ export function SourceFoldersPage() {
         open={doomed.folders.length > 0 || doomed.files.length > 0}
         onOpenChange={(open) => !open && setDoomed(NOTHING_DOOMED)}
       >
-        <DialogContent className="w-[min(28rem,92vw)]">
+        <DialogContent
+          className="w-[min(28rem,92vw)]"
+          // Delete is the dialog's default action, so it is what opens focused:
+          // Enter then confirms without a key handler of our own, and Escape
+          // still cancels through Radix. Tab to Cancel and Enter cancels, which
+          // is the behaviour a focused button already has.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            deleteButtonRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
               {onlyDoomed ? "Delete source folder?" : `${deleteLabel(doomed)}?`}
@@ -2371,7 +2389,12 @@ export function SourceFoldersPage() {
             <Button variant="secondary" onClick={() => setDoomed(NOTHING_DOOMED)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>
+            <Button
+              ref={deleteButtonRef}
+              variant="destructive"
+              disabled={deleting}
+              onClick={confirmDelete}
+            >
               <Trash2 /> Delete
             </Button>
           </DialogFooter>
