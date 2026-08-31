@@ -3,6 +3,16 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.44 — 2026-08-31
+
+- Files and folders can be selected together, and deleted together. A folder
+  row in Source Folders now opens to show its files underneath, and the tick
+  column reaches them — so three files and two folders is one selection and one
+  Delete, from the row menu or the selection bar. The confirmation counts each
+  half and names the first eight, and a file ticked inside a folder that is
+  going anyway is not counted twice. Deleting anything with a folder in it says
+  plainly that it cannot be undone; a files-only delete still offers Undo.
+
 ## v0.5.43 — 2026-08-31
 
 - Source folders can be deleted in bulk. Tick a few, then right-click or use
