@@ -3,6 +3,14 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.40 — 2026-08-31
+
+- Source folders have a filter field of their own. Type part of a name, a path,
+  a brand, a tag or a column value and the table narrows to what matches; add a
+  second word and it narrows again, each word free to come from a different
+  field. It only sifts the rows already on screen — the search up in the
+  titlebar is still the one that queries the library.
+
 ## v0.5.39 — 2026-08-26
 
 - Check Source now shows its work: a progress bar with the file it is on, and
