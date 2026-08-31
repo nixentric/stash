@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { confirm, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
   CircleCheck,
@@ -15,6 +15,7 @@ import {
   Heart,
   Image,
   Trash2,
+  Unlink,
   Unplug,
 } from "lucide-react";
 import {
@@ -68,7 +69,7 @@ export function FootageContextMenu({
   /** So a surface with its own key handling can stand down while the menu is up. */
   onOpenChange?: (open: boolean) => void;
 }) {
-  const { selection, setQuickLookId } = useUi();
+  const { selection, setQuickLookId, view } = useUi();
   const qc = useQueryClient();
   const action = useFootageAction();
   const collections = useCollections(true);
@@ -80,6 +81,9 @@ export function FootageContextMenu({
 
   const ids = selection;
   const single = ids.length === 1 ? ids[0] : null;
+  // Needs Attention only lists sources that no longer answer, so removal there
+  // is a link cleanup rather than a judgement call about a healthy file.
+  const broken = view.kind === "missing";
 
   // Only the backend knows whether Download can do anything — it is false for
   // local files and for anything already on disk. Asked when the menu opens,
@@ -298,10 +302,25 @@ export function FootageContextMenu({
                 destructive
                 // Wording matters and lives with the action: this is a catalog,
                 // and nothing in it can delete a file from Drive or from disk.
-                onSelect={() => action.mutate({ type: "remove", ids })}
+                // The broken-link wording gets a confirm because the rows under
+                // it were gathered by a filter, not picked one by one.
+                onSelect={async () => {
+                  if (
+                    broken &&
+                    !(await confirm(
+                      `Remove ${
+                        ids.length === 1 ? "this broken link" : `${count(ids.length)} broken links`
+                      } from Stash? No file on disk or in Drive is deleted.`,
+                    ))
+                  )
+                    return;
+                  action.mutate({ type: "remove", ids });
+                }}
               >
-                <Trash2 />
-                Remove from Library
+                {broken ? <Unlink /> : <Trash2 />}
+                {broken
+                  ? `Remove Broken ${ids.length === 1 ? "Link" : "Links"}…`
+                  : "Remove from Library"}
               </ContextMenuItem>
             </>
           )}
