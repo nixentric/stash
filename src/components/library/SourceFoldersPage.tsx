@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   ChevronsUpDown,
   ExternalLink,
@@ -277,13 +278,59 @@ export function mergeValues(current: string[], added: string[], multi: boolean):
 }
 
 /**
- * What a row action applies to: right-clicking inside a ticked set means the
- * whole set, right-clicking outside it means that one row. Same rule the footage
- * grid uses, so "right-click → Delete" never quietly hits forty folders when you
- * aimed at one — or one when you ticked forty.
+ * One file shown under its folder: enough to tick it, name it, and know which
+ * folder it would go with.
  */
-export function deleteTarget(folder: FolderNode, picked: FolderNode[]): FolderNode[] {
-  return picked.some((f) => f.containerPath === folder.containerPath) ? picked : [folder];
+export type FileRow = { id: number; containerPath: string; displayName: string };
+
+/** Folders and files heading for the same delete, as one thing to pass around. */
+export type DeletePlan = { folders: FolderNode[]; files: FileRow[] };
+
+export const NOTHING_DOOMED: DeletePlan = { folders: [], files: [] };
+
+/**
+ * What a row action applies to: right-clicking inside the ticked set means the
+ * whole set — folders and files together — and right-clicking outside it means
+ * that one row. Same rule the footage grid uses, so a right-click never quietly
+ * hits forty things when you aimed at one, or one when you ticked forty.
+ */
+export function deleteTarget(row: FolderNode | FileRow, picked: DeletePlan): DeletePlan {
+  if ("id" in row) {
+    return picked.files.some((f) => f.id === row.id) ? picked : { folders: [], files: [row] };
+  }
+  return picked.folders.some((f) => f.containerPath === row.containerPath)
+    ? picked
+    : { folders: [row], files: [] };
+}
+
+/** What a plan holds, in words: "2 Folders and 1 File". Empty when it holds nothing. */
+export function planLabel(plan: DeletePlan): string {
+  const parts: string[] = [];
+  if (plan.folders.length)
+    parts.push(`${count(plan.folders.length)} ${plan.folders.length === 1 ? "Folder" : "Folders"}`);
+  if (plan.files.length)
+    parts.push(`${count(plan.files.length)} ${plan.files.length === 1 ? "File" : "Files"}`);
+  return parts.join(" and ");
+}
+
+/** What the Delete entry says it will take, so the count is never a surprise. */
+export const deleteLabel = (plan: DeletePlan) => `Delete ${planLabel(plan)}`.trim();
+
+/**
+ * What a plan actually removes.
+ *
+ * A ticked file inside a folder that is going anyway is not a second thing to
+ * delete: counting it twice overstates the confirmation, and asking the backend
+ * to remove a record the folder already took is a write against nothing.
+ */
+export function planTotals(plan: DeletePlan) {
+  const doomedPaths = new Set(plan.folders.map((f) => f.containerPath));
+  const fileIds = plan.files.filter((f) => !doomedPaths.has(f.containerPath)).map((f) => f.id);
+  return {
+    fileIds,
+    /** Every footage record going, the folders' own contents included. */
+    footageCount: plan.folders.reduce((n, f) => n + f.footageCount, 0) + fileIds.length,
+  };
 }
 
 /**
@@ -432,6 +479,107 @@ const FolderPreview = memo(function FolderPreview({ path }: { path: string }) {
   );
 });
 
+/** How many files an opened folder lists before it stops. */
+const FILE_ROWS = 200;
+
+/**
+ * The files inside one opened folder, as rows under it.
+ *
+ * This is the only place in the app where a file and a folder are on screen as
+ * the same kind of row, which is what lets one selection hold both.
+ */
+function FolderFiles({
+  folder,
+  selectMode,
+  pickedIds,
+  onToggle,
+  onDelete,
+}: {
+  folder: FolderNode;
+  selectMode: boolean;
+  pickedIds: Set<number>;
+  onToggle: (file: FileRow) => void;
+  onDelete: (file: FileRow) => void;
+}) {
+  // ponytail: first 200, no paging — a folder past that is a folder you open
+  // properly. Page it when someone actually keeps 200+ in one.
+  const page = useFootage(
+    { ...emptyQuery(), containerPath: folder.containerPath, limit: FILE_ROWS },
+    true,
+  );
+  const items = page.data?.items ?? [];
+  const total = page.data?.total ?? 0;
+
+  if (page.isLoading) {
+    return (
+      <tr className="border-b border-border">
+        <td colSpan={99} className="px-3 py-2 pl-12 text-[12px] text-subtle-foreground">
+          Loading files…
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <>
+      {items.map((item) => {
+        const file: FileRow = {
+          id: item.id,
+          containerPath: folder.containerPath,
+          displayName: item.displayName,
+        };
+        return (
+          <ContextMenu key={item.id}>
+            <ContextMenuTrigger asChild>
+              <tr
+                // No data-id: the marquee sweeps tr[data-id] into the folder
+                // selection, and a file id landing there would read as a path.
+                data-file-id={item.id}
+                className={cn(
+                  "border-b border-border transition-colors last:border-0 hover:bg-accent/50",
+                  pickedIds.has(item.id) && "bg-accent/40",
+                )}
+              >
+                {selectMode && (
+                  <td className="w-8 px-3 py-1.5">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${item.displayName}`}
+                      checked={pickedIds.has(item.id)}
+                      onChange={() => onToggle(file)}
+                      className="size-3.5 cursor-pointer accent-primary"
+                    />
+                  </td>
+                )}
+                <td colSpan={99} className="px-3 py-1.5">
+                  <div className="flex min-w-0 items-center gap-2 pl-9">
+                    <Thumb id={item.id} className="size-6" />
+                    <span className="truncate text-[12px] text-muted-foreground">
+                      {item.displayName}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem destructive onSelect={() => onDelete(file)}>
+                <Trash2 /> Delete
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        );
+      })}
+      {total > items.length && (
+        <tr className="border-b border-border">
+          <td colSpan={99} className="px-3 py-1.5 pl-12 text-[12px] text-subtle-foreground">
+            {count(total - items.length)} more not shown — open the folder to see them.
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 export function SourceFoldersPage() {
   const folders = useFolders(true);
   const fields = useFolderFields(true);
@@ -469,10 +617,10 @@ export function SourceFoldersPage() {
   // and coming back to an unfiltered list loses the typing that found it. Plain
   // text, so there is nothing to parse and nothing to validate.
   const [term, setTerm] = useState(() => localStorage.getItem("stash:folder_filter") ?? "");
-  // A list, not one row: the same dialog answers for the row you right-clicked
-  // and for the forty you ticked, so the two cannot describe deletion
-  // differently.
-  const [doomed, setDoomed] = useState<FolderNode[]>([]);
+  // A plan, not one row: the same dialog answers for the row you right-clicked,
+  // for the forty folders you ticked, and for the files ticked alongside them,
+  // so none of them can describe deletion differently.
+  const [doomed, setDoomed] = useState<DeletePlan>(NOTHING_DOOMED);
   const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState<FolderNode | null>(null);
@@ -507,6 +655,12 @@ export function SourceFoldersPage() {
   // on the many days you are only reading the table.
   const [selectMode, setSelectMode] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
+  /** The file half of the selection. Rows, not ids: the dialog names them and
+      the plan needs to know which folder each one sits in. */
+  const [pickedFiles, setPickedFiles] = useState<FileRow[]>([]);
+  /** Folders showing their files. Opening one is what puts a file in reach of
+      the same tick column the folders use. */
+  const [expanded, setExpanded] = useState<string[]>([]);
   const [bulkTarget, setBulkTarget] = useState("Tags");
   const [bulkText, setBulkText] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -708,20 +862,32 @@ export function SourceFoldersPage() {
   const brandOptions = useMemo(() => [NO_BRAND, ...(brands.data ?? []).map((b) => b.name)], [brands.data]);
 
   const confirmDelete = async () => {
-    if (!doomed.length) return;
+    const { fileIds } = planTotals(doomed);
+    if (!doomed.folders.length && !fileIds.length) return;
     setDeleting(true);
     try {
       // ponytail: one call per folder, in order — the cascade already lives in
       // delete_folder and a bulk command would be a second copy of it. Give it
       // a real bulk command once someone deletes enough folders to notice.
-      for (const f of doomed) await ipc.deleteFolder(f.containerPath);
-      setPicked((cur) => cur.filter((path) => !doomed.some((f) => f.containerPath === path)));
+      for (const f of doomed.folders) await ipc.deleteFolder(f.containerPath);
+      if (fileIds.length) await ipc.removeFootage(fileIds);
+      const gone = new Set(doomed.folders.map((f) => f.containerPath));
+      setPicked((cur) => cur.filter((path) => !gone.has(path)));
+      setExpanded((cur) => cur.filter((path) => !gone.has(path)));
+      setPickedFiles((cur) =>
+        cur.filter((f) => !gone.has(f.containerPath) && !fileIds.includes(f.id)),
+      );
       invalidateLibrary(qc);
-      setDoomed([]);
+      setDoomed(NOTHING_DOOMED);
+      // Undo only where it is real: remove_footage keeps the rows for one
+      // restore, delete_folder does not. Offering it on a mixed delete would
+      // promise back folders that are gone for good.
+      if (!doomed.folders.length)
+        toastUndo(qc, `Removed ${count(fileIds.length)} files from the library`, ipc.restoreRemoved);
     } catch (e) {
       // Whatever already went is gone, so the table has to be re-read either way.
       invalidateLibrary(qc);
-      reportError(e, "Could not delete folder");
+      reportError(e, "Could not delete");
     } finally {
       setDeleting(false);
     }
@@ -767,9 +933,23 @@ export function SourceFoldersPage() {
     [rows, pickedSet],
   );
   const allPicked = rows.length > 0 && pickedRows.length === rows.length;
-  const targetOf = (folder: FolderNode) => deleteTarget(folder, pickedRows);
+  const pickedFileIds = useMemo(() => new Set(pickedFiles.map((f) => f.id)), [pickedFiles]);
+  const expandedSet = useMemo(() => new Set(expanded), [expanded]);
+  /** Everything ticked right now, as the one thing a delete acts on. */
+  const pickedPlan: DeletePlan = { folders: pickedRows, files: pickedFiles };
+  const targetOf = (row: FolderNode | FileRow) => deleteTarget(row, pickedPlan);
+  const totals = planTotals(doomed);
   /** The single folder a one-row delete is about, so the dialog can name it. */
-  const onlyDoomed = doomed.length === 1 ? doomed[0] : undefined;
+  const onlyDoomed =
+    doomed.folders.length === 1 && doomed.files.length === 0 ? doomed.folders[0] : undefined;
+
+  const toggleExpanded = (path: string) =>
+    setExpanded((cur) => (cur.includes(path) ? cur.filter((p) => p !== path) : [...cur, path]));
+  const toggleFile = (file: FileRow) => {
+    setPickedFiles((cur) =>
+      cur.some((f) => f.id === file.id) ? cur.filter((f) => f.id !== file.id) : [...cur, file],
+    );
+  };
 
   const toggleRow = (idx: number, shift: boolean) => {
     const path = rows[idx]!.containerPath;
@@ -909,7 +1089,8 @@ export function SourceFoldersPage() {
       !bulkBusy &&
       !!bulkText.trim() &&
       !manageColumnsOpen &&
-      !doomed.length &&
+      !doomed.folders.length &&
+      !doomed.files.length &&
       !renaming,
     bulkAddValue,
   );
@@ -1030,7 +1211,10 @@ export function SourceFoldersPage() {
           title="Show tick boxes for editing several folders at once"
           onClick={() =>
             setSelectMode((on) => {
-              if (on) setPicked([]);
+              if (on) {
+                setPicked([]);
+                setPickedFiles([]);
+              }
               return !on;
             })
           }
@@ -1107,7 +1291,7 @@ export function SourceFoldersPage() {
           used to mean scrolling back to the top to act on it.
           The wrapper does the centring and the inner bar the animation — sharing
           one element would have the keyframe's transform eat the -translate-x. */}
-      {pickedRows.length > 0 && (
+      {(pickedRows.length > 0 || pickedFiles.length > 0) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-6">
         <div
           // The bar sits over the table; pressing it is not the start of a
@@ -1119,9 +1303,13 @@ export function SourceFoldersPage() {
                      ease-[cubic-bezier(.34,1.56,.64,1)]"
         >
           <span className="tnum shrink-0 text-[12px] font-medium">
-            {count(pickedRows.length)} selected
+            {planLabel(pickedPlan)} selected
           </span>
 
+          {/* Brands, tags and columns are folder metadata — they have nothing to
+              write to when only files are ticked. */}
+          {pickedRows.length > 0 && (
+          <>
           <div className="w-40 shrink-0">
             <Select
               value="Set brand…"
@@ -1213,18 +1401,28 @@ export function SourceFoldersPage() {
           <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={bulkClearTarget}>
             Clear {bulkTarget}
           </Button>
+          </>
+          )}
           <Button
             variant="ghost"
             size="sm"
             className="text-destructive hover:text-destructive"
             disabled={bulkBusy}
-            onClick={() => setDoomed(pickedRows)}
+            onClick={() => setDoomed(pickedPlan)}
           >
             <Trash2 />
             Delete
           </Button>
 
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setPicked([])}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => {
+              setPicked([]);
+              setPickedFiles([]);
+            }}
+          >
             <X />
             Deselect
           </Button>
@@ -1295,7 +1493,8 @@ export function SourceFoldersPage() {
           </thead>
           <tbody>
             {rows.map((folder, idx) => (
-              <ContextMenu key={folder.containerPath}>
+              <Fragment key={folder.containerPath}>
+              <ContextMenu>
                 <ContextMenuTrigger asChild>
                 <tr
                   role="button"
@@ -1340,6 +1539,24 @@ export function SourceFoldersPage() {
                   </td>
                   <td className="max-w-[22rem] min-w-[12rem] px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-2">
+                      {/* Opening a folder here shows its files as rows, which is
+                          what puts them in reach of the same tick column. */}
+                      <button
+                        type="button"
+                        aria-label={`${expandedSet.has(folder.containerPath) ? "Hide" : "Show"} files in ${folder.containerPath}`}
+                        aria-expanded={expandedSet.has(folder.containerPath)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleExpanded(folder.containerPath);
+                        }}
+                        className="shrink-0 rounded text-subtle-foreground hover:text-foreground"
+                      >
+                        {expandedSet.has(folder.containerPath) ? (
+                          <ChevronDown className="size-4" />
+                        ) : (
+                          <ChevronRight className="size-4" />
+                        )}
+                      </button>
                       <FolderTree className="size-4 shrink-0 text-subtle-foreground" />
                       {/* The custom name never replaces the path: a label that hides
                           where the files came from is worse than no label. */}
@@ -1970,7 +2187,7 @@ export function SourceFoldersPage() {
                         aria-label={`Delete ${folder.containerPath}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDoomed([folder]);
+                          setDoomed({ folders: [folder], files: [] });
                         }}
                       >
                         <Trash2 className="size-4" />
@@ -2023,13 +2240,20 @@ export function SourceFoldersPage() {
                     <Unplug /> Check Sources...
                   </ContextMenuItem>
                   <ContextMenuItem destructive onSelect={() => setDoomed(targetOf(folder))}>
-                    <Trash2 />{" "}
-                    {targetOf(folder).length > 1
-                      ? `Delete ${count(targetOf(folder).length)} Folders`
-                      : "Delete Folder"}
+                    <Trash2 /> {deleteLabel(targetOf(folder))}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
+              {expandedSet.has(folder.containerPath) && (
+                <FolderFiles
+                  folder={folder}
+                  selectMode={selectMode}
+                  pickedIds={pickedFileIds}
+                  onToggle={toggleFile}
+                  onDelete={(file) => setDoomed(targetOf(file))}
+                />
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -2051,13 +2275,14 @@ export function SourceFoldersPage() {
 
       <Marquee boxRef={marquee.boxRef} />
 
-      <Dialog open={doomed.length > 0} onOpenChange={(open) => !open && setDoomed([])}>
+      <Dialog
+        open={doomed.folders.length > 0 || doomed.files.length > 0}
+        onOpenChange={(open) => !open && setDoomed(NOTHING_DOOMED)}
+      >
         <DialogContent className="w-[min(28rem,92vw)]">
           <DialogHeader>
             <DialogTitle>
-              {doomed.length > 1
-                ? `Delete ${count(doomed.length)} source folders?`
-                : "Delete source folder?"}
+              {onlyDoomed ? "Delete source folder?" : `${deleteLabel(doomed)}?`}
             </DialogTitle>
           </DialogHeader>
           <DialogBody className="flex flex-col gap-2 text-[13px]">
@@ -2069,29 +2294,46 @@ export function SourceFoldersPage() {
                 <p className="truncate text-subtle-foreground">{onlyDoomed.containerPath}</p>
               </>
             ) : (
-              // Named, not only counted: seeing the paths is what tells you that
-              // one of the forty is not the folder you meant.
+              // Named, not only counted: seeing them is what tells you that one
+              // of the forty is not the thing you meant.
               <ul className="max-h-40 overflow-y-auto text-subtle-foreground">
-                {doomed.slice(0, 8).map((f) => (
-                  <li key={f.containerPath} className="truncate">
-                    {f.displayName ?? f.containerPath}
-                  </li>
-                ))}
-                {doomed.length > 8 && (
+                {[
+                  ...doomed.folders.map((f) => ({
+                    key: f.containerPath,
+                    label: f.displayName ?? f.containerPath,
+                  })),
+                  ...doomed.files.map((f) => ({ key: `f${f.id}`, label: f.displayName })),
+                ]
+                  .slice(0, 8)
+                  .map((row) => (
+                    <li key={row.key} className="truncate">
+                      {row.label}
+                    </li>
+                  ))}
+                {doomed.folders.length + doomed.files.length > 8 && (
                   <li className="text-muted-foreground">
-                    and {count(doomed.length - 8)} more
+                    and {count(doomed.folders.length + doomed.files.length - 8)} more
                   </li>
                 )}
               </ul>
             )}
             <p className="text-muted-foreground">
-              Removes {count(doomed.reduce((n, f) => n + f.footageCount, 0))} footage records, plus{" "}
-              {doomed.length > 1 ? "their" : "this folder's"} tags and column values, from the
-              library. Files on disk and on Drive are untouched.
+              {`Removes ${count(totals.footageCount)} footage records${
+                doomed.folders.length
+                  ? `, plus ${doomed.folders.length > 1 ? "the folders'" : "the folder's"} tags and column values,`
+                  : ""
+              } from the library. Files on disk and on Drive are untouched.`}
+            </p>
+            {/* delete_folder drops the rows outright; remove_footage keeps them
+                for one restore. Only the second can honestly promise a way back. */}
+            <p className="text-muted-foreground">
+              {doomed.folders.length > 0
+                ? "Deleting a folder cannot be undone."
+                : "You can put these back from the Undo that follows."}
             </p>
           </DialogBody>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setDoomed([])}>
+            <Button variant="secondary" onClick={() => setDoomed(NOTHING_DOOMED)}>
               Cancel
             </Button>
             <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>

@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   applyFacets,
+  deleteLabel,
   deleteTarget,
   filterFolders,
   mergeValues,
+  NOTHING_DOOMED,
+  planTotals,
   sortFolders,
   type Facet,
+  type FileRow,
 } from "./SourceFoldersPage";
 import type { FolderNode } from "@/lib/types";
 
@@ -130,16 +134,79 @@ describe("mergeValues", () => {
 
 describe("deleteTarget", () => {
   const [a, b, c] = all as [FolderNode, FolderNode, FolderNode];
+  const fileIn = (id: number, path: string): FileRow => ({
+    id,
+    containerPath: path,
+    displayName: `file-${id}`,
+  });
+  const f1 = fileIn(1, "A");
+  const f2 = fileIn(2, "Z");
+  const picked = { folders: [a, b], files: [f1, f2] };
 
-  it("takes the whole ticked set when the click lands inside it", () => {
-    expect(deleteTarget(a, [a, b]).map((f) => f.containerPath)).toEqual(["A", "B"]);
+  it("takes the whole ticked set, files included, when the click lands inside it", () => {
+    expect(deleteTarget(a, picked)).toBe(picked);
+    expect(deleteTarget(f2, picked)).toBe(picked);
   });
 
-  it("takes only the clicked row when the click lands outside the ticked set", () => {
-    expect(deleteTarget(c, [a, b]).map((f) => f.containerPath)).toEqual(["C"]);
+  it("takes only the clicked folder when the click lands outside the ticked set", () => {
+    const plan = deleteTarget(c, picked);
+    expect(plan.folders.map((f) => f.containerPath)).toEqual(["C"]);
+    expect(plan.files).toEqual([]);
+  });
+
+  it("takes only the clicked file when the click lands outside the ticked set", () => {
+    const loose = fileIn(9, "C");
+    const plan = deleteTarget(loose, picked);
+    expect(plan.folders).toEqual([]);
+    expect(plan.files.map((f) => f.id)).toEqual([9]);
   });
 
   it("takes the clicked row when nothing is ticked", () => {
-    expect(deleteTarget(c, []).map((f) => f.containerPath)).toEqual(["C"]);
+    expect(deleteTarget(c, NOTHING_DOOMED).folders.map((f) => f.containerPath)).toEqual(["C"]);
+  });
+});
+
+describe("planTotals", () => {
+  const [a, b] = all as [FolderNode, FolderNode];
+  const file = (id: number, path: string): FileRow => ({
+    id,
+    containerPath: path,
+    displayName: `file-${id}`,
+  });
+
+  it("drops a ticked file whose folder is going anyway", () => {
+    // A carries 1 footage record; the file inside it must not be counted twice
+    // nor removed a second time after the folder already took it.
+    const totals = planTotals({ folders: [a], files: [file(1, "A"), file(2, "Z")] });
+    expect(totals.fileIds).toEqual([2]);
+    expect(totals.footageCount).toBe(2);
+  });
+
+  it("counts every folder's contents plus the loose files", () => {
+    const totals = planTotals({ folders: [a, b], files: [file(3, "Z")] });
+    expect(totals.fileIds).toEqual([3]);
+    expect(totals.footageCount).toBe(3);
+  });
+
+  it("is empty for an empty plan", () => {
+    expect(planTotals(NOTHING_DOOMED)).toEqual({ fileIds: [], footageCount: 0 });
+  });
+});
+
+describe("deleteLabel", () => {
+  const [a, b] = all as [FolderNode, FolderNode];
+  const file = (id: number): FileRow => ({ id, containerPath: "Z", displayName: `file-${id}` });
+
+  it("names both halves of a mixed selection", () => {
+    expect(deleteLabel({ folders: [a, b], files: [file(1)] })).toBe("Delete 2 Folders and 1 File");
+  });
+
+  it("names only the half that is there, in the singular when it is one", () => {
+    expect(deleteLabel({ folders: [a], files: [] })).toBe("Delete 1 Folder");
+    expect(deleteLabel({ folders: [], files: [file(1), file(2)] })).toBe("Delete 2 Files");
+  });
+
+  it("stays a plain Delete when there is nothing in the plan", () => {
+    expect(deleteLabel(NOTHING_DOOMED)).toBe("Delete");
   });
 });
