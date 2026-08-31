@@ -277,6 +277,16 @@ export function mergeValues(current: string[], added: string[], multi: boolean):
 }
 
 /**
+ * What a row action applies to: right-clicking inside a ticked set means the
+ * whole set, right-clicking outside it means that one row. Same rule the footage
+ * grid uses, so "right-click → Delete" never quietly hits forty folders when you
+ * aimed at one — or one when you ticked forty.
+ */
+export function deleteTarget(folder: FolderNode, picked: FolderNode[]): FolderNode[] {
+  return picked.some((f) => f.containerPath === folder.containerPath) ? picked : [folder];
+}
+
+/**
  * Stable colour per value, so the same tag reads the same on every row. Hashing
  * beats storing a colour: no schema, no picker, and new tags are coloured for free.
  */
@@ -459,7 +469,10 @@ export function SourceFoldersPage() {
   // and coming back to an unfiltered list loses the typing that found it. Plain
   // text, so there is nothing to parse and nothing to validate.
   const [term, setTerm] = useState(() => localStorage.getItem("stash:folder_filter") ?? "");
-  const [doomed, setDoomed] = useState<FolderNode | null>(null);
+  // A list, not one row: the same dialog answers for the row you right-clicked
+  // and for the forty you ticked, so the two cannot describe deletion
+  // differently.
+  const [doomed, setDoomed] = useState<FolderNode[]>([]);
   const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState<FolderNode | null>(null);
@@ -695,13 +708,19 @@ export function SourceFoldersPage() {
   const brandOptions = useMemo(() => [NO_BRAND, ...(brands.data ?? []).map((b) => b.name)], [brands.data]);
 
   const confirmDelete = async () => {
-    if (!doomed) return;
+    if (!doomed.length) return;
     setDeleting(true);
     try {
-      await ipc.deleteFolder(doomed.containerPath);
+      // ponytail: one call per folder, in order — the cascade already lives in
+      // delete_folder and a bulk command would be a second copy of it. Give it
+      // a real bulk command once someone deletes enough folders to notice.
+      for (const f of doomed) await ipc.deleteFolder(f.containerPath);
+      setPicked((cur) => cur.filter((path) => !doomed.some((f) => f.containerPath === path)));
       invalidateLibrary(qc);
-      setDoomed(null);
+      setDoomed([]);
     } catch (e) {
+      // Whatever already went is gone, so the table has to be re-read either way.
+      invalidateLibrary(qc);
       reportError(e, "Could not delete folder");
     } finally {
       setDeleting(false);
@@ -748,6 +767,9 @@ export function SourceFoldersPage() {
     [rows, pickedSet],
   );
   const allPicked = rows.length > 0 && pickedRows.length === rows.length;
+  const targetOf = (folder: FolderNode) => deleteTarget(folder, pickedRows);
+  /** The single folder a one-row delete is about, so the dialog can name it. */
+  const onlyDoomed = doomed.length === 1 ? doomed[0] : undefined;
 
   const toggleRow = (idx: number, shift: boolean) => {
     const path = rows[idx]!.containerPath;
@@ -887,7 +909,7 @@ export function SourceFoldersPage() {
       !bulkBusy &&
       !!bulkText.trim() &&
       !manageColumnsOpen &&
-      !doomed &&
+      !doomed.length &&
       !renaming,
     bulkAddValue,
   );
@@ -1190,6 +1212,16 @@ export function SourceFoldersPage() {
           </Tooltip>
           <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={bulkClearTarget}>
             Clear {bulkTarget}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            disabled={bulkBusy}
+            onClick={() => setDoomed(pickedRows)}
+          >
+            <Trash2 />
+            Delete
           </Button>
 
           <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setPicked([])}>
@@ -1938,7 +1970,7 @@ export function SourceFoldersPage() {
                         aria-label={`Delete ${folder.containerPath}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDoomed(folder);
+                          setDoomed([folder]);
                         }}
                       >
                         <Trash2 className="size-4" />
@@ -1990,8 +2022,11 @@ export function SourceFoldersPage() {
                   >
                     <Unplug /> Check Sources...
                   </ContextMenuItem>
-                  <ContextMenuItem destructive onSelect={() => setDoomed(folder)}>
-                    <Trash2 /> Delete Folder
+                  <ContextMenuItem destructive onSelect={() => setDoomed(targetOf(folder))}>
+                    <Trash2 />{" "}
+                    {targetOf(folder).length > 1
+                      ? `Delete ${count(targetOf(folder).length)} Folders`
+                      : "Delete Folder"}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -2016,21 +2051,47 @@ export function SourceFoldersPage() {
 
       <Marquee boxRef={marquee.boxRef} />
 
-      <Dialog open={!!doomed} onOpenChange={(open) => !open && setDoomed(null)}>
+      <Dialog open={doomed.length > 0} onOpenChange={(open) => !open && setDoomed([])}>
         <DialogContent className="w-[min(28rem,92vw)]">
           <DialogHeader>
-            <DialogTitle>Delete source folder?</DialogTitle>
+            <DialogTitle>
+              {doomed.length > 1
+                ? `Delete ${count(doomed.length)} source folders?`
+                : "Delete source folder?"}
+            </DialogTitle>
           </DialogHeader>
           <DialogBody className="flex flex-col gap-2 text-[13px]">
-            {doomed?.displayName && <p className="truncate font-medium">{doomed.displayName}</p>}
-            <p className="truncate text-subtle-foreground">{doomed?.containerPath}</p>
+            {onlyDoomed ? (
+              <>
+                {onlyDoomed.displayName && (
+                  <p className="truncate font-medium">{onlyDoomed.displayName}</p>
+                )}
+                <p className="truncate text-subtle-foreground">{onlyDoomed.containerPath}</p>
+              </>
+            ) : (
+              // Named, not only counted: seeing the paths is what tells you that
+              // one of the forty is not the folder you meant.
+              <ul className="max-h-40 overflow-y-auto text-subtle-foreground">
+                {doomed.slice(0, 8).map((f) => (
+                  <li key={f.containerPath} className="truncate">
+                    {f.displayName ?? f.containerPath}
+                  </li>
+                ))}
+                {doomed.length > 8 && (
+                  <li className="text-muted-foreground">
+                    and {count(doomed.length - 8)} more
+                  </li>
+                )}
+              </ul>
+            )}
             <p className="text-muted-foreground">
-              Removes {doomed?.footageCount ?? 0} footage records, plus this folder's tags and
-              column values, from the library. Files on disk and on Drive are untouched.
+              Removes {count(doomed.reduce((n, f) => n + f.footageCount, 0))} footage records, plus{" "}
+              {doomed.length > 1 ? "their" : "this folder's"} tags and column values, from the
+              library. Files on disk and on Drive are untouched.
             </p>
           </DialogBody>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setDoomed(null)}>
+            <Button variant="secondary" onClick={() => setDoomed([])}>
               Cancel
             </Button>
             <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>

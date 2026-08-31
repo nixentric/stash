@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { applyFacets, filterFolders, mergeValues, sortFolders, type Facet } from "./SourceFoldersPage";
+import {
+  applyFacets,
+  deleteTarget,
+  filterFolders,
+  mergeValues,
+  sortFolders,
+  type Facet,
+} from "./SourceFoldersPage";
 import type { FolderNode } from "@/lib/types";
 
 const folder = (
@@ -118,5 +125,21 @@ describe("mergeValues", () => {
 
   it("replaces a single-value cell", () => {
     expect(mergeValues(["Serang"], ["Bandung"], false)).toEqual(["Bandung"]);
+  });
+});
+
+describe("deleteTarget", () => {
+  const [a, b, c] = all as [FolderNode, FolderNode, FolderNode];
+
+  it("takes the whole ticked set when the click lands inside it", () => {
+    expect(deleteTarget(a, [a, b]).map((f) => f.containerPath)).toEqual(["A", "B"]);
+  });
+
+  it("takes only the clicked row when the click lands outside the ticked set", () => {
+    expect(deleteTarget(c, [a, b]).map((f) => f.containerPath)).toEqual(["C"]);
+  });
+
+  it("takes the clicked row when nothing is ticked", () => {
+    expect(deleteTarget(c, []).map((f) => f.containerPath)).toEqual(["C"]);
   });
 });
