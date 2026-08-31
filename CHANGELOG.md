@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.43 — 2026-08-31
+
+- Source folders can be deleted in bulk. Tick a few, then right-click or use
+  the Delete in the selection bar, and one confirmation covers all of them —
+  it counts the folders, names the first eight so a mis-tick is visible, and
+  totals the footage records going with them. Right-clicking a folder outside
+  the ticked set still means only that folder. Files on disk and on Drive are
+  untouched, as before.
+
 ## v0.5.42 — 2026-08-31
 
 - Needs attention can clear a dead link where you found it. Right-click
