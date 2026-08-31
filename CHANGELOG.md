@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.45 — 2026-08-31
+
+- Source folders warn about broken files. A folder holding a file whose source
+  stopped answering now carries a ⚠ with the count, and the count climbs the
+  path, so a folder warns about what its subfolders are carrying too. It goes
+  away on its own once the last broken file under it is fixed or removed.
+  "Broken" means exactly what Needs attention collects, so the two cannot
+  disagree.
+
 ## v0.5.44 — 2026-08-31
 
 - Files and folders can be selected together, and deleted together. A folder
