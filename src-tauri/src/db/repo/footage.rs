@@ -458,7 +458,10 @@ pub fn stats(conn: &Connection) -> Result<LibraryStats> {
            SUM(CASE WHEN f.media_type = 'image' THEN 1 ELSE 0 END),
            SUM(CASE WHEN f.media_type = 'video' THEN 1 ELSE 0 END),
            SUM(CASE WHEN f.favorite = 1 THEN 1 ELSE 0 END),
-           SUM(CASE WHEN s.accessibility = 'source_missing' THEN 1 ELSE 0 END),
+           -- Both states, matching what the view this badge opens actually
+           -- filters on. Counting only the missing ones understated it.
+           SUM(CASE WHEN s.accessibility IN ('source_missing', 'permission_required')
+                    THEN 1 ELSE 0 END),
            SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM thumbnails th WHERE th.footage_id = f.id)
                     THEN 1 ELSE 0 END)
          FROM footages f LEFT JOIN sources s ON s.footage_id = f.id
