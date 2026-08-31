@@ -455,9 +455,10 @@ export function SourceFoldersPage() {
       return DEFAULT_SORT;
     }
   });
-  // Not persisted, unlike the facets above: a typed filter is how you reach one
-  // folder now, and finding it again next week starts with typing again.
-  const [term, setTerm] = useState("");
+  // Kept for the same reason as the facets: opening a folder unmounts the table,
+  // and coming back to an unfiltered list loses the typing that found it. Plain
+  // text, so there is nothing to parse and nothing to validate.
+  const [term, setTerm] = useState(() => localStorage.getItem("stash:folder_filter") ?? "");
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
   const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -646,6 +647,10 @@ export function SourceFoldersPage() {
   useEffect(() => {
     localStorage.setItem("stash:folder_sort", JSON.stringify(sort));
   }, [sort]);
+
+  useEffect(() => {
+    localStorage.setItem("stash:folder_filter", term);
+  }, [term]);
 
   // Ordering by a column that has since been deleted sorts every row as blank,
   // which reads as "the table is broken" rather than "that column is gone".
