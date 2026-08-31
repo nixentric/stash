@@ -3,6 +3,13 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.42 — 2026-08-31
+
+- Needs attention can clear a dead link where you found it. Right-click
+  anything in there and the removal now reads "Remove Broken Link", and asks
+  before it goes — the rows in that view were gathered by a filter, not picked
+  one by one. Nothing on disk or in Drive is deleted, and undo still works.
+
 ## v0.5.41 — 2026-08-31
 
 - The source folder filter is remembered. Opening a folder and coming back no
