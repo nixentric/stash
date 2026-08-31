@@ -13,12 +13,14 @@ import {
   ListChecks,
   Pencil,
   Plus,
+  Search,
   Settings,
   Trash2,
   Unplug,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge, Tooltip } from "@/components/ui/misc";
 import { cn, mod } from "@/lib/utils";
 import {
@@ -242,6 +244,29 @@ export function applyFacets(folders: FolderNode[], facets: Facet[]): FolderNode[
   );
 }
 
+/** Everything a folder is searchable by, in one lowercased string. */
+const haystack = (f: FolderNode) =>
+  [f.displayName ?? "", f.containerPath, f.brandName ?? "", ...f.tags, ...f.fields.map((v) => v.value)]
+    .join(" ")
+    .toLowerCase();
+
+/**
+ * Narrows the table to folders matching every word typed, across their name,
+ * path, brand, tags and column values.
+ *
+ * This is not the library's search: it never leaves the page and never asks the
+ * database anything, it only sifts the rows already on screen — the fast way to
+ * reach one folder when no facet names it.
+ */
+export function filterFolders(folders: FolderNode[], term: string): FolderNode[] {
+  const words = term.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return folders;
+  return folders.filter((f) => {
+    const hay = haystack(f);
+    return words.every((w) => hay.includes(w));
+  });
+}
+
 /**
  * What a bulk edit writes into a cell: multi-value cells (tags, columns marked
  * "multiple") gain the new values without losing what is there, single-value
@@ -430,6 +455,9 @@ export function SourceFoldersPage() {
       return DEFAULT_SORT;
     }
   });
+  // Not persisted, unlike the facets above: a typed filter is how you reach one
+  // folder now, and finding it again next week starts with typing again.
+  const [term, setTerm] = useState("");
   const [doomed, setDoomed] = useState<FolderNode | null>(null);
   const [checking, setChecking] = useState<SourceCheckScope | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -679,8 +707,8 @@ export function SourceFoldersPage() {
   // Filtering and sorting every folder on every keystroke and every tick of a
   // drag was the table's own contribution to the lag.
   const rows = useMemo(
-    () => sortFolders(applyFacets(folders.data ?? [], facets), sort),
-    [folders.data, facets, sort],
+    () => sortFolders(filterFolders(applyFacets(folders.data ?? [], facets), term), sort),
+    [folders.data, facets, term, sort],
   );
   // Clicking the column you are already on flips it; a new column starts
   // ascending, except the dates, where "newest first" is what you want.
@@ -876,10 +904,36 @@ export function SourceFoldersPage() {
           being outside the scroller keeps it there. */}
       <div className="flex h-9 shrink-0 items-center gap-1 bg-titlebar px-2 hairline-b">
         <span className="tnum mr-1 shrink-0 text-[11.5px] text-subtle-foreground">
-          {facets.length > 0
+          {facets.length > 0 || term
             ? `${count(rows.length)} of ${count(folders.data?.length ?? 0)} folders`
             : `${count(rows.length)} ${rows.length === 1 ? "folder" : "folders"}`}
         </span>
+
+        {/* Sifts the rows already on screen. The library's search box up in the
+            titlebar is the one that queries the database; this one only sorts
+            through the folders this page is holding. */}
+        <div className="relative w-44 shrink-0">
+          <Search className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-subtle-foreground" />
+          <Input
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setTerm("")}
+            placeholder="Filter folders…"
+            aria-label="Filter these folders by name, brand, tag or column"
+            className="h-6 pl-6 pr-6 text-[12px]"
+          />
+          {term && (
+            <button
+              type="button"
+              onClick={() => setTerm("")}
+              aria-label="Clear the folder filter"
+              className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5
+                         text-subtle-foreground hover:text-foreground"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -960,8 +1014,15 @@ export function SourceFoldersPage() {
           {picked.length > 0 && <Badge className="ml-0.5">{pickedRows.length}</Badge>}
         </Button>
 
-        {facets.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => setFacets([])}>
+        {(facets.length > 0 || term) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setFacets([]);
+              setTerm("");
+            }}
+          >
             <X />
             Clear
           </Button>
@@ -1935,7 +1996,7 @@ export function SourceFoldersPage() {
 
         {rows.length === 0 && (
           <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">
-            {facets.length > 0
+            {facets.length > 0 || term
               ? "No folder matches these filters."
               : "Import footage from a folder to see it here."}
           </p>

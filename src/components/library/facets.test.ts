@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFacets, mergeValues, sortFolders, type Facet } from "./SourceFoldersPage";
+import { applyFacets, filterFolders, mergeValues, sortFolders, type Facet } from "./SourceFoldersPage";
 import type { FolderNode } from "@/lib/types";
 
 const folder = (
@@ -73,6 +73,26 @@ describe("applyFacets", () => {
     expect(paths([brand("ETIVE")])).toEqual(["A"]);
     expect(paths([brand("ETIVE"), brand("Acme")])).toEqual(["A", "B"]);
     expect(paths([brand("ETIVE"), tag("test")])).toEqual(["A"]);
+  });
+});
+
+describe("filterFolders", () => {
+  const hits = (term: string) => filterFolders(all, term).map((f) => f.containerPath);
+
+  it("returns everything for an empty or blank term", () => {
+    expect(hits("")).toEqual(["A", "B", "C"]);
+    expect(hits("   ")).toEqual(["A", "B", "C"]);
+  });
+
+  it("matches a tag, a brand or a column value, whatever the case", () => {
+    expect(hits("kol")).toEqual(["A", "C"]);
+    expect(hits("ETIVE")).toEqual(["A"]);
+    expect(hits("bandung")).toEqual(["B"]);
+  });
+
+  it("requires every word, and may take each from a different field", () => {
+    expect(hits("kol serang")).toEqual(["A"]);
+    expect(hits("kol bandung")).toEqual([]);
   });
 });
 
