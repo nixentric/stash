@@ -3,6 +3,16 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.46 — 2026-08-31
+
+- Enter confirms the delete dialog. Delete is the dialog's default action now,
+  so it opens focused and Enter goes through it; Escape still cancels, and
+  tabbing to Cancel makes Enter cancel instead. Holding Enter, or double
+  clicking, can no longer fire the deletion twice.
+- The "Needs attention" badge counted less than the view it opens. It summed
+  missing sources alone while the view also lists permission-blocked ones, so
+  a blocked file was shown but never counted. Both states now.
+
 ## v0.5.45 — 2026-08-31
 
 - Source folders warn about broken files. A folder holding a file whose source
