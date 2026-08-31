@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   Trash2,
+  TriangleAlert,
   Unplug,
   X,
 } from "lucide-react";
@@ -275,6 +276,29 @@ export function filterFolders(folders: FolderNode[], term: string): FolderNode[]
  */
 export function mergeValues(current: string[], added: string[], multi: boolean): string[] {
   return multi ? [...new Set([...current, ...added])] : [added.join(", ")];
+}
+
+/**
+ * Broken files at or under every folder, keyed by path.
+ *
+ * The count climbs the path itself rather than the table: this list is flat, a
+ * parent only has a row of its own when files sit directly in it, and the point
+ * of the warning is to find a bad file without opening every folder. So
+ * "Projects" carries whatever "Projects/Client A" is carrying.
+ */
+export function brokenTotals(folders: FolderNode[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const f of folders) {
+    if (!f.brokenCount) continue;
+    let path = f.containerPath;
+    for (;;) {
+      totals.set(path, (totals.get(path) ?? 0) + f.brokenCount);
+      const cut = path.lastIndexOf("/");
+      if (cut === -1) break;
+      path = path.slice(0, cut);
+    }
+  }
+  return totals;
 }
 
 /**
@@ -933,6 +957,9 @@ export function SourceFoldersPage() {
     [rows, pickedSet],
   );
   const allPicked = rows.length > 0 && pickedRows.length === rows.length;
+  // Off every folder, not the filtered rows: a parent still warns about a child
+  // the current filter happens to hide.
+  const broken = useMemo(() => brokenTotals(folders.data ?? []), [folders.data]);
   const pickedFileIds = useMemo(() => new Set(pickedFiles.map((f) => f.id)), [pickedFiles]);
   const expandedSet = useMemo(() => new Set(expanded), [expanded]);
   /** Everything ticked right now, as the one thing a delete acts on. */
@@ -1570,6 +1597,14 @@ export function SourceFoldersPage() {
                           </div>
                         )}
                       </div>
+                      {!!broken.get(folder.containerPath) && (
+                        <Tooltip side="top" content="This folder contains missing or broken files.">
+                          <Badge tone="warn" className="tnum shrink-0">
+                            <TriangleAlert className="size-3" />
+                            {count(broken.get(folder.containerPath)!)}
+                          </Badge>
+                        </Tooltip>
+                      )}
                       {folder.driveFolderId && (
                         <button
                           type="button"

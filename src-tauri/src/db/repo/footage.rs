@@ -489,6 +489,8 @@ pub fn folders(conn: &Connection) -> Result<Vec<FolderNode>> {
         "SELECT s.container_path, COUNT(*),
                 SUM(CASE WHEN f.usage_count > 0 THEN 1 ELSE 0 END),
                 SUM(CASE WHEN f.usage_count = 0 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN s.accessibility IN ('source_missing', 'permission_required')
+                         THEN 1 ELSE 0 END),
                 (SELECT group_concat(t.name, char(31))
                    FROM source_folder_tags sft JOIN tags t ON t.id = sft.tag_id
                   WHERE sft.container_path = s.container_path),
@@ -510,13 +512,13 @@ pub fn folders(conn: &Connection) -> Result<Vec<FolderNode>> {
          GROUP BY s.container_path ORDER BY s.container_path COLLATE NOCASE",
     )?;
     #[allow(clippy::type_complexity)]
-    let rows: Vec<(String, i64, i64, i64, Option<String>, String, String, Option<i64>, Option<String>, Option<String>, Option<String>)> = stmt
+    let rows: Vec<(String, i64, i64, i64, i64, Option<String>, String, String, Option<i64>, Option<String>, Option<String>, Option<String>)> = stmt
         .query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(container_path, footage_count, used_count, unused_count, tags, added_at, updated_at, brand_id, brand_name, display_name, drive_folder_id)| {
+        .map(|(container_path, footage_count, used_count, unused_count, broken_count, tags, added_at, updated_at, brand_id, brand_name, display_name, drive_folder_id)| {
             Ok(FolderNode {
                 fields: super::source_folder::values(conn, &container_path)?,
                 container_path,
@@ -525,6 +527,7 @@ pub fn folders(conn: &Connection) -> Result<Vec<FolderNode>> {
                 footage_count,
                 used_count,
                 unused_count,
+                broken_count,
                 tags: tags.map(|v| v.split(TAG_SEP).map(str::to_string).collect()).unwrap_or_default(),
                 brand_id,
                 brand_name,

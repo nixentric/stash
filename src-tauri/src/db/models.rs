@@ -263,6 +263,10 @@ pub struct FolderNode {
     pub footage_count: i64,
     pub used_count: i64,
     pub unused_count: i64,
+    /// Files here whose source no longer answers. Same two states the Needs
+    /// Attention view collects, so a folder cannot warn about files that view
+    /// would not list, or stay quiet about ones it would.
+    pub broken_count: i64,
     pub tags: Vec<String>,
     pub fields: Vec<FolderFieldValue>,
     /// Whose folder this is. Resolved from the brand, not copied, so a rename

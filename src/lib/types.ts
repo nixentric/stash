@@ -148,6 +148,9 @@ export interface FolderNode {
   footageCount: number;
   usedCount: number;
   unusedCount: number;
+  /** Files here whose source no longer answers — the same two states the Needs
+      attention view collects, so the two can never disagree. */
+  brokenCount: number;
   tags: string[];
   fields: FolderFieldValue[];
   /** Whose folder this is, resolved from the brand itself so renames follow. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyFacets,
   deleteLabel,
+  brokenTotals,
   deleteTarget,
   filterFolders,
   mergeValues,
@@ -26,6 +27,7 @@ const folder = (
   footageCount: 1,
   usedCount: 0,
   unusedCount: 1,
+  brokenCount: 0,
   tags,
   fields: branch ? [{ fieldId: 1, name: "Branch", value: branch }] : [],
   brandId: brandName ? 1 : null,
@@ -208,5 +210,39 @@ describe("deleteLabel", () => {
 
   it("stays a plain Delete when there is nothing in the plan", () => {
     expect(deleteLabel(NOTHING_DOOMED)).toBe("Delete");
+  });
+});
+
+describe("brokenTotals", () => {
+  const withBroken = (path: string, broken: number): FolderNode => ({
+    ...folder(path, []),
+    brokenCount: broken,
+  });
+
+  it("climbs every ancestor, so a parent warns about a child's broken file", () => {
+    const totals = brokenTotals([withBroken("Projects/Client A", 3)]);
+    expect(totals.get("Projects/Client A")).toBe(3);
+    expect(totals.get("Projects")).toBe(3);
+  });
+
+  it("adds up siblings at the parent", () => {
+    const totals = brokenTotals([
+      withBroken("Projects/Client A", 3),
+      withBroken("Projects/Client B", 2),
+    ]);
+    expect(totals.get("Projects")).toBe(5);
+    expect(totals.get("Projects/Client A")).toBe(3);
+  });
+
+  it("leaves out folders with nothing broken, so the icon disappears once they are resolved", () => {
+    const totals = brokenTotals([withBroken("Projects/Client A", 0), withBroken("Other", 1)]);
+    expect(totals.has("Projects/Client A")).toBe(false);
+    expect(totals.has("Projects")).toBe(false);
+    expect(totals.get("Other")).toBe(1);
+  });
+
+  it("counts a folder's own broken files alongside its children's", () => {
+    const totals = brokenTotals([withBroken("Projects", 1), withBroken("Projects/Client A", 2)]);
+    expect(totals.get("Projects")).toBe(3);
   });
 });
