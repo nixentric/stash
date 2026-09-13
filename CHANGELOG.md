@@ -3,6 +3,15 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.47 — 2026-09-13
+
+- Libraries past 500 items scroll all the way to the end. The grid only ever
+  fetched its first 500 rows, so in a library of 10,400 the toolbar counted
+  everything while the grid stopped at 500 and the rest could not be reached.
+  It now loads the next 500 as you near the bottom of what it has, until the
+  last item is on screen. Quick Look's arrows and its "n / total" cover the
+  whole view too, not just the rows the grid has loaded so far.
+
 ## v0.5.46 — 2026-08-31
 
 - Enter confirms the delete dialog. Delete is the dialog's default action now,
