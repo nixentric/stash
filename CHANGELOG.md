@@ -3,6 +3,16 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.49 — 2026-09-13
+
+- Esc lets go of a bulk selection in Source Folders too. Folders and files you
+  picked, by dragging a box or ticking them one at a time, are released with
+  Esc, the same as a selection in the library grid. Esc still goes first to
+  whatever it would close: pressing it in a text field, on an open menu or on
+  the delete confirmation keeps your selection, and the next Esc lets it go.
+  The library grid follows the same rule now, so closing its right-click menu
+  with Esc no longer drops the items the menu was about.
+
 ## v0.5.48 — 2026-09-13
 
 - Drag-selecting holds its place while the list scrolls. Scrolling in the
