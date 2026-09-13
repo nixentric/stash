@@ -94,7 +94,10 @@ export function FootageContextMenu({
     enabled: open && single != null,
   });
 
-  const selectedItems = items.filter((item) => ids.includes(item.id));
+  // A Set, because this runs on every grid render and a paged-in library can hold
+  // 10,000 rows against a Select All of 10,000 ids.
+  const selected = new Set(ids);
+  const selectedItems = items.filter((item) => selected.has(item.id));
   const anyUnfavorited = selectedItems.length === 0 || selectedItems.some((item) => !item.favorite);
   const anyUnused = selectedItems.length === 0 || selectedItems.some((item) => !item.usageCount);
 

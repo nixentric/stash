@@ -38,9 +38,9 @@ import {
   keys,
   reportError,
   useCurrentLibrary,
-  useFootage,
   useFootageAction,
   useFootageIds,
+  useFootagePages,
   usePrefs,
   useProjects,
 } from "@/hooks/queries";
@@ -104,10 +104,11 @@ export default function App() {
     ],
   );
 
-  const page = useFootage(query, hasLibrary);
+  const page = useFootagePages(query, hasLibrary);
   const allIds = useFootageIds(query, hasLibrary);
 
-  const items = page.data?.items ?? [];
+  const items = useMemo(() => page.data?.pages.flatMap((p) => p.items) ?? [], [page.data]);
+  const total = page.data?.pages.at(-1)?.total ?? 0;
   const orderedIds = useMemo(() => items.map((i) => i.id), [items]);
 
   useEffect(() => {
@@ -377,7 +378,7 @@ export default function App() {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <Toolbar
-            total={page.data?.total ?? 0}
+            total={total}
             onAddFootage={() => setAddOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -400,8 +401,9 @@ export default function App() {
                 <div className="min-h-0 flex-1">
                   <FootageGrid
                     items={items}
-                    total={page.data?.total ?? 0}
+                    total={total}
                     loading={page.isLoading}
+                    onLoadMore={page.hasNextPage && !page.isFetching ? page.fetchNextPage : undefined}
                     onAddFootage={() => setAddOpen(true)}
                     onSetThumbnail={setThumbnailFromDataUrl}
                   />
@@ -429,7 +431,7 @@ export default function App() {
         </div>
       )}
 
-      <QuickLook orderedIds={orderedIds} onSetThumbnail={setThumbnailFromDataUrl} />
+      <QuickLook orderedIds={allIds.data ?? orderedIds} onSetThumbnail={setThumbnailFromDataUrl} />
 
       <AddFootageDialog
         open={addOpen}

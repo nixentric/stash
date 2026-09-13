@@ -38,8 +38,9 @@ import { useUi } from "@/store/ui";
 /**
  * Space-to-preview, arrows to move, Esc to close (§27).
  *
- * Navigation walks the ids currently on screen, so it follows the user's sort
- * and filter rather than the database's natural order.
+ * Navigation walks every id in the current view, pages the grid has not loaded
+ * yet included, so it follows the user's sort and filter rather than the
+ * database's natural order.
  */
 export function QuickLook({
   orderedIds,

@@ -1,4 +1,5 @@
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -14,6 +15,7 @@ export const keys = {
   recent: ["recent"] as const,
   stats: ["stats"] as const,
   footage: (q: T.FootageQuery) => ["footage", q] as const,
+  footagePages: (q: T.FootageQuery) => ["footage", "pages", q] as const,
   footageIds: (q: T.FootageQuery) => ["footageIds", q] as const,
   detail: (id: number) => ["footage", "detail", id] as const,
   thumb: (id: number, large: boolean) => ["thumb", id, large] as const,
@@ -106,6 +108,39 @@ export const useFootage = (query: T.FootageQuery, enabled: boolean) =>
     enabled,
     // Keeps the previous page visible while a new filter loads, so the grid
     // never flashes empty mid-typing.
+    placeholderData: (prev) => prev,
+  });
+
+/**
+ * Where the next page starts, or undefined once every match is loaded.
+ *
+ * Counts the rows that arrived instead of trusting the requested limit, which
+ * the backend clamps. An empty page ends it too: asking again would only bring
+ * back another empty page, forever.
+ */
+export function nextOffset(pages: T.FootagePage[]): number | undefined {
+  const last = pages.at(-1);
+  const loaded = pages.reduce((n, p) => n + p.items.length, 0);
+  return last && last.items.length > 0 && loaded < last.total ? loaded : undefined;
+}
+
+/**
+ * The library grid, one page at a time.
+ *
+ * Pages stack up as the grid scrolls toward the end of what is loaded, so every
+ * match is reachable without shipping the whole table up front (ARCHITECTURE.md §1).
+ *
+ * ponytail: an edit refetches every loaded page in turn — twenty-odd round trips
+ * for someone who scrolled through 10,000 items. Patch the cached rows in place
+ * if that lag ever shows.
+ */
+export const useFootagePages = (query: T.FootageQuery, enabled: boolean) =>
+  useInfiniteQuery({
+    queryKey: keys.footagePages(query),
+    queryFn: ({ pageParam }) => ipc.listFootage({ ...query, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (_last, pages) => nextOffset(pages),
+    enabled,
     placeholderData: (prev) => prev,
   });
 

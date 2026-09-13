@@ -17,6 +17,8 @@ interface Props {
   items: FootageListItem[];
   total: number;
   loading: boolean;
+  /** Set only while more matches wait on the backend and none are on the way. */
+  onLoadMore?: () => void;
   onAddFootage: () => void;
   onSetThumbnail: (id: number, dataUrl: string) => void;
 }
@@ -24,7 +26,7 @@ interface Props {
 const GAP = 10;
 const PAD = 14;
 
-export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnail }: Props) {
+export function FootageGrid({ items, total, loading, onLoadMore, onAddFootage, onSetThumbnail }: Props) {
   const { selection, viewMode, gridSize, quickLookId, setQuickLookId, hasActiveFilters, search, lastAnchor, select } = useUi();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -149,6 +151,13 @@ export function FootageGrid({ items, total, loading, onAddFootage, onSetThumbnai
   useEffect(() => {
     virtualizer.measure();
   }, [rowHeight, columns, virtualizer]);
+
+  // Only the pages loaded so far are rows. Once the last of them is drawn —
+  // overscan draws it a few rows before anyone sees it — ask for the next.
+  const lastRow = virtualizer.getVirtualItems().at(-1)?.index ?? -1;
+  useEffect(() => {
+    if (onLoadMore && lastRow >= rowCount - 1) onLoadMore();
+  }, [onLoadMore, lastRow, rowCount]);
 
   const isEmpty = !loading && items.length === 0;
 
