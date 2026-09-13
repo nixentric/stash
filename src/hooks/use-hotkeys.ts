@@ -112,7 +112,9 @@ export function useHotkeys(o: Options) {
           }
           break;
         case "Escape":
-          if (selection.length) {
+          // Unless that Esc just closed a menu or dialog: Radix marks it handled,
+          // and the selection the menu was about should outlive the menu.
+          if (selection.length && !e.defaultPrevented) {
             e.preventDefault();
             clearSelection();
           }

@@ -999,6 +999,25 @@ export function SourceFoldersPage() {
     lastPickedIdx.current = idx;
   };
 
+  // Esc lets go of every ticked folder and file, the way it clears the library
+  // grid's selection. It waits its turn: Esc typed into a field belongs to the
+  // field, and Esc that just closed a menu or dialog is already spent. A tick box
+  // is not a field — it is where focus sits right after ticking one.
+  const anyPicked = picked.length > 0 || pickedFiles.length > 0;
+  useEffect(() => {
+    if (!anyPicked) return;
+    const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement).closest?.(
+        "textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio'])",
+      );
+      if (e.key !== "Escape" || e.defaultPrevented || typing) return;
+      setPicked([]);
+      setPickedFiles([]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [anyPicked]);
+
   /**
    * The one place folder edits are written, whether they came from a cell or
    * from the bulk bar.
