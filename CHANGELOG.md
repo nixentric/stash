@@ -3,6 +3,16 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.48 — 2026-09-13
+
+- Drag-selecting holds its place while the list scrolls. Scrolling in the
+  middle of a drag, with the wheel or by resting the pointer at the top or
+  bottom edge, used to slide the box along with the view and drop the items it
+  had already passed over. The box now stays pinned to where you started and
+  grows with the scroll, everything it covers stays selected even once it is
+  out of sight, and auto-scroll keeps going while the pointer rests at the
+  edge. The same goes for the library grid and for Source Folders.
+
 ## v0.5.47 — 2026-09-13
 
 - Libraries past 500 items scroll all the way to the end. The grid only ever
