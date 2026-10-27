@@ -3,6 +3,25 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.51 — 2026-10-27
+
+- An assistant can file your source folders for you. Folder metadata is the part
+  of a library that is tedious rather than hard: the same tag, the same Client
+  column, the same brand, decided once and then repeated across every folder
+  ever imported, which on a library of a hundred and twenty is an afternoon of
+  clicking. `stash mcp` puts that table behind an MCP server — seven tools that
+  are the table's own gestures taken in bulk, on a list of folders instead of
+  one row at a time. Point Claude Code or Claude Desktop at it and ask for what
+  you would otherwise have clicked through. `docs/mcp-server.md` has the setup,
+  the tools and worked examples.
+
+- About ChatGPT, since it is the first thing anyone asks: connecting a custom
+  MCP server needs a Business, Enterprise or Edu plan. On Plus, Go and Free it
+  cannot be connected at all, and on Pro only the reading half of these tools
+  would work, which is not the half this is for. The HTTP transport is in the
+  build for the day that changes, and the documentation carries OpenAI's own
+  wording with the date it was checked.
+
 ## v0.5.50 — 2026-10-27
 
 - Source Folders scrolls at its own speed again. A library with a hundred or
