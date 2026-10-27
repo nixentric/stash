@@ -3,6 +3,24 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.50 — 2026-10-27
+
+- Source Folders scrolls at its own speed again. A library with a hundred or
+  more source folders used to stutter the whole way down the table, and a cover
+  you had already seen was fetched all over again the moment it came back on
+  screen. Three things were asking for the same pictures over and over:
+  thumbnails were served with caching switched off, so every one of them was a
+  fresh read out of the library file; a row that scrolled past the edge of the
+  view threw its covers away even though the row itself never went anywhere;
+  and the list of files behind each row was re-read every time the row came
+  back. Covers now stay once they have arrived, and nothing below is asked for
+  twice.
+
+- Coming back from a folder leaves you where you were. Opening a folder and
+  returning used to drop you at the top of a table you had scrolled halfway
+  down, and rebuild every thumbnail on the way past. The scroll position is
+  kept now, the way the filters and the sort already were.
+
 ## v0.5.49 — 2026-09-13
 
 - Esc lets go of a bulk selection in Source Folders too. Folders and files you
