@@ -44,8 +44,8 @@ folders would defeat the point.
 | Linux (AppImage) | the `.AppImage` file itself |
 | From source | `src-tauri/target/release/stash` after `cargo build --release` |
 
-The subcommand landed after v0.5.50, so a release older than that has the app
-but not the server. Run it in a terminal first: a working build prints which
+The subcommand shipped in v0.5.51, so an older release has the app but not the
+server. Run it in a terminal first: a working build prints which
 library it opened and then waits. Anything else is an error message that says
 what to fix.
 

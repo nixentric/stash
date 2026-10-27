@@ -3,6 +3,25 @@
 Every released version, and what actually changed in it. The release notes on
 GitHub are generated from this file.
 
+## v0.5.52 — 2026-10-27
+
+- Source Folders shows fifty folders at a time, with the range and a pair of
+  buttons under the table. The Library stays smooth at ten thousand records
+  while this table crawled at a couple of hundred folders, and both draw the
+  same thumbnails the same way — the difference was never the pictures, it was
+  that the Library only ever has about forty rows alive and this table had all
+  of them. One folder row is a preview strip, a context menu and a dozen
+  editable cells, so a few hundred of them is tens of thousands of nodes being
+  laid out, repainted on every scroll and reconciled again on every keystroke.
+  A page puts the same ceiling on it. Filters, sorting, ticking and the
+  drag-select box all work as before; a filter that shortens the list below
+  where you were puts you on its last page instead of a blank one.
+
+- Covers are let go of again when a row scrolls away. The previous release held
+  on to every one it had shown, which replaced reloading them with an
+  ever-growing pile of live images, and that was the worse half of the trade.
+  Letting go costs nothing now that the thumbnails are cacheable.
+
 ## v0.5.51 — 2026-10-27
 
 - An assistant can file your source folders for you. Folder metadata is the part
