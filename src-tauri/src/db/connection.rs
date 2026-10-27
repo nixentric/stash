@@ -126,6 +126,46 @@ pub fn open(path: &Path) -> Result<Library> {
     })
 }
 
+/// Opens a library from a second process without ever upgrading it.
+///
+/// [`open`] migrates an older file in place, which is the one thing a second
+/// process must not do: the schema would move under a running Stash that is
+/// still reading the old shape, and the safety backup would be taken while the
+/// app holds the file. So a version mismatch is refused here and the user is
+/// told to open the library in the app once, where migration belongs.
+pub fn open_without_migrating(path: &Path) -> Result<Library> {
+    if !path.exists() {
+        return Err(AppError::NotFound(format!(
+            "{} could not be found. It may have been moved or renamed.",
+            path.display()
+        )));
+    }
+    let conn = Connection::open(path).map_err(|e| cannot_open(path, e))?;
+    apply_pragmas(&conn)?;
+    verify_is_library(&conn, path)?;
+
+    let found = user_version(&conn)?;
+    if found > APP_SCHEMA_VERSION {
+        return Err(AppError::LibraryTooNew {
+            found,
+            supported: APP_SCHEMA_VERSION,
+            app: env!("CARGO_PKG_VERSION"),
+        });
+    }
+    if found < APP_SCHEMA_VERSION {
+        return Err(AppError::Migration(format!(
+            "{} uses library format v{found} and this build reads v{APP_SCHEMA_VERSION}. \
+             Open it in Stash once to upgrade it, then try again.",
+            path.display()
+        )));
+    }
+
+    Ok(Library {
+        conn,
+        path: path.to_path_buf(),
+    })
+}
+
 /// Turns SQLite's "unable to open database file" into something actionable.
 ///
 /// That one message covers a missing file, a folder SQLite cannot write its

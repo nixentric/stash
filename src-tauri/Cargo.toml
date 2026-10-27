@@ -26,6 +26,15 @@ rusqlite = { version = "0.37", features = ["bundled", "backup", "functions"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 
+# The MCP server's HTTP transport. All three are already in the tree under
+# reqwest; naming them here only turns on hyper's server half.
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+# Finds the app's own config directory from outside Tauri, so the MCP server can
+# read which library the app had open last.
+dirs = "6"
+
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp", "tiff"] }
 
 chrono = { version = "0.4", features = ["serde"] }

@@ -95,6 +95,7 @@ The app is unsigned, so both macOS and Windows warn on first launch —
 | [Brand guidelines](docs/brand-guidelines.md) | Brands, colors, typography, logos, rules, elements, Quick Brand Kit |
 | [The library file](docs/library-file.md) | Offline-first design, portable SQLite format, saving, migrations |
 | [Google Drive](docs/google-drive.md) | Link mode, connected mode, OAuth setup |
+| [MCP server](docs/mcp-server.md) | Letting an assistant file your source folders — tags, columns, brands — in bulk |
 | [Development](docs/development.md) | Build from source, project layout, tests, tech stack |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and what they actually mean |
 | [Roadmap](docs/roadmap.md) | What's next, and what will never be built |

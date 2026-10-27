@@ -3,6 +3,7 @@ pub mod db;
 pub mod error;
 pub mod gdrive;
 pub mod jobs;
+pub mod mcp;
 pub mod prefs;
 pub mod preview;
 pub mod source;
