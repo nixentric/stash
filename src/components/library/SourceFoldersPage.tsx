@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
@@ -485,14 +485,16 @@ function SortHeader({
  * fire hundreds of queries on mount.
  */
 const FolderPreview = memo(function FolderPreview({ path }: { path: string }) {
-  const { ref, visible } = useVisible<HTMLDivElement>();
+  // Latched: this table is not virtualized, so a row that scrolls away is still
+  // mounted, and taking its covers down only means fetching them again on the
+  // way back. Scrolling a hundred folders used to reload every picture it passed.
+  const { ref, visible } = useVisible<HTMLDivElement>("300px", true);
   const page = useFootage({ ...emptyQuery(), containerPath: path, limit: 3 }, visible);
   const items = page.data?.items ?? [];
 
   return (
-    // Scrolled out of sight, the images come down with it — a decoded bitmap for
-    // a row nobody is looking at is memory for nothing. The list itself stays
-    // cached, so scrolling back is instant.
+    // ponytail: holds every cover the page has shown, bounded by the folder
+    // count. Virtualize the table if someone turns up with thousands of folders.
     <div ref={ref} className="flex min-h-8 gap-1">
       {visible &&
         items.map((i) => <Thumb key={i.id} id={i.id} />)}
@@ -603,6 +605,16 @@ function FolderFiles({
     </>
   );
 }
+
+/**
+ * Where the table was left, between one mounting and the next.
+ *
+ * Opening a folder unmounts it — App.tsx swaps the whole view on `ui.view.kind`
+ * — so coming back put you at the top of a list you had scrolled halfway down,
+ * the same way it used to hand back an unfiltered one. A plain module-level
+ * number: this has to outlive the component, not the app.
+ */
+let lastScrollTop = 0;
 
 export function SourceFoldersPage() {
   const folders = useFolders(true);
@@ -932,6 +944,15 @@ export function SourceFoldersPage() {
     () => sortFolders(filterFolders(applyFacets(folders.data ?? [], facets), term), sort),
     [folders.data, facets, term, sort],
   );
+  // Put back where you were, as soon as there are rows to scroll. Before paint,
+  // so returning from a folder does not flash the top of the list on the way.
+  const restored = useRef(false);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (restored.current || !el || !rows.length) return;
+    restored.current = true;
+    el.scrollTop = lastScrollTop;
+  }, [rows.length]);
   // Clicking the column you are already on flips it; a new column starts
   // ascending, except the dates, where "newest first" is what you want.
   const toggleSort = (key: SortKey) =>
@@ -1307,6 +1328,9 @@ export function SourceFoldersPage() {
       <div
         ref={scrollRef}
         onMouseDown={marquee.onMouseDown}
+        onScroll={(e) => {
+          lastScrollTop = e.currentTarget.scrollTop;
+        }}
         className={cn("min-h-0 flex-1 overflow-y-auto p-6", marquee.dragging && "select-none")}
       >
       {facets.length > 0 && (

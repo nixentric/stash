@@ -109,6 +109,11 @@ export const useFootage = (query: T.FootageQuery, enabled: boolean) =>
     // Keeps the previous page visible while a new filter loads, so the grid
     // never flashes empty mid-typing.
     placeholderData: (prev) => prev,
+    // A folder row's preview turns this query off when it scrolls away and on
+    // when it comes back, and with the default staleTime of 0 that is a fresh
+    // SQLite round trip per row crossed. Every write goes through
+    // invalidateLibrary, so nothing sits stale without being told.
+    staleTime: 5 * 60_000,
   });
 
 /**

@@ -13,23 +13,34 @@ import { subscribeThumbs, thumbGeneration } from "@/lib/thumbs";
  * a flick-scroll to the bottom fetches what you land on, not everything you flew
  * past (ARCHITECTURE.md §7).
  */
-export function useVisible<E extends HTMLElement>(rootMargin = "300px") {
+export function useVisible<E extends HTMLElement>(rootMargin = "300px", once = false) {
   const ref = useRef<E | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Both ways. Latching on at the first sighting meant a list you scrolled
-    // once kept every image it had ever shown: the queries stayed active, so
-    // nothing was ever collected and memory only went up.
+    // Both ways by default. Latching on at the first sighting meant a list you
+    // scrolled once kept every image it had ever shown: the queries stayed
+    // active, so nothing was ever collected and memory only went up.
+    //
+    // `once` is for a list that is not virtualized, where letting go costs more
+    // than holding on: the row is never unmounted, so every pass over it tears
+    // its images out of the DOM and puts them back, and a single scroll becomes
+    // hundreds of reloads. What it holds is bounded there — one row per source
+    // folder — and a held image is a URL the webview owns, not bytes on the heap.
     const io = new IntersectionObserver(
-      ([entry]) => setVisible(!!entry?.isIntersecting),
+      ([entry]) => {
+        const seen = !!entry?.isIntersecting;
+        if (once && !seen) return;
+        setVisible(seen);
+        if (once) io.disconnect();
+      },
       { rootMargin },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [rootMargin]);
+  }, [rootMargin, once]);
 
   return { ref, visible };
 }

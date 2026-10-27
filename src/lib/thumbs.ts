@@ -8,7 +8,11 @@
  * It lives on its own so both the query layer and the thumbnail hook can reach
  * it without importing each other.
  */
-let generation = 0;
+// Seeded from the launch time rather than 0, so the `?v=` on every thumbnail URL
+// is unique to this run. The webview is now allowed to cache a thumbnail for a
+// year (preview/scheme.rs); a picture replaced in an earlier session would
+// otherwise come back out of that cache under the URL it had then.
+let generation = Date.now();
 const listeners = new Set<() => void>();
 
 export const subscribeThumbs = (l: () => void) => {

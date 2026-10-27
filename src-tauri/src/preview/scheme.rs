@@ -146,9 +146,12 @@ fn serve_thumb(state: &AppState, footage_id: i64) -> Result<Response<Vec<u8>>> {
         .status(200)
         .header("Content-Type", mime)
         .header("Content-Length", bytes.len().to_string())
-        // A thumbnail can be replaced in place, and the URL does not change when
-        // it is. Reading it again is one indexed row out of a local file.
-        .header("Cache-Control", "no-store")
+        // Cacheable, because a replaced thumbnail arrives under a different URL:
+        // the frontend hangs a generation counter off `?v=`, bumped whenever the
+        // stored pictures change (src/lib/thumbs.ts). `no-store` meant every row
+        // scrolled past re-read its blob through the library lock, which is most
+        // of what made a table of a hundred folders crawl.
+        .header("Cache-Control", "max-age=31536000, immutable")
         .body(bytes)
         .unwrap_or_else(|_| Response::new(Vec::new())))
 }
