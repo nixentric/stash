@@ -485,16 +485,15 @@ function SortHeader({
  * fire hundreds of queries on mount.
  */
 const FolderPreview = memo(function FolderPreview({ path }: { path: string }) {
-  // Latched: this table is not virtualized, so a row that scrolls away is still
-  // mounted, and taking its covers down only means fetching them again on the
-  // way back. Scrolling a hundred folders used to reload every picture it passed.
-  const { ref, visible } = useVisible<HTMLDivElement>("300px", true);
+  const { ref, visible } = useVisible<HTMLDivElement>();
   const page = useFootage({ ...emptyQuery(), containerPath: path, limit: 3 }, visible);
   const items = page.data?.items ?? [];
 
   return (
-    // ponytail: holds every cover the page has shown, bounded by the folder
-    // count. Virtualize the table if someone turns up with thousands of folders.
+    // Scrolled out of sight, the images come down with it — a decoded bitmap for
+    // a row nobody is looking at is memory for nothing. Coming back is cheap now
+    // that thumbnails are cacheable and this query has a staleTime: the row
+    // re-reads nothing, it re-mounts a picture the webview is already holding.
     <div ref={ref} className="flex min-h-8 gap-1">
       {visible &&
         items.map((i) => <Thumb key={i.id} id={i.id} />)}
@@ -615,6 +614,37 @@ function FolderFiles({
  * number: this has to outlive the component, not the app.
  */
 let lastScrollTop = 0;
+/** And which page it was showing, for the same reason. */
+let lastPage = 0;
+
+/**
+ * How many folders are on screen at once.
+ *
+ * This table is not virtualized, and one row is a preview strip, a context menu
+ * and a dozen editable cells — so a library of several hundred folders on one
+ * page is tens of thousands of nodes to lay out, repaint on every scroll, and
+ * reconcile again whenever anything in the page changes. A page is the lazy half
+ * of virtualizing: a fixed ceiling on live rows, and none of the absolute
+ * positioning that fighting a table's own layout would cost.
+ *
+ * ponytail: a fixed size, no picker. Make it a preference if 50 turns out to be
+ * the wrong number for someone.
+ */
+export const PAGE_SIZE = 50;
+
+/**
+ * Which stretch of the filtered list a page number actually shows.
+ *
+ * Separate from the component because the clamp is the part that can be wrong
+ * quietly: a filter that shortens the list leaves the stored page past the end
+ * of it, and an unclamped slice is a blank table with no hint why.
+ */
+export function pageSlice<T>(rows: T[], page: number, size = PAGE_SIZE) {
+  const pageCount = Math.max(1, Math.ceil(rows.length / size));
+  const current = Math.min(Math.max(page, 0), pageCount - 1);
+  const start = current * size;
+  return { current, pageCount, start, rows: rows.slice(start, start + size) };
+}
 
 export function SourceFoldersPage() {
   const folders = useFolders(true);
@@ -944,15 +974,32 @@ export function SourceFoldersPage() {
     () => sortFolders(filterFolders(applyFacets(folders.data ?? [], facets), term), sort),
     [folders.data, facets, term, sort],
   );
+  // No reset on filter change: landing on the last page of a list that just got
+  // shorter is the right place, and resetting would also throw away the page
+  // this table was left on when a folder was opened.
+  const [page, setPage] = useState(lastPage);
+  const { current, pageCount, start, rows: pageRows } = useMemo(
+    () => pageSlice(rows, page),
+    [rows, page],
+  );
+
+  const goToPage = (p: number) => {
+    lastPage = p;
+    setPage(p);
+    // A new page starts at its own top, not halfway down where the last one was.
+    lastScrollTop = 0;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  };
+
   // Put back where you were, as soon as there are rows to scroll. Before paint,
   // so returning from a folder does not flash the top of the list on the way.
   const restored = useRef(false);
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (restored.current || !el || !rows.length) return;
+    if (restored.current || !el || !pageRows.length) return;
     restored.current = true;
     el.scrollTop = lastScrollTop;
-  }, [rows.length]);
+  }, [pageRows.length]);
   // Clicking the column you are already on flips it; a new column starts
   // ascending, except the dates, where "newest first" is what you want.
   const toggleSort = (key: SortKey) =>
@@ -1570,7 +1617,11 @@ export function SourceFoldersPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((folder, idx) => (
+            {pageRows.map((folder, i) => {
+              // The index into the whole filtered list, not into this page: it is
+              // what a shift-click range and the last-ticked marker are counted in.
+              const idx = start + i;
+              return (
               <Fragment key={folder.containerPath}>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
@@ -2340,9 +2391,38 @@ export function SourceFoldersPage() {
                 />
               )}
               </Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
+
+        {pageCount > 1 && (
+          <div className="mt-4 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
+            <button
+              type="button"
+              disabled={current === 0}
+              onClick={() => goToPage(current - 1)}
+              className="rounded-md border border-border px-2 py-1 hover:bg-accent/60 hover:text-foreground
+                         disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            >
+              Previous
+            </button>
+            {/* The range, not the page number: what you are looking at is a
+                stretch of the list, and "4 of 9" does not say which folders. */}
+            <span className="tnum">
+              {start + 1}–{start + pageRows.length} of {rows.length}
+            </span>
+            <button
+              type="button"
+              disabled={current >= pageCount - 1}
+              onClick={() => goToPage(current + 1)}
+              className="rounded-md border border-border px-2 py-1 hover:bg-accent/60 hover:text-foreground
+                         disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            >
+              Next
+            </button>
+          </div>
+        )}
 
         {rows.length === 0 && (
           <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">

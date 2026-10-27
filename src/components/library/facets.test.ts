@@ -7,6 +7,7 @@ import {
   filterFolders,
   mergeValues,
   NOTHING_DOOMED,
+  pageSlice,
   planTotals,
   sortFolders,
   type Facet,
@@ -244,5 +245,33 @@ describe("brokenTotals", () => {
   it("counts a folder's own broken files alongside its children's", () => {
     const totals = brokenTotals([withBroken("Projects", 1), withBroken("Projects/Client A", 2)]);
     expect(totals.get("Projects")).toBe(3);
+  });
+});
+
+describe("pageSlice", () => {
+  const list = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+  it("hands back one page's worth and says where it starts", () => {
+    const p = pageSlice(list(120), 1, 50);
+    expect(p.rows).toEqual(list(100).slice(50));
+    expect(p.start).toBe(50);
+    expect(p.pageCount).toBe(3);
+  });
+
+  it("clamps a page the list is no longer long enough for, rather than going blank", () => {
+    // What a filter does: you were on page three, now there are nine folders.
+    const p = pageSlice(list(9), 2, 50);
+    expect(p.current).toBe(0);
+    expect(p.rows).toHaveLength(9);
+  });
+
+  it("keeps one page for an empty list, so the table has somewhere to be", () => {
+    const p = pageSlice([], 0, 50);
+    expect(p.pageCount).toBe(1);
+    expect(p.rows).toEqual([]);
+  });
+
+  it("never slices from before the start", () => {
+    expect(pageSlice(list(60), -3, 50).start).toBe(0);
   });
 });
